@@ -332,6 +332,30 @@ tr:hover td { background: rgba(9,105,218,0.03); }
 .badge-warn { background: rgba(154,103,0,0.12); color: var(--accent4); }
 .badge-err { background: rgba(207,34,46,0.12); color: var(--accent3); }
 .badge-gray { background: rgba(99,108,118,0.1); color: var(--text2); }
+
+/* ── 재도장 입력칸 강조 ── */
+.input-cell {
+  background: rgba(59,130,246,0.08) !important;
+  position: relative;
+}
+.input-cell:hover {
+  background: rgba(59,130,246,0.15) !important;
+}
+.input-cell input:focus {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+.input-cell select:focus {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+.input-cell input::placeholder {
+  color: #93c5fd;
+  font-size: 10px;
+  font-style: italic;
+}
 </style>
 </head>
 <body>
@@ -485,7 +509,7 @@ tr:hover td { background: rgba(9,105,218,0.03); }
       <div style="display:flex;align-items:center;gap:8px">
         <label style="font-size:13px;font-weight:700;color:var(--text2)">🔩 막고철단가</label>
         <input type="number" id="t3_scrap_price" value="250" min="0" onchange="t3RenderInput()" oninput="t3RenderInput()"
-          style="width:90px;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">
+          style="width:90px;padding:7px 10px;border:2px solid #3b82f6;border-radius:8px;font-size:13px;font-family:inherit;background:rgba(59,130,246,0.07)">
         <span style="font-size:12px;color:var(--text2)">원/kg</span>
       </div>
       <div>
@@ -933,6 +957,7 @@ function t3InputRowHtml(r, i, scrap) {
 
   const inp = (field, val, align) =>
     `<input type="text" value="${val??''}" data-i="${i}" data-f="${field}"
+      placeholder="${field==='size'?'규격':field==='qty'?'수량':''}"
       onblur="t3CellInput(this)" oninput="t3CellData(this)" onkeydown="t3TabKey(event,this)"
       style="width:100%;border:none;outline:none;background:transparent;
         font-family:'JetBrains Mono',monospace;font-size:12px;
@@ -947,7 +972,7 @@ function t3InputRowHtml(r, i, scrap) {
       <button onclick="t3DelRow(${i})"
         style="border:none;background:none;cursor:pointer;color:var(--accent3);font-size:13px;line-height:1">✕</button>
     </td>
-    <td style="padding:3px 6px;min-width:130px">
+    <td class="input-cell" style="padding:3px 6px;min-width:130px">
       <select data-i="${i}" data-f="name" onchange="t3CellInput(this)"
         style="width:100%;border:none;outline:none;background:transparent;
           font-family:'Noto Sans KR',sans-serif;font-size:12px;
@@ -959,9 +984,9 @@ function t3InputRowHtml(r, i, scrap) {
         <option value="스피드랙받침" ${r.name==='스피드랙받침'?'selected':''}>스피드랙받침</option>
       </select>
     </td>
-    <td style="padding:3px 6px;min-width:90px">${t3ThicknessCell(r, i)}</td>
-    <td style="padding:3px 6px">${inp('size', r.size)}</td>
-    <td style="padding:3px 6px">${inp('qty', r.qty)}</td>
+    <td class="input-cell" style="padding:3px 6px;min-width:90px">${t3ThicknessCell(r, i)}</td>
+    <td class="input-cell" style="padding:3px 6px">${inp('size', r.size)}</td>
+    <td class="input-cell" style="padding:3px 6px">${inp('qty', r.qty)}</td>
     <td style="padding:3px 4px;text-align:center"><span class="td-mono" style="font-size:12px;color:var(--text2)">7.85</span></td>
     <td style="padding:3px 4px;text-align:center"><span class="td-mono" style="font-size:12px;color:var(--text2)">${r.name==='홈던트기둥' ? '129' : (r.name ? '64' : '-')}</span></td>
     <td style="padding:3px 4px;text-align:right">${ro(weight ? weight.toFixed(4) : null, 'col-gray')}</td>

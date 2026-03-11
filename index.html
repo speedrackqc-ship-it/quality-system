@@ -575,6 +575,22 @@ tr:hover td { background: rgba(9,105,218,0.03); }
   <!-- 저장된 월별 결과 -->
   <div id="t3_results_wrap"></div>
 
+  <!-- 통계 분석 -->
+  <div id="t3_stats_wrap" style="display:none">
+    <div style="display:flex;align-items:center;gap:10px;margin-top:32px;margin-bottom:16px">
+      <h2 style="font-size:16px;font-weight:900;color:var(--text)">📊 재도장 통계 분석</h2>
+      <div style="height:1px;flex:1;background:var(--border)"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button id="t3_stat_tab_year" onclick="t3StatTab('year')"
+        style="padding:7px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;border:1.5px solid var(--accent);background:var(--accent);color:white;">📅 연별 합산</button>
+      <button id="t3_stat_tab_month" onclick="t3StatTab('month')"
+        style="padding:7px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;border:1.5px solid var(--border);background:var(--surface);color:var(--text2);">🗓 월별 상세</button>
+    </div>
+    <div id="t3_stat_panel_year" class="panel" style="padding:20px"></div>
+    <div id="t3_stat_panel_month" class="panel" style="padding:20px;display:none"></div>
+  </div>
+
 </div>
 </div>
 
@@ -1217,6 +1233,7 @@ function t3RenderResults() {
       </div></div>
     </div>`;
   }).join('');
+  t3RenderStats();
 }
 
 function t3EditMonth(month) {
@@ -1501,6 +1518,132 @@ function t3SaveToStorage() {
   } catch(e) { console.warn('localStorage 저장 실패:', e); }
 }
 
+function t3StatTab(tab) {
+  var yearPanel  = document.getElementById("t3_stat_panel_year");
+  var monthPanel = document.getElementById("t3_stat_panel_month");
+  var yearBtn    = document.getElementById("t3_stat_tab_year");
+  var monthBtn   = document.getElementById("t3_stat_tab_month");
+  if (tab === "year") {
+    yearPanel.style.display  = "block";
+    monthPanel.style.display = "none";
+    yearBtn.style.background  = "var(--accent)"; yearBtn.style.color = "white"; yearBtn.style.borderColor = "var(--accent)";
+    monthBtn.style.background = "var(--surface)"; monthBtn.style.color = "var(--text2)"; monthBtn.style.borderColor = "var(--border)";
+  } else {
+    yearPanel.style.display  = "none";
+    monthPanel.style.display = "block";
+    monthBtn.style.background = "var(--accent)"; monthBtn.style.color = "white"; monthBtn.style.borderColor = "var(--accent)";
+    yearBtn.style.background  = "var(--surface)"; yearBtn.style.color = "var(--text2)"; yearBtn.style.borderColor = "var(--border)";
+  }
+}
+
+function t3RenderStats() {
+  var wrap = document.getElementById("t3_stats_wrap");
+  if (!T3.saved.length) { wrap.style.display = "none"; return; }
+  wrap.style.display = "block";
+
+  // 연별 합산
+  var yearMap = {};
+  T3.saved.forEach(function(s) {
+    var scrap = s.scrap;
+    var mMonth = s.month;
+    var stdMap = (T3.monthStdCost[mMonth] && T3.monthStdCost[mMonth].data) || {};
+    s.rows.forEach(function(r) {
+      var key = (r.name||"") + "__" + (r.thickness||"") + "__" + (r.size||"");
+      if (!yearMap[key]) yearMap[key] = { name: r.name, thickness: r.thickness, size: r.size, qty: 0, totPL: 0 };
+      yearMap[key].qty   += +r.qty || 0;
+      yearMap[key].totPL += t3CalcRow(r, scrap, stdMap).totPL;
+    });
+  });
+  var yearRows = Object.values(yearMap).sort(function(a, b) {
+    if ((a.name||"") !== (b.name||"")) return (a.name||"").localeCompare(b.name||"", "ko");
+    if ((a.thickness||"") !== (b.thickness||"")) return (+a.thickness||0) - (+b.thickness||0);
+    return (+a.size||0) - (+b.size||0);
+  });
+  var yearTotQty = yearRows.reduce(function(s,r){ return s+r.qty; }, 0);
+  var yearTotPL  = yearRows.reduce(function(s,r){ return s+r.totPL; }, 0);
+  var ySign = yearTotPL >= 0 ? "col-green" : "col-red";
+
+  var yHTML = "";
+  yHTML += '<div style="font-size:13px;color:var(--text2);margin-bottom:12px">';
+  yHTML += '전체 <strong style="color:var(--text)">' + T3.saved.length + '개월</strong> 합산';
+  yHTML += ' &nbsp;|&nbsp; 총 수량 <strong class="td-mono col-blue">' + yearTotQty.toLocaleString() + '</strong>개';
+  yHTML += ' &nbsp;|&nbsp; 총 손익 <strong class="td-mono ' + ySign + '">' + Math.round(yearTotPL).toLocaleString() + '원</strong>';
+  yHTML += '</div>';
+  yHTML += '<div class="table-wrap"><div class="table-scroll">';
+  yHTML += '<table><thead><tr>';
+  yHTML += '<th style="text-align:left">품명</th>';
+  yHTML += '<th style="text-align:center">두께</th>';
+  yHTML += '<th style="text-align:right">규격(mm)</th>';
+  yHTML += '<th style="text-align:right">재도장 수량</th>';
+  yHTML += '<th style="text-align:right">총 손익</th>';
+  yHTML += '</tr></thead><tbody>';
+  yearRows.forEach(function(r) {
+    var pc = r.totPL >= 0 ? "col-green" : "col-red";
+    yHTML += "<tr>";
+    yHTML += '<td class="td-name">' + (r.name||"-") + '</td>';
+    yHTML += '<td class="td-mono td-center col-gray">' + (r.thickness||"-") + '</td>';
+    yHTML += '<td class="td-mono td-right col-blue">' + (r.size||"-") + '</td>';
+    yHTML += '<td class="td-mono td-right"><strong>' + r.qty.toLocaleString() + '</strong>개</td>';
+    yHTML += '<td class="td-mono td-right ' + pc + '" style="font-weight:700">' + Math.round(r.totPL).toLocaleString() + '원</td>';
+    yHTML += "</tr>";
+  });
+  yHTML += '</tbody><tfoot><tr style="background:var(--surface2);border-top:2px solid var(--border)">';
+  yHTML += '<td style="font-weight:700">TOTAL</td><td></td><td></td>';
+  yHTML += '<td class="td-mono td-right"><strong>' + yearTotQty.toLocaleString() + '</strong>개</td>';
+  yHTML += '<td class="td-mono td-right ' + ySign + '" style="font-weight:700">' + Math.round(yearTotPL).toLocaleString() + '원</td>';
+  yHTML += '</tr></tfoot></table></div></div>';
+  document.getElementById("t3_stat_panel_year").innerHTML = yHTML;
+
+  // 월별 상세
+  var months = T3.saved.slice().sort(function(a,b){ return a.month - b.month; });
+  var mAllHTML = "";
+  months.forEach(function(s) {
+    var scrap = s.scrap;
+    var mMonth = s.month;
+    var stdMap = (T3.monthStdCost[mMonth] && T3.monthStdCost[mMonth].data) || {};
+    var mMap = {};
+    s.rows.forEach(function(r) {
+      var key = (r.name||"") + "__" + (r.thickness||"") + "__" + (r.size||"");
+      if (!mMap[key]) mMap[key] = { name: r.name, thickness: r.thickness, size: r.size, qty: 0, totPL: 0 };
+      mMap[key].qty   += +r.qty || 0;
+      mMap[key].totPL += t3CalcRow(r, scrap, stdMap).totPL;
+    });
+    var mRows = Object.values(mMap).sort(function(a,b) {
+      if ((a.name||"") !== (b.name||"")) return (a.name||"").localeCompare(b.name||"", "ko");
+      return (+a.size||0) - (+b.size||0);
+    });
+    var mTotQty = mRows.reduce(function(sum,r){ return sum+r.qty; }, 0);
+    var mTotPL  = mRows.reduce(function(sum,r){ return sum+r.totPL; }, 0);
+    var mSign   = mTotPL >= 0 ? "col-green" : "col-red";
+    mAllHTML += '<div style="margin-bottom:24px">';
+    mAllHTML += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">';
+    mAllHTML += '<span style="font-size:15px;font-weight:900;color:var(--accent)">' + s.month + '월</span>';
+    mAllHTML += '<span style="font-size:12px;color:var(--text2)">막고철 <strong>' + s.scrap.toLocaleString() + '원</strong>/kg</span>';
+    mAllHTML += ' <span style="font-size:12px;color:var(--text2)">수량 <strong class="td-mono col-blue">' + mTotQty.toLocaleString() + '</strong>개</span>';
+    mAllHTML += ' <span style="font-size:12px;color:var(--text2)">손익 <strong class="td-mono ' + mSign + '">' + Math.round(mTotPL).toLocaleString() + '원</strong></span>';
+    mAllHTML += '</div>';
+    mAllHTML += '<div class="table-wrap"><div class="table-scroll"><table>';
+    mAllHTML += '<thead><tr>';
+    mAllHTML += '<th style="text-align:left">품명</th><th style="text-align:center">두께</th><th style="text-align:right">규격(mm)</th><th style="text-align:right">재도장 수량</th><th style="text-align:right">총 손익</th>';
+    mAllHTML += '</tr></thead><tbody>';
+    mRows.forEach(function(r) {
+      var pc = r.totPL >= 0 ? "col-green" : "col-red";
+      mAllHTML += "<tr>";
+      mAllHTML += '<td class="td-name">' + (r.name||"-") + '</td>';
+      mAllHTML += '<td class="td-mono td-center col-gray">' + (r.thickness||"-") + '</td>';
+      mAllHTML += '<td class="td-mono td-right col-blue">' + (r.size||"-") + '</td>';
+      mAllHTML += '<td class="td-mono td-right"><strong>' + r.qty.toLocaleString() + '</strong>개</td>';
+      mAllHTML += '<td class="td-mono td-right ' + pc + '" style="font-weight:700">' + Math.round(r.totPL).toLocaleString() + '원</td>';
+      mAllHTML += "</tr>";
+    });
+    mAllHTML += '</tbody><tfoot><tr style="background:var(--surface2);border-top:2px solid var(--border)">';
+    mAllHTML += '<td style="font-weight:700">TOTAL</td><td></td><td></td>';
+    mAllHTML += '<td class="td-mono td-right"><strong>' + mTotQty.toLocaleString() + '</strong>개</td>';
+    mAllHTML += '<td class="td-mono td-right ' + mSign + '" style="font-weight:700">' + Math.round(mTotPL).toLocaleString() + '원</td>';
+    mAllHTML += '</tr></tfoot></table></div></div></div>';
+  });
+  document.getElementById("t3_stat_panel_month").innerHTML = mAllHTML;
+}
 function t3UpdateStdSavedList() {
   const el = document.getElementById('t3_std_saved_list');
   if (!el) return;

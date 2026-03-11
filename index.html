@@ -4,21 +4,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>íì§ë³´ì¦íí¸ íµí©ê´ë¦¬ ìì¤í</title>
+<title>품질보증파트 통합관리 시스템</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-// Supabaseìì íì¤ìê° ë¡ë
+// Supabase에서 표준원가 로드
 async function t3LoadStdCostFromSB() {
   try {
     const rows = await sb3('repaint_stdcost?select=*');
     rows.forEach(r => {
       T3.monthStdCost[r.month] = { fileName: r.file_name, data: r.data };
     });
-  } catch(e) { console.error('íì¤ìê° ë¡ë ì¤ë¥:', e); }
+  } catch(e) { console.error('표준원가 로드 오류:', e); }
 }
 
-// Supabaseìì ì ì²´ ì¤ì  ë¡ë
+// Supabase에서 전체 실적 로드
 async function t3LoadSessions() {
   try {
     const sessions = await sb3('repaint_sessions?select=*,repaint_items(*)&order=month');
@@ -33,8 +33,9 @@ async function t3LoadSessions() {
       totQty: (s.repaint_items||[]).reduce((a,r) => a + (+r.qty||0), 0),
       totPL: 0
     }));
-  } catch(e) { console.error('ì¤ì  ë¡ë ì¤ë¥:', e); }
+  } catch(e) { console.error('실적 로드 오류:', e); }
 }
+
 </script>
 <style>
 :root {
@@ -85,7 +86,7 @@ header span { font-size: 12px; color: var(--text2); margin-left: 6px; }
 .tab-content.active { display: block; }
 .main { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
 
-/* ìë¡ë */
+/* 업로드 */
 .upload-zone {
   border: 2px dashed var(--border); border-radius: 12px; padding: 48px 32px;
   text-align: center; cursor: pointer; transition: all 0.2s;
@@ -243,7 +244,7 @@ tr:hover td { background: rgba(9,105,218,0.03); }
 @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
 .fade-in { animation: fadeIn 0.25s ease; }
 
-/* ===== TAB4 ì¤ìê° DB ì ì© ì¤íì¼ ===== */
+/* ===== TAB4 실시간 DB 전용 스타일 ===== */
 .db-header {
   display: flex; align-items: center; gap: 12px;
   margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
@@ -336,65 +337,65 @@ tr:hover td { background: rgba(9,105,218,0.03); }
 <body>
 
 <header>
-  <div class="logo-icon">ð¦</div>
-  <h1>íì§ë³´ì¦íí¸ íµí©ê´ë¦¬ ìì¤í</h1>
-  <span>ì¬ê³ ë¶ì Â· ë¦¬í¼ê³ì° Â· ì¬ëì¥ Â· ì¤ìê° DB</span>
+  <div class="logo-icon">📦</div>
+  <h1>품질보증파트 통합관리 시스템</h1>
+  <span>재고분석 · 리퍼계산 · 재도장 · 실시간 DB</span>
 </header>
 
 <div class="tab-bar">
-  <button class="tab-btn active" onclick="switchTab('tab1',this)">ð ì¬ê³  ë¶ìê¸°</button>
-  <button class="tab-btn" onclick="switchTab('tab2',this)">ð° ë¦¬í¼ ê¸ì¡ ê³ì°</button>
-  <button class="tab-btn" onclick="switchTab('tab3',this)">ð¨ ì¬ëì¥ ì¤ì </button>
-  <button class="tab-btn" onclick="switchTab('tab4',this)">ð ê´ë¦¬íí©</button>
+  <button class="tab-btn active" onclick="switchTab('tab1',this)">📊 재고 분석기</button>
+  <button class="tab-btn" onclick="switchTab('tab2',this)">💰 리퍼 금액 계산</button>
+  <button class="tab-btn" onclick="switchTab('tab3',this)">🎨 재도장 실적</button>
+  <button class="tab-btn" onclick="switchTab('tab4',this)">📊 관리현황</button>
 </div>
 
-<!-- ===== TAB 1: ì¬ê³  ë¶ìê¸° ===== -->
+<!-- ===== TAB 1: 재고 분석기 ===== -->
 <div id="tab1" class="tab-content active">
 <div class="main">
   <div class="upload-zone" id="uploadZone1">
-    <div class="upload-icon">ð</div>
-    <h2>ìì íì¼ì ì¬ê¸°ì ëëê·¸íê±°ë í´ë¦­íì¸ì</h2>
-    <p>ì°½ê³ ì¬ê³ ì¡°í íìì .xlsx íì¼ì ì§ìí©ëë¤</p>
+    <div class="upload-icon">📂</div>
+    <h2>엑셀 파일을 여기에 드래그하거나 클릭하세요</h2>
+    <p>창고재고조회 형식의 .xlsx 파일을 지원합니다</p>
     <input type="file" id="fileInput1" accept=".xlsx,.xls">
-    <div id="fileBadge1" style="display:none" class="file-badge">â <span id="fileName1"></span></div>
+    <div id="fileBadge1" style="display:none" class="file-badge">✅ <span id="fileName1"></span></div>
   </div>
 
   <div class="panel" id="filterPanel1" style="display:none">
-    <div class="panel-title">ð§ íí° ì¤ì </div>
+    <div class="panel-title">🔧 필터 설정</div>
     <div class="filter-grid">
       <div class="filter-group">
-        <label>íëª(Cì´) í¤ìë íí°</label>
+        <label>품명(C열) 키워드 필터</label>
         <div class="keyword-tags" id="tagList1"></div>
         <div class="add-keyword">
-          <input type="text" id="newKeyword1" placeholder="í¤ìë ìë ¥ í ì¶ê°" maxlength="20">
-          <button class="btn-add" onclick="addKeyword1()">+ ì¶ê°</button>
+          <input type="text" id="newKeyword1" placeholder="키워드 입력 후 추가" maxlength="20">
+          <button class="btn-add" onclick="addKeyword1()">+ 추가</button>
         </div>
       </div>
       <div class="filter-group">
-        <label>ìµì</label>
+        <label>옵션</label>
         <div class="toggle-row">
-          <span>ì¬ê³ ìë(Jì´) 0ì¸ í­ëª© ì ì¸</span>
+          <span>재고수량(J열) 0인 항목 제외</span>
           <div class="toggle on" id="toggleZero1" onclick="this.classList.toggle('on')"></div>
         </div>
       </div>
     </div>
-    <button class="btn-run" onclick="runAnalysis1()">ð ë¶ì ì¤í</button>
+    <button class="btn-run" onclick="runAnalysis1()">🔍 분석 실행</button>
   </div>
 
   <div id="resultsArea1" style="display:none">
     <div class="results-header">
       <div class="stat-chips">
-        <div class="chip green"><span>ê²°ê³¼</span><span class="num" id="statCount1">0</span><span>ê±´</span></div>
-        <div class="chip blue"><span>ì¬ê³ í©ê³</span><span class="num" id="statTotal1">0</span></div>
+        <div class="chip green"><span>결과</span><span class="num" id="statCount1">0</span><span>건</span></div>
+        <div class="chip blue"><span>재고합계</span><span class="num" id="statTotal1">0</span></div>
       </div>
-      <button class="btn-download" onclick="downloadExcel1()">â¬ ìì ë¤ì´ë¡ë</button>
+      <button class="btn-download" onclick="downloadExcel1()">⬇ 엑셀 다운로드</button>
     </div>
     <div class="table-wrap"><div class="table-scroll">
       <table>
         <thead><tr>
-          <th>#</th><th>íëª (Cì´)</th>
-          <th style="text-align:center">ê·ê²© (Eì´)</th>
-          <th style="text-align:right">ì¬ê³ ìë (Jì´)</th>
+          <th>#</th><th>품명 (C열)</th>
+          <th style="text-align:center">규격 (E열)</th>
+          <th style="text-align:right">재고수량 (J열)</th>
         </tr></thead>
         <tbody id="tableBody1"></tbody>
         <tfoot id="tableFoot1"></tfoot>
@@ -404,54 +405,54 @@ tr:hover td { background: rgba(9,105,218,0.03); }
 </div>
 </div>
 
-<!-- ===== TAB 2: ë¦¬í¼ ê¸ì¡ ê³ì° ===== -->
+<!-- ===== TAB 2: 리퍼 금액 계산 ===== -->
 <div id="tab2" class="tab-content">
 <div class="main">
   <div class="info-box">
-    <strong>ì¬ì© ë°©ë²:</strong> ìì°ì¤ì (í¬ì¥ìë) íì¼ê³¼ í ì¸ê° íì¼ì ê°ê° ìë¡ë í ê³ì°ì ì¤ííì¸ì.<br>
-    ë¸ëë(<strong>ì¤í¼ëë</strong>, <strong>Híì°ì¤ â íëí¸íì°ì¤</strong>) ìë ë§¤ì¹­ ë° ê·ê²©(<strong>*5S â *5ë¨</strong>) ë³íì´ ì ì©ë©ëë¤.
+    <strong>사용 방법:</strong> 생산실적(포장수량) 파일과 할인가 파일을 각각 업로드 후 계산을 실행하세요.<br>
+    브랜드(<strong>스피드랙</strong>, <strong>H하우스 → 홈던트하우스</strong>) 자동 매칭 및 규격(<strong>*5S → *5단</strong>) 변환이 적용됩니다.
   </div>
   <div class="upload-pair">
     <div class="upload-mini" id="zone2a" onclick="document.getElementById('file2a').click()">
-      <div class="icon">ð­</div>
-      <h3>ìì°ì¤ì  (í¬ì¥ìë) íì¼</h3>
-      <p>header=1 íìì .xlsx</p>
+      <div class="icon">🏭</div>
+      <h3>생산실적 (포장수량) 파일</h3>
+      <p>header=1 형식의 .xlsx</p>
       <input type="file" id="file2a" accept=".xlsx,.xls">
-      <div id="badge2a" style="display:none" class="badge-yellow">â <span id="name2a"></span></div>
+      <div id="badge2a" style="display:none" class="badge-yellow">✅ <span id="name2a"></span></div>
     </div>
     <div class="upload-mini" id="zone2b" onclick="document.getElementById('file2b').click()">
-      <div class="icon">ð²</div>
-      <h3>í ì¸ê° íì¼</h3>
-      <p>ìíëª / íëª©ëª / í ì¸ê° í¬í¨ .xlsx</p>
+      <div class="icon">💲</div>
+      <h3>할인가 파일</h3>
+      <p>상품명 / 품목명 / 할인가 포함 .xlsx</p>
       <input type="file" id="file2b" accept=".xlsx,.xls">
-      <div id="badge2b" style="display:none" class="badge-yellow">â <span id="name2b"></span></div>
+      <div id="badge2b" style="display:none" class="badge-yellow">✅ <span id="name2b"></span></div>
     </div>
   </div>
   <div class="panel" style="margin-top:14px">
-    <div class="panel-title">â ê³ì° ìµì</div>
+    <div class="panel-title">⚙ 계산 옵션</div>
     <div class="toggle-row" style="border-top:none;padding-top:0">
-      <span>ë¨ê° 0ì í­ëª©ë ê²°ê³¼ì í¬í¨ (ë§¤ì¹­ ì¤í¨ í­ëª© íì¸ì©)</span>
+      <span>단가 0원 항목도 결과에 포함 (매칭 실패 항목 확인용)</span>
       <div class="toggle" id="toggleZeroPrice" onclick="this.classList.toggle('on')"></div>
     </div>
-    <button class="btn-run yellow" onclick="runCalc()">ð° ê¸ì¡ ê³ì° ì¤í</button>
+    <button class="btn-run yellow" onclick="runCalc()">💰 금액 계산 실행</button>
   </div>
   <div id="resultsArea2" style="display:none">
     <div class="results-header">
       <div class="stat-chips">
-        <div class="chip green"><span>ê±´ì</span><span class="num" id="statCount2">0</span><span>ê±´</span></div>
-        <div class="chip blue"><span>ì´ìë</span><span class="num" id="statQty2">0</span><span>ê°</span></div>
-        <div class="chip yellow"><span>ì´ê¸ì¡</span><span class="num" id="statAmt2">0</span><span>ì</span></div>
+        <div class="chip green"><span>건수</span><span class="num" id="statCount2">0</span><span>건</span></div>
+        <div class="chip blue"><span>총수량</span><span class="num" id="statQty2">0</span><span>개</span></div>
+        <div class="chip yellow"><span>총금액</span><span class="num" id="statAmt2">0</span><span>원</span></div>
       </div>
-      <button class="btn-download yellow" onclick="downloadExcel2()">â¬ ìì ë¤ì´ë¡ë</button>
+      <button class="btn-download yellow" onclick="downloadExcel2()">⬇ 엑셀 다운로드</button>
     </div>
     <div class="table-wrap"><div class="table-scroll">
       <table>
         <thead><tr>
-          <th>#</th><th>ììì¼</th><th>ê³µì íëª</th>
-          <th style="text-align:center">ê³µì íê·ê²©</th>
-          <th style="text-align:right">ìì°ìë</th>
-          <th style="text-align:right">ë¨ê°</th>
-          <th style="text-align:right">ìµì¢ ê¸ì¡</th>
+          <th>#</th><th>작업일</th><th>공정품명</th>
+          <th style="text-align:center">공정품규격</th>
+          <th style="text-align:right">생산수량</th>
+          <th style="text-align:right">단가</th>
+          <th style="text-align:right">최종 금액</th>
         </tr></thead>
         <tbody id="tableBody2"></tbody>
         <tfoot id="tableFoot2"></tfoot>
@@ -461,31 +462,31 @@ tr:hover td { background: rgba(9,105,218,0.03); }
 </div>
 </div>
 
-<!-- ===== TAB 3: ì¬ëì¥ ì¤ì  ===== -->
+<!-- ===== TAB 3: 재도장 실적 ===== -->
 <div id="tab3" class="tab-content">
 <div class="main">
 
-  <!-- ìë ¥ í¨ë -->
+  <!-- 입력 패널 -->
   <div class="panel" style="margin-bottom:24px">
-    <div class="panel-title">ð ìë³ ë°ì´í° ìë ¥</div>
+    <div class="panel-title">📝 월별 데이터 입력</div>
 
-    <!-- ì / ë§ê³ ì² ë¨ê° -->
+    <!-- 월 / 막고철단가 -->
     <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:8px">
-        <label style="font-size:13px;font-weight:700;color:var(--text2)">ð ì</label>
+        <label style="font-size:13px;font-weight:700;color:var(--text2)">📅 월</label>
         <select id="t3_sel_month" onchange="t3ChangeMonth()"
           style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;background:var(--surface)">
-          <option value="1">1ì</option><option value="2">2ì</option><option value="3">3ì</option>
-          <option value="4">4ì</option><option value="5">5ì</option><option value="6">6ì</option>
-          <option value="7">7ì</option><option value="8">8ì</option><option value="9">9ì</option>
-          <option value="10">10ì</option><option value="11">11ì</option><option value="12">12ì</option>
+          <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option>
+          <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
+          <option value="7">7월</option><option value="8">8월</option><option value="9">9월</option>
+          <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
         </select>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <label style="font-size:13px;font-weight:700;color:var(--text2)">ð© ë§ê³ ì² ë¨ê°</label>
+        <label style="font-size:13px;font-weight:700;color:var(--text2)">🔩 막고철단가</label>
         <input type="number" id="t3_scrap_price" value="250" min="0" onchange="t3RenderInput()" oninput="t3RenderInput()"
           style="width:90px;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">
-        <span style="font-size:12px;color:var(--text2)">ì/kg</span>
+        <span style="font-size:12px;color:var(--text2)">원/kg</span>
       </div>
       <div>
         <div id="t3_std_dropzone"
@@ -495,22 +496,22 @@ tr:hover td { background: rgba(9,105,218,0.03); }
           onclick="document.getElementById('t3_std_file').click()"
           style="border:2px dashed rgba(110,64,201,0.35);border-radius:10px;padding:10px 20px;
             cursor:pointer;transition:all 0.2s;text-align:center;min-width:220px">
-          <div style="font-size:13px;font-weight:700;color:var(--accent5)">ð íì¤ìê° íì¼</div>
-          <div style="font-size:11px;color:var(--text2);margin-top:2px">ëëê·¸íê±°ë í´ë¦­í´ì ìë¡ë</div>
+          <div style="font-size:13px;font-weight:700;color:var(--accent5)">📋 표준원가 파일</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">드래그하거나 클릭해서 업로드</div>
           <div id="t3_std_status" style="font-size:11px;color:var(--accent5);font-weight:600;margin-top:4px"></div>
         </div>
         <input type="file" id="t3_std_file" accept=".xlsx,.xls" style="display:none" onchange="t3LoadStdCost(this)">
         <div id="t3_std_saved_list" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px"></div>
         <div id="t3_std_saved_list" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-        <button onclick="if(confirm('íì¤ìê° ì ì¥ ë°ì´í°ë¥¼ ì ë¶ ì´ê¸°íí ê¹ì?\n(ì ì¥ë ì¤ì ì ì ì§ë©ëë¤)')){localStorage.removeItem('t3_monthStdCost');T3.monthStdCost={};T3.stdCost={};t3UpdateStdSavedList();t3RenderInput();document.getElementById('t3_std_status').textContent='â ì´ê¸°í ìë£';}" style="margin-top:6px;padding:3px 10px;font-size:11px;background:#ffe0e0;border:1px solid #f99;border-radius:6px;cursor:pointer">ð íì¤ìê° ì´ê¸°í</button>
+        <button onclick="if(confirm('표준원가 저장 데이터를 전부 초기화할까요?\n(저장된 실적은 유지됩니다)')){localStorage.removeItem('t3_monthStdCost');T3.monthStdCost={};T3.stdCost={};t3UpdateStdSavedList();t3RenderInput();document.getElementById('t3_std_status').textContent='✅ 초기화 완료';}" style="margin-top:6px;padding:3px 10px;font-size:11px;background:#ffe0e0;border:1px solid #f99;border-radius:6px;cursor:pointer">🗑 표준원가 초기화</button>
       </div>
     </div>
 
-    <!-- ìë ¥ íì´ë¸ -->
+    <!-- 입력 테이블 -->
     <div style="margin-bottom:6px">
       <button onclick="t3AddRow()"
         style="padding:6px 16px;border:1.5px solid var(--accent);color:var(--accent);background:white;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
-        + í ì¶ê°
+        + 행 추가
       </button>
     </div>
     <div class="table-wrap" style="margin-bottom:12px"><div class="table-scroll">
@@ -518,52 +519,52 @@ tr:hover td { background: rgba(9,105,218,0.03); }
         <thead>
           <tr>
             <th style="width:32px"></th>
-            <th style="min-width:130px;text-align:left">íëª</th>
-            <th style="min-width:90px;text-align:left">ëê»</th>
-            <th style="min-width:65px;text-align:right">ê·ê²©</th>
-            <th style="min-width:75px;text-align:right">ìë</th>
-            <th style="min-width:70px;text-align:right">ì² ìë¹ì¤</th>
-            <th style="min-width:65px;text-align:right">í­</th>
-            <th style="min-width:75px;text-align:right">ë¬´ê²(kg)</th>
-            <th style="min-width:80px;text-align:right">ë§ê³ ì² ë¨ê°</th>
-            <th style="min-width:80px;text-align:right">ë§ê³ ì² (ì)</th>
-            <th style="min-width:75px;text-align:right">ì¬ëì¥ë¹ì©</th>
-            <th style="min-width:75px;text-align:right">íì¤ìê°</th>
-            <th style="min-width:75px;text-align:right;background:rgba(154,103,0,0.06)">ê°ë¹ììµ</th>
-            <th style="min-width:85px;text-align:right;background:rgba(154,103,0,0.06)">ì´ ììµ</th>
+            <th style="min-width:130px;text-align:left">품명</th>
+            <th style="min-width:90px;text-align:left">두께</th>
+            <th style="min-width:65px;text-align:right">규격</th>
+            <th style="min-width:75px;text-align:right">수량</th>
+            <th style="min-width:70px;text-align:right">철의비중</th>
+            <th style="min-width:65px;text-align:right">폭</th>
+            <th style="min-width:75px;text-align:right">무게(kg)</th>
+            <th style="min-width:80px;text-align:right">막고철단가</th>
+            <th style="min-width:80px;text-align:right">막고철(원)</th>
+            <th style="min-width:75px;text-align:right">재도장비용</th>
+            <th style="min-width:75px;text-align:right">표준원가</th>
+            <th style="min-width:75px;text-align:right;background:rgba(154,103,0,0.06)">개당손익</th>
+            <th style="min-width:85px;text-align:right;background:rgba(154,103,0,0.06)">총 손익</th>
           </tr>
         </thead>
         <tbody id="t3_input_tbody"></tbody>
       </table>
     </div></div>
 
-    <!-- íë¨ ë²í¼ -->
+    <!-- 하단 버튼 -->
     <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
 
       <button onclick="t3SaveMonth()"
         style="padding:8px 24px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">
-        ð¾ ì ì¥
+        💾 저장
       </button>
     </div>
   </div>
 
-  <!-- ì ì¥ë ìë³ ê²°ê³¼ -->
+  <!-- 저장된 월별 결과 -->
   <div id="t3_results_wrap"></div>
 
 </div>
 </div>
 
-<!-- ===== TAB 4: ê´ë¦¬íí© ===== -->
+<!-- ===== TAB 4: 관리현황 ===== -->
 <div id="tab4" class="tab-content">
 <div class="main">
 
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)">
     <div id="dbStatus4" style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;background:var(--surface2);border:1px solid var(--border);padding:5px 12px;border-radius:14px">
       <div id="dbDot4" style="width:7px;height:7px;border-radius:50%;background:var(--text3)"></div>
-      <span id="dbLabel4">ì°ê²° ì¤...</span>
+      <span id="dbLabel4">연결 중...</span>
     </div>
     <button onclick="refreshAll4()" id="refreshAllBtn4" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;background:var(--surface);color:var(--text2);font-family:'Noto Sans KR',sans-serif">
-      <span id="refreshIcon4" style="display:inline-block">â»</span> ì ì²´ ìë¡ê³ ì¹¨
+      <span id="refreshIcon4" style="display:inline-block">↻</span> 전체 새로고침
     </button>
     <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="lastRefresh4"></div>
   </div>
@@ -625,7 +626,7 @@ tr:hover td { background: rgba(9,105,218,0.03); }
   font-size:10px; font-family:'JetBrains Mono',monospace;
 }
 .v4-mbtn:not(.v4-mbtn-on) .v4-mcnt { background:rgba(9,105,218,0.1); color:var(--accent); }
-/* ë ì§ ë²í¼ - ì¡°ê¸ ë ìê² */
+/* 날짜 버튼 - 조금 더 작게 */
 .v4-mbtn-sm {
   padding:4px 9px; font-size:11px; border-radius:12px;
 }
@@ -636,7 +637,7 @@ tr:hover td { background: rgba(9,105,218,0.03); }
 
 <script>
 // ===================================================
-// ê³µíµ ì í¸
+// 공통 유틸
 // ===================================================
 function switchTab(id, btn) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -661,7 +662,7 @@ function setupDrop(zoneId, inputId, onFile) {
 }
 
 // ===================================================
-// TAB 1: ì¬ê³  ë¶ìê¸°
+// TAB 1: 재고 분석기
 // ===================================================
 let rawData1 = [], filteredData1 = [], keywords1 = ['120','160','200'];
 renderTags1();
@@ -682,7 +683,7 @@ function handleFile1(file) {
 }
 function renderTags1() {
   document.getElementById('tagList1').innerHTML = keywords1.map((k, i) =>
-    `<div class="tag">${k}<span class="remove" onclick="removeKeyword1(${i})">Ã</span></div>`
+    `<div class="tag">${k}<span class="remove" onclick="removeKeyword1(${i})">×</span></div>`
   ).join('');
 }
 function addKeyword1() {
@@ -695,7 +696,7 @@ document.getElementById('newKeyword1').addEventListener('keydown', e => { if(e.k
 function removeKeyword1(i) { keywords1.splice(i,1); renderTags1(); }
 
 function runAnalysis1() {
-  if (!rawData1.length) { alert('íì¼ì ë¨¼ì  ìë¡ëí´ì£¼ì¸ì!'); return; }
+  if (!rawData1.length) { alert('파일을 먼저 업로드해주세요!'); return; }
   const excludeZero = document.getElementById('toggleZero1').classList.contains('on');
   const pattern = keywords1.map(k => k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
   const regex = pattern ? new RegExp(pattern) : null;
@@ -722,24 +723,24 @@ function runAnalysis1() {
       <td class="td-mono td-right ${cls}">${qty.toLocaleString()}</td></tr>`;
   }).join('');
   document.getElementById('tableFoot1').innerHTML = `<tr class="tfoot-row">
-    <td></td><td style="font-size:12px;color:var(--text2)">í©ê³ ${filteredData1.length}ê±´</td><td></td>
+    <td></td><td style="font-size:12px;color:var(--text2)">합계 ${filteredData1.length}건</td><td></td>
     <td class="td-mono td-right col-blue">${total.toLocaleString()}</td></tr>`;
   showFade(document.getElementById('resultsArea1'));
 }
 function downloadExcel1() {
-  const wsData = [['íëª (Cì´)','ê·ê²© (Eì´)','ì¬ê³ ìë (Jì´)']];
+  const wsData = [['품명 (C열)','규격 (E열)','재고수량 (J열)']];
   filteredData1.forEach(r => wsData.push([r[2]??'', r[4]??'', Number(r[9])||0]));
-  wsData.push(['í©ê³','', filteredData1.reduce((s,r)=>s+(Number(r[9])||0),0)]);
+  wsData.push(['합계','', filteredData1.reduce((s,r)=>s+(Number(r[9])||0),0)]);
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   ws['!cols'] = [{wch:40},{wch:12},{wch:14}];
-  XLSX.utils.book_append_sheet(wb, ws, 'ì¬ê³ íí©');
+  XLSX.utils.book_append_sheet(wb, ws, '재고현황');
   const now = new Date();
-  XLSX.writeFile(wb, `ì¬ê³ íí©_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`);
+  XLSX.writeFile(wb, `재고현황_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`);
 }
 
 // ===================================================
-// TAB 2: ë¦¬í¼ ê¸ì¡ ê³ì°
+// TAB 2: 리퍼 금액 계산
 // ===================================================
 let pkgData = null, discData = null, calcResult = [];
 
@@ -769,26 +770,26 @@ setupDrop('zone2b', 'file2b', f => {
   readExcelByHeader(f, data => { discData = data; });
 });
 function findPrice(row) {
-  const name = String(row['ê³µì íëª'] ?? '');
-  const spec = String(row['ê³µì íê·ê²©'] ?? '');
+  const name = String(row['공정품명'] ?? '');
+  const spec = String(row['공정품규격'] ?? '');
   let brand = null;
-  if (name.includes('ì¤í¼ëë'))   brand = 'ì¤í¼ëë';
-  else if (name.includes('Híì°ì¤')) brand = 'íëí¸íì°ì¤';
+  if (name.includes('스피드랙'))   brand = '스피드랙';
+  else if (name.includes('H하우스')) brand = '홈던트하우스';
   if (!brand) return 0;
-  const targetSpec = spec.replace('*5S', '*5ë¨');
-  const altSpec    = spec.replace('*5S', ' 5ë¨');
+  const targetSpec = spec.replace('*5S', '*5단');
+  const altSpec    = spec.replace('*5S', ' 5단');
   const match = discData.filter(d =>
-    String(d['ìíëª'] ?? '').includes(brand) &&
-    (d['íëª©ëª'] === targetSpec || d['íëª©ëª'] === altSpec)
+    String(d['상품명'] ?? '').includes(brand) &&
+    (d['품목명'] === targetSpec || d['품목명'] === altSpec)
   );
-  return match.length > 0 ? (Number(match[0]['í ì¸ê°']) || 0) : 0;
+  return match.length > 0 ? (Number(match[0]['할인가']) || 0) : 0;
 }
 function runCalc() {
-  if (!pkgData || !discData) { alert('ë íì¼ì ëª¨ë ìë¡ëí´ì£¼ì¸ì!'); return; }
+  if (!pkgData || !discData) { alert('두 파일을 모두 업로드해주세요!'); return; }
   const includeZero = document.getElementById('toggleZeroPrice').classList.contains('on');
-  const rows = pkgData.filter(r => r['ê³µì íëª'] && String(r['ìì°ì¬ìì¥'] ?? '') !== 'TOTAL');
+  const rows = pkgData.filter(r => r['공정품명'] && String(r['생산사업장'] ?? '') !== 'TOTAL');
   let result = rows.map(r => {
-    const qty = parseInt(r['ìì°ìë']) || 0;
+    const qty = parseInt(r['생산수량']) || 0;
     const price = findPrice(r);
     return { ...r, _qty: qty, _price: price, _amount: qty * price };
   });
@@ -802,40 +803,40 @@ function runCalc() {
   document.getElementById('tableBody2').innerHTML = calcResult.map((r, i) => {
     const pCls = r._price === 0 ? 'col-red' : 'col-yellow';
     return `<tr><td class="td-mono col-gray">${i+1}</td>
-      <td style="font-size:12px">${r['ììì¼']??''}</td>
-      <td class="td-name">${r['ê³µì íëª']??''}</td>
-      <td class="td-mono td-center col-blue">${r['ê³µì íê·ê²©']??''}</td>
+      <td style="font-size:12px">${r['작업일']??''}</td>
+      <td class="td-name">${r['공정품명']??''}</td>
+      <td class="td-mono td-center col-blue">${r['공정품규격']??''}</td>
       <td class="td-mono td-right col-green">${r._qty.toLocaleString()}</td>
       <td class="td-mono td-right ${pCls}">${r._price.toLocaleString()}</td>
       <td class="td-mono td-right">${r._amount.toLocaleString()}</td></tr>`;
   }).join('');
   document.getElementById('tableFoot2').innerHTML = `<tr class="tfoot-row">
-    <td></td><td></td><td style="font-size:12px;color:var(--text2)">í©ê³ ${calcResult.length}ê±´</td><td></td>
+    <td></td><td></td><td style="font-size:12px;color:var(--text2)">합계 ${calcResult.length}건</td><td></td>
     <td class="td-mono td-right col-green">${totalQty.toLocaleString()}</td><td></td>
     <td class="td-mono td-right col-yellow">${totalAmt.toLocaleString()}</td></tr>`;
   showFade(document.getElementById('resultsArea2'));
 }
 function downloadExcel2() {
-  const wsData = [['ììì¼','ê³µì íëª','ê³µì íê·ê²©','ìì°ìë','ë¨ê°','ìµì¢ ê¸ì¡']];
-  calcResult.forEach(r => wsData.push([r['ììì¼']??'', r['ê³µì íëª']??'', r['ê³µì íê·ê²©']??'', r._qty, r._price, r._amount]));
+  const wsData = [['작업일','공정품명','공정품규격','생산수량','단가','최종 금액']];
+  calcResult.forEach(r => wsData.push([r['작업일']??'', r['공정품명']??'', r['공정품규격']??'', r._qty, r._price, r._amount]));
   const tq = calcResult.reduce((s,r)=>s+r._qty,0);
   const ta = calcResult.reduce((s,r)=>s+r._amount,0);
-  wsData.push(['í©ê³','','', tq,'', ta]);
+  wsData.push(['합계','','', tq,'', ta]);
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   ws['!cols'] = [{wch:14},{wch:36},{wch:16},{wch:12},{wch:12},{wch:16}];
-  XLSX.utils.book_append_sheet(wb, ws, 'ë¦¬í¼ê¸ì¡ê³ì°');
+  XLSX.utils.book_append_sheet(wb, ws, '리퍼금액계산');
   const now = new Date();
-  XLSX.writeFile(wb, `ë¦¬í¼_ê¸ì¡ê³ì°_ìë£_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`);
+  XLSX.writeFile(wb, `리퍼_금액계산_완료_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`);
 }
 
 // ===================================================
-// TAB 3: ì¬ëì¥ ì¤ì 
+// TAB 3: 재도장 실적
 // ===================================================
 const T3 = {
-  stdCost:  {},        // íì¬ ì í ìì íì¤ìê°
-  monthStdCost: {},   // { ì: { "íëª_ê·ê²©": íì¤ìê° } } - ìë³ ì ì¥
-  inputRows: [],       // íì¬ ìë ¥ ì¤ì¸ íë¤
+  stdCost:  {},        // 현재 선택 월의 표준원가
+  monthStdCost: {},   // { 월: { "품명_규격": 표준원가 } } - 월별 저장
+  inputRows: [],       // 현재 입력 중인 행들
   saved: [],           // [{ month, scrap, rows, totQty, totPL }, ...]
   IRON: 7.85,
 };
@@ -845,10 +846,10 @@ function t3ChangeMonth() {
   if (T3.monthStdCost[month]) {
     T3.stdCost = T3.monthStdCost[month].data;
     document.getElementById('t3_std_status').textContent =
-      `â ${month}ì íì¤ìê° ì ì© ì¤ (${Object.keys(T3.stdCost).length}ê±´)`;
+      `✅ ${month}월 표준원가 적용 중 (${Object.keys(T3.stdCost).length}건)`;
   } else {
     T3.stdCost = {};
-    document.getElementById('t3_std_status').textContent = `â  ${month}ì íì¤ìê° ìì`;
+    document.getElementById('t3_std_status').textContent = `⚠ ${month}월 표준원가 없음`;
   }
   t3RenderInput();
 }
@@ -862,14 +863,14 @@ function initTab3() {
   t3RenderResults();
   t3UpdateStdSavedList();
 
-  // Supabaseìì ë¹ëê¸° ë¡ë
+  // Supabase에서 비동기 로드
   (async () => {
-    document.getElementById('t3_std_status').textContent = 'â³ ë°ì´í° ë¶ë¬ì¤ë ì¤...';
+    document.getElementById('t3_std_status').textContent = '⏳ 데이터 불러오는 중...';
     try {
       await t3LoadStdCostFromSB();
       await t3LoadSessions();
     } catch(e) {
-      console.warn('Supabase ë¡ë ì¤í¨, localStorage ë°±ì ì¬ì©:', e);
+      console.warn('Supabase 로드 실패, localStorage 백업 사용:', e);
       try {
         const saved = localStorage.getItem('t3_saved');
         const stdCosts = localStorage.getItem('t3_monthStdCost');
@@ -880,9 +881,9 @@ function initTab3() {
     if (T3.monthStdCost[m]) {
       T3.stdCost = T3.monthStdCost[m].data;
       document.getElementById('t3_std_status').textContent =
-        `â ${m}ì íì¤ìê° ${Object.keys(T3.stdCost).length}ê±´`;
+        `✅ ${m}월 표준원가 ${Object.keys(T3.stdCost).length}건`;
     } else {
-      document.getElementById('t3_std_status').textContent = `â  ${m}ì íì¤ìê° ìì`;
+      document.getElementById('t3_std_status').textContent = `⚠ ${m}월 표준원가 없음`;
     }
     t3RenderResults();
     t3UpdateStdSavedList();
@@ -893,7 +894,7 @@ function t3EmptyRow() {
   return { name:'', thickness:'', size:'', qty:'', repaint:'', stdcost:'' };
 }
 
-// ââ ìë ¥ íì´ë¸ ë ë ââ
+// ── 입력 테이블 렌더 ──
 function t3RenderInput() {
   const scrap = +document.getElementById('t3_scrap_price')?.value || 250;
   document.getElementById('t3_input_tbody').innerHTML =
@@ -906,16 +907,16 @@ function t3CalcRow(r, scrap, stdCostMap) {
     const m = +document.getElementById('t3_sel_month')?.value || 1;
     stdCostMap = (T3.monthStdCost[m] && T3.monthStdCost[m].data) || T3.stdCost || {};
   }
-  const _autoThick = r.name === 'íëí¸ê¸°ë¥' ? 0.8 : (r.name && r.name.includes('íëí¸') ? 1.2 : 0);
+  const _autoThick = r.name === '홈던트기둥' ? 0.8 : (r.name && r.name.includes('홈던트') ? 1.2 : 0);
   const thickness = +r.thickness || _autoThick || 0;
-  const width     = r.name === 'íëí¸ê¸°ë¥' ? 129 : (r.name ? 64 : 0);
+  const width     = r.name === '홈던트기둥' ? 129 : (r.name ? 64 : 0);
   const size      = +r.size || 0;
   const weight    = (thickness && width && size) ? (thickness * width * T3.IRON * size) / 1000000 : 0;
   const sAmt    = weight ? weight * scrap : 0;
   const _lookup = stdCostMap[r.name + '_' + (r.thickness||'') + '_' + (+r.size)] || {};
   const repaint = +r.repaint  || (_lookup.repaint || 0);
   const std     = +r.stdcost  || (_lookup.std     || 0);
-  // ê°ë¹ììµ = íì¤ìê° - ì¬ëì¥ë¹ì© - ë§ê³ ì² (ì)
+  // 개당손익 = 표준원가 - 재도장비용 - 막고철(원)
   const perPL   = std ? std - repaint - sAmt : 0;
   const qty     = +r.qty || 0;
   const totPL   = (perPL && qty) ? perPL * qty : 0;
@@ -944,25 +945,25 @@ function t3InputRowHtml(r, i, scrap) {
   return `<tr data-i="${i}">
     <td style="text-align:center;padding:2px">
       <button onclick="t3DelRow(${i})"
-        style="border:none;background:none;cursor:pointer;color:var(--accent3);font-size:13px;line-height:1">â</button>
+        style="border:none;background:none;cursor:pointer;color:var(--accent3);font-size:13px;line-height:1">✕</button>
     </td>
     <td style="padding:3px 6px;min-width:130px">
       <select data-i="${i}" data-f="name" onchange="t3CellInput(this)"
         style="width:100%;border:none;outline:none;background:transparent;
           font-family:'Noto Sans KR',sans-serif;font-size:12px;
           padding:2px 4px;color:var(--text);cursor:pointer">
-        <option value="">ì í</option>
-        <option value="íëí¸ê¸°ë¥" ${r.name==='íëí¸ê¸°ë¥'?'selected':''}>íëí¸ê¸°ë¥</option>
-        <option value="íëí¸ë°ì¹¨" ${r.name==='íëí¸ë°ì¹¨'?'selected':''}>íëí¸ë°ì¹¨</option>
-        <option value="ì¤í¼ëëê¸°ë¥" ${r.name==='ì¤í¼ëëê¸°ë¥'?'selected':''}>ì¤í¼ëëê¸°ë¥</option>
-        <option value="ì¤í¼ëëë°ì¹¨" ${r.name==='ì¤í¼ëëë°ì¹¨'?'selected':''}>ì¤í¼ëëë°ì¹¨</option>
+        <option value="">선택</option>
+        <option value="홈던트기둥" ${r.name==='홈던트기둥'?'selected':''}>홈던트기둥</option>
+        <option value="홈던트받침" ${r.name==='홈던트받침'?'selected':''}>홈던트받침</option>
+        <option value="스피드랙기둥" ${r.name==='스피드랙기둥'?'selected':''}>스피드랙기둥</option>
+        <option value="스피드랙받침" ${r.name==='스피드랙받침'?'selected':''}>스피드랙받침</option>
       </select>
     </td>
     <td style="padding:3px 6px;min-width:90px">${t3ThicknessCell(r, i)}</td>
     <td style="padding:3px 6px">${inp('size', r.size)}</td>
     <td style="padding:3px 6px">${inp('qty', r.qty)}</td>
     <td style="padding:3px 4px;text-align:center"><span class="td-mono" style="font-size:12px;color:var(--text2)">7.85</span></td>
-    <td style="padding:3px 4px;text-align:center"><span class="td-mono" style="font-size:12px;color:var(--text2)">${r.name==='íëí¸ê¸°ë¥' ? '129' : (r.name ? '64' : '-')}</span></td>
+    <td style="padding:3px 4px;text-align:center"><span class="td-mono" style="font-size:12px;color:var(--text2)">${r.name==='홈던트기둥' ? '129' : (r.name ? '64' : '-')}</span></td>
     <td style="padding:3px 4px;text-align:right">${ro(weight ? weight.toFixed(4) : null, 'col-gray')}</td>
     <td style="padding:3px 4px;text-align:center"><span class="td-mono" style="font-size:12px;color:var(--text2)">${scrap ? scrap.toLocaleString() : '-'}</span></td>
     <td style="padding:3px 4px;text-align:right">${ro(sAmt ? Math.round(sAmt) : null, 'col-gray')}</td>
@@ -974,23 +975,23 @@ function t3InputRowHtml(r, i, scrap) {
 }
 
 function t3ThicknessCell(r, i) {
-  const isSpeed = r.name.includes('ì¤í¼ëë');
-  const isHome  = r.name.includes('íëí¸');
+  const isSpeed = r.name.includes('스피드랙');
+  const isHome  = r.name.includes('홈던트');
   if (!r.name) {
-    // íëª ë¯¸ì í - ë¹íì±
+    // 품명 미선택 - 비활성
     return `<span style="color:var(--text3);font-size:11px">-</span>`;
   }
   if (isHome) {
-    const val = r.name === 'íëí¸ê¸°ë¥' ? '0.8' : '1.2';
+    const val = r.name === '홈던트기둥' ? '0.8' : '1.2';
     return `<span class="td-mono" style="font-size:12px;color:var(--text2)">${val}</span>`;
   }
   if (isSpeed) {
-    // ì¤í¼ëë: 120/160/200 ì í
+    // 스피드랙: 120/160/200 선택
     return `<select data-i="${i}" data-f="thickness" onchange="t3CellInput(this)"
       style="width:100%;border:none;outline:none;background:transparent;
         font-family:'JetBrains Mono',monospace;font-size:12px;
         text-align:right;padding:2px 4px;color:var(--text);cursor:pointer">
-      <option value="">ì í</option>
+      <option value="">선택</option>
       <option value="1.2" ${r.thickness==='1.2'?'selected':''}>1.2</option>
       <option value="1.4" ${r.thickness==='1.4'?'selected':''}>1.4</option>
       <option value="1.8" ${r.thickness==='1.8'?'selected':''}>1.8</option>
@@ -1003,7 +1004,7 @@ function t3CellData(el) {
   const i = +el.dataset.i;
   const f = el.dataset.f;
   T3.inputRows[i][f] = el.value;
-  // size ìë ¥ ì ì¦ì ìëì±ì°ê¸°
+  // size 입력 시 즉시 자동채우기
   if (f === 'size') {
     const key = T3.inputRows[i].name + '_' + (+el.value);
     const lookup = T3.stdCost[key] || {};
@@ -1018,15 +1019,15 @@ function t3CellInput(el) {
   const f = el.dataset.f;
   T3.inputRows[i][f] = el.value;
 
-  // 1) íëª ë°ëë©´ ëê» ë¨¼ì  ìëì¤ì 
+  // 1) 품명 바뀌면 두께 먼저 자동설정
   if (f === 'name') {
     const nm = T3.inputRows[i].name;
-    if (nm === 'íëí¸ê¸°ë¥')       T3.inputRows[i].thickness = '0.8';
-    else if (nm === 'íëí¸ë°ì¹¨')  T3.inputRows[i].thickness = '1.2';
+    if (nm === '홈던트기둥')       T3.inputRows[i].thickness = '0.8';
+    else if (nm === '홈던트받침')  T3.inputRows[i].thickness = '1.2';
     else                           T3.inputRows[i].thickness = '';
   }
 
-  // 2) íëª/ëê»/ê·ê²© ë³ê²½ ì íì¤ìê°+ì¬ëì¥ë¹ ìëì¡°í
+  // 2) 품명/두께/규격 변경 시 표준원가+재도장비 자동조회
   if (f === 'name' || f === 'thickness' || f === 'size') {
     const r = T3.inputRows[i];
     if (r.name && r.thickness && r.size) {
@@ -1067,20 +1068,20 @@ function t3DelRow(i) {
   t3RenderInput();
 }
 
-// ââ ì ì¥ ââ
+// ── 저장 ──
 function t3SaveMonth() {
   const month = +document.getElementById('t3_sel_month').value;
   const scrap = +document.getElementById('t3_scrap_price').value || 250;
   const rows  = T3.inputRows.filter(r => r.name && r.name.trim());
-  if (!rows.length) { alert('ìë ¥ë ë°ì´í°ê° ììµëë¤.'); return; }
+  if (!rows.length) { alert('입력된 데이터가 없습니다.'); return; }
 
   const existIdx = T3.saved.findIndex(s => s.month === month);
   if (existIdx >= 0) {
-    if (!confirm(`${month}ì ë°ì´í°ê° ì´ë¯¸ ììµëë¤. ë®ì´ì°ê² ìµëê¹?`)) return;
+    if (!confirm(`${month}월 데이터가 이미 있습니다. 덮어쓰겠습니까?`)) return;
     T3.saved.splice(existIdx, 1);
   }
 
-  // ì§ê³
+  // 집계
   let totQty=0, totPL=0;
   rows.forEach(r => {
     totQty += +r.qty||0;
@@ -1091,15 +1092,15 @@ function t3SaveMonth() {
   T3.saved.push({ month, scrap, rows: JSON.parse(JSON.stringify(rows)), totQty, totPL });
   T3.saved.sort((a,b) => a.month - b.month);
 
-  // Supabaseì ì ì¥ (ë¹ëê¸°)
+  // Supabase에 저장 (비동기)
   (async () => {
     try {
       await t3SaveSession(month, scrap, rows);
-      t3SaveToStorage(); // localStorage ë°±ì
-    } catch(e) { alert('ì ì¥ ì¤ë¥: ' + e.message); }
+      t3SaveToStorage(); // localStorage 백업
+    } catch(e) { alert('저장 오류: ' + e.message); }
   })();
 
-  // ìë ¥ ì´ê¸°í & ë¤ì ì ì´ë
+  // 입력 초기화 & 다음 월 이동
   T3.inputRows = [t3EmptyRow(), t3EmptyRow(), t3EmptyRow()];
   const sel = document.getElementById('t3_sel_month');
   if (month < 12) sel.value = String(month + 1);
@@ -1108,7 +1109,7 @@ function t3SaveMonth() {
   t3RenderResults();
 }
 
-// ââ ì ì¥ë ê²°ê³¼ ë ë ââ
+// ── 저장된 결과 렌더 ──
 function t3RenderResults() {
   const wrap = document.getElementById('t3_results_wrap');
   if (!T3.saved.length) { wrap.innerHTML=''; return; }
@@ -1137,40 +1138,40 @@ function t3RenderResults() {
     <div class="panel" style="margin-bottom:20px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:12px">
-          <span style="font-size:16px;font-weight:900;color:var(--accent)">${s.month}ì</span>
-          <span style="font-size:12px;color:var(--text2)">ë§ê³ ì² ë¨ê° <strong>${s.scrap.toLocaleString()}ì</strong>/kg</span>
+          <span style="font-size:16px;font-weight:900;color:var(--accent)">${s.month}월</span>
+          <span style="font-size:12px;color:var(--text2)">막고철단가 <strong>${s.scrap.toLocaleString()}원</strong>/kg</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <span class="td-mono" style="font-size:13px">
-            ìë <strong>${s.totQty.toLocaleString()}</strong>ê° &nbsp;
-            ì´ììµ <strong class="${plSign}">${Math.round(s.totPL).toLocaleString()}ì</strong>
+            수량 <strong>${s.totQty.toLocaleString()}</strong>개 &nbsp;
+            총손익 <strong class="${plSign}">${Math.round(s.totPL).toLocaleString()}원</strong>
           </span>
           <button onclick="t3EditMonth(${s.month})"
             style="padding:5px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;background:var(--surface);font-family:inherit">
-            â ìì 
+            ✏ 수정
           </button>
           <button onclick="t3DeleteMonth(${s.month})"
             style="padding:5px 12px;border:1.5px solid rgba(207,34,46,0.3);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;background:rgba(207,34,46,0.05);color:var(--accent3);font-family:inherit">
-            ð ì­ì 
+            🗑 삭제
           </button>
           <button onclick="t3DownloadMonth(${s.month})"
             style="padding:5px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;background:var(--surface);font-family:inherit">
-            â¬ ìì
+            ⬇ 엑셀
           </button>
         </div>
       </div>
       <div class="table-wrap"><div class="table-scroll">
         <table style="min-width:900px">
           <thead><tr>
-            <th style="text-align:left;min-width:130px">íëª</th>
-            <th style="text-align:right">ê·ê²©</th>
-            <th style="text-align:right">ìë</th>
-            <th style="text-align:right">ë¬´ê²(kg)</th>
-            <th style="text-align:right">ë§ê³ ì² (ì)</th>
-            <th style="text-align:right">ì¬ëì¥ë¹ì©</th>
-            <th style="text-align:right">íì¤ìê°</th>
-            <th style="text-align:right">ê°ë¹ììµ</th>
-            <th style="text-align:right">ì´ ììµ</th>
+            <th style="text-align:left;min-width:130px">품명</th>
+            <th style="text-align:right">규격</th>
+            <th style="text-align:right">수량</th>
+            <th style="text-align:right">무게(kg)</th>
+            <th style="text-align:right">막고철(원)</th>
+            <th style="text-align:right">재도장비용</th>
+            <th style="text-align:right">표준원가</th>
+            <th style="text-align:right">개당손익</th>
+            <th style="text-align:right">총 손익</th>
           </tr></thead>
           <tbody>${rows}</tbody>
           <tfoot><tr style="background:var(--surface2);font-weight:700;border-top:2px solid var(--border)">
@@ -1179,7 +1180,7 @@ function t3RenderResults() {
             <td class="td-mono td-right">${s.totQty.toLocaleString()}</td>
             <td colspan="4"></td>
             <td></td>
-            <td class="td-mono td-right ${plSign}" style="font-weight:700">${Math.round(s.totPL).toLocaleString()}ì</td>
+            <td class="td-mono td-right ${plSign}" style="font-weight:700">${Math.round(s.totPL).toLocaleString()}원</td>
           </tfoot>
         </table>
       </div></div>
@@ -1200,32 +1201,32 @@ function t3EditMonth(month) {
 }
 
 function t3DeleteMonth(month) {
-  if (!confirm(`${month}ì ë°ì´í°ë¥¼ ì­ì í ê¹ì?`)) return;
+  if (!confirm(`${month}월 데이터를 삭제할까요?`)) return;
   T3.saved = T3.saved.filter(s => s.month !== month);
-  // Supabaseììë ì­ì 
+  // Supabase에서도 삭제
   (async () => {
     try {
       await sb3(`repaint_sessions?month=eq.${month}`, { method:'DELETE', prefer:'' });
-    } catch(e) { console.error('ì­ì  ì¤ë¥:', e); }
+    } catch(e) { console.error('삭제 오류:', e); }
     t3SaveToStorage();
     t3RenderResults();
   })();
 }
 
-// localStorage ë°ì´í°ë¥¼ Supabaseë¡ ì´ì 
+// localStorage 데이터를 Supabase로 이전
 async function t3MigrateFromLocalStorage() {
   try {
     const savedRaw = localStorage.getItem('t3_saved');
     const stdRaw   = localStorage.getItem('t3_monthStdCost');
     if (!savedRaw && !stdRaw) {
-      alert('localStorageì ì´ì í  ë°ì´í°ê° ììµëë¤.');
+      alert('localStorage에 이전할 데이터가 없습니다.');
       return;
     }
-    if (!confirm('localStorageì ê¸°ì¡´ ë°ì´í°ë¥¼ Supabaseë¡ ì´ì íê² ìµëê¹?\n(ê¸°ì¡´ Supabase ë°ì´í°ë ì ì§ë©ëë¤)')) return;
+    if (!confirm('localStorage의 기존 데이터를 Supabase로 이전하겠습니까?\n(기존 Supabase 데이터는 유지됩니다)')) return;
 
     let count = 0;
 
-    // íì¤ìê° ì´ì 
+    // 표준원가 이전
     if (stdRaw) {
       const stdData = JSON.parse(stdRaw);
       for (const [month, val] of Object.entries(stdData)) {
@@ -1237,7 +1238,7 @@ async function t3MigrateFromLocalStorage() {
       }
     }
 
-    // ì¤ì  ì´ì 
+    // 실적 이전
     if (savedRaw) {
       const sessions = JSON.parse(savedRaw);
       for (const s of sessions) {
@@ -1246,7 +1247,7 @@ async function t3MigrateFromLocalStorage() {
       }
     }
 
-    // ë¤ì ë¡ë
+    // 다시 로드
     await t3LoadStdCostFromSB();
     await t3LoadSessions();
     t3RenderResults();
@@ -1256,34 +1257,34 @@ async function t3MigrateFromLocalStorage() {
     if (T3.monthStdCost[m]) {
       T3.stdCost = T3.monthStdCost[m].data;
       document.getElementById('t3_std_status').textContent =
-        `â ${m}ì íì¤ìê° ${Object.keys(T3.stdCost).length}ê±´`;
+        `✅ ${m}월 표준원가 ${Object.keys(T3.stdCost).length}건`;
     }
 
-    alert(`â ì´ì  ìë£! (${count}ê±´ ì²ë¦¬ë¨)\nì´ì  ëêµ¬ë ê°ì ë°ì´í°ë¥¼ ë³¼ ì ìì´ì.`);
+    alert(`✅ 이전 완료! (${count}건 처리됨)\n이제 누구나 같은 데이터를 볼 수 있어요.`);
   } catch(e) {
-    alert('ì´ì  ì¤ ì¤ë¥: ' + e.message);
+    alert('이전 중 오류: ' + e.message);
     console.error(e);
   }
 }
 
 
-// íì¼ íëª â { appName, thickness } ë§¤í
+// 파일 품명 → { appName, thickness } 매핑
 function t3MapName(filName) {
   if (!filName) return null;
   const n = filName.trim();
-  // íëí¸: ê¸°ë¥, ë°ì¹¨ë§ (íê³µë°ì¹¨/ííë°ì¹¨/íê±°ë°ì¹¨ ì ì¸)
-  if (n.startsWith('íëí¸/080/ê¸°ë¥'))        return { appName:'íëí¸ê¸°ë¥',  thick:'0.8' };
-  if (n.startsWith('íëí¸/120/ë°ì¹¨/'))        return { appName:'íëí¸ë°ì¹¨',  thick:'1.2' };
-  // ì¤í¼ëë 120 (1.2)
-  if (n.startsWith('ì¤í¼ëë/120/Rê¸°ë¥/'))     return { appName:'ì¤í¼ëëê¸°ë¥', thick:'1.2' };
-  if (n.startsWith('ì¤í¼ëë/120/ê¸°ë¥/'))      return { appName:'ì¤í¼ëëê¸°ë¥', thick:'1.2' };
-  if (n.startsWith('ì¤í¼ëë/120/ë°ì¹¨/'))      return { appName:'ì¤í¼ëëë°ì¹¨', thick:'1.2' };
-  // ì¤í¼ëë 160 (1.4)
-  if (n.startsWith('ì¤í¼ëë/160/ê¸°ë¥/'))      return { appName:'ì¤í¼ëëê¸°ë¥', thick:'1.4' };
-  if (n.startsWith('ì¤í¼ëë/160/ë°ì¹¨/'))      return { appName:'ì¤í¼ëëë°ì¹¨', thick:'1.4' };
-  // ì¤í¼ëë 200 (1.8)
-  if (n.startsWith('ì¤í¼ëë/200/ê¸°ë¥/'))      return { appName:'ì¤í¼ëëê¸°ë¥', thick:'1.8' };
-  if (n.startsWith('ì¤í¼ëë/200/ë°ì¹¨/'))      return { appName:'ì¤í¼ëëë°ì¹¨', thick:'1.8' };
+  // 홈던트: 기둥, 받침만 (타공받침/하프받침/행거받침 제외)
+  if (n.startsWith('홈던트/080/기둥'))        return { appName:'홈던트기둥',  thick:'0.8' };
+  if (n.startsWith('홈던트/120/받침/'))        return { appName:'홈던트받침',  thick:'1.2' };
+  // 스피드랙 120 (1.2)
+  if (n.startsWith('스피드랙/120/R기둥/'))     return { appName:'스피드랙기둥', thick:'1.2' };
+  if (n.startsWith('스피드랙/120/기둥/'))      return { appName:'스피드랙기둥', thick:'1.2' };
+  if (n.startsWith('스피드랙/120/받침/'))      return { appName:'스피드랙받침', thick:'1.2' };
+  // 스피드랙 160 (1.4)
+  if (n.startsWith('스피드랙/160/기둥/'))      return { appName:'스피드랙기둥', thick:'1.4' };
+  if (n.startsWith('스피드랙/160/받침/'))      return { appName:'스피드랙받침', thick:'1.4' };
+  // 스피드랙 200 (1.8)
+  if (n.startsWith('스피드랙/200/기둥/'))      return { appName:'스피드랙기둥', thick:'1.8' };
+  if (n.startsWith('스피드랙/200/받침/'))      return { appName:'스피드랙받침', thick:'1.8' };
   return null;
 }
 
@@ -1295,28 +1296,28 @@ function t3LoadStdCost(input) {
   reader.onload = e => {
     try {
       const wb = XLSX.read(e.target.result, { type: 'array' });
-      const wsName = wb.SheetNames.find(n => n.includes('íë ì')) || wb.SheetNames[0];
+      const wsName = wb.SheetNames.find(n => n.includes('프레임')) || wb.SheetNames[0];
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[wsName], { header:1, defval:null });
       const header = rows[0] || [];
 
-      // ì íí ìì ë§ë íì¤ìê° ì»¬ë¼ ì°¾ê¸°
-      // 1ì: "1ì\níì¤\nìê°"(idx11), 2ì: "2ì\níì¤ìê°"(idx21) ë±
+      // 선택한 월에 맞는 표준원가 컬럼 찾기
+      // 1월: "1월\n표준\n원가"(idx11), 2월: "2월\n표준원가"(idx21) 등
       let stdCol = -1;
       for (let i = 0; i < header.length; i++) {
         const h = String(header[i] || '').replace(/\s/g, '');
-        const m = h.match(/(\d+)ì/);
-        if (m && +m[1] === month && h.includes('íì¤ìê°')) {
+        const m = h.match(/(\d+)월/);
+        if (m && +m[1] === month && h.includes('표준원가')) {
           stdCol = i;
           break;
         }
       }
       if (stdCol === -1) {
-        alert(`${month}ì íì¤ìê° ì»¬ë¼ì ì°¾ì ì ìì´ì.\ní¤ë: ` + header.filter(Boolean).join(', '));
+        alert(`${month}월 표준원가 컬럼을 찾을 수 없어요.\n헤더: ` + header.filter(Boolean).join(', '));
         return;
       }
-      const repaintCol = 18; // ë¶ì²´ ëì¥ë¹(col19, idx18) ê³ ì 
+      const repaintCol = 18; // 분체 도장비(col19, idx18) 고정
 
-      // stdMap ìì±: { "ì±íëª_ëê»_ê·ê²©": { std, repaint } }
+      // stdMap 생성: { "앱품명_두께_규격": { std, repaint } }
       const stdMap = {};
       rows.slice(3).forEach(row => {
         if (!row[0]) return;
@@ -1334,22 +1335,22 @@ function t3LoadStdCost(input) {
 
       T3.monthStdCost[month] = { fileName: file.name, data: stdMap };
       const cnt = Object.keys(stdMap).length;
-      document.getElementById('t3_std_status').textContent = `â ${month}ì ${cnt}ê±´ ì ì¥ ì¤...`;
+      document.getElementById('t3_std_status').textContent = `✅ ${month}월 ${cnt}건 저장 중...`;
       if (input.value !== undefined) input.value = '';
-      // Supabaseì íì¤ìê° ì ì¥
+      // Supabase에 표준원가 저장
       (async () => {
         await t3SaveStdCostToSB(month, file.name, stdMap);
-        document.getElementById('t3_std_status').textContent = `â ${month}ì ${cnt}ê±´ ì ì¥ (${file.name})`;
+        document.getElementById('t3_std_status').textContent = `✅ ${month}월 ${cnt}건 저장 (${file.name})`;
         t3SaveToStorage();
         t3UpdateStdSavedList();
         t3RenderInput();
       })();
-    } catch(err) { alert('íì¼ ì¤ë¥: ' + err.message); }
+    } catch(err) { alert('파일 오류: ' + err.message); }
   };
   reader.readAsArrayBuffer(file);
 }
 
-// ââ TAB3 Supabase API ââââââââââââââââââââââââââââââ
+// ── TAB3 Supabase API ──────────────────────────────
 async function sb3(path, opt={}) {
   const res = await fetch(SB3 + '/rest/v1/' + path, {
     headers: {
@@ -1367,17 +1368,17 @@ async function sb3(path, opt={}) {
   return txt ? JSON.parse(txt) : null;
 }
 
-// Supabaseì ì¤ì  ì ì¥
+// Supabase에 실적 저장
 async function t3SaveSession(month, scrap, rows) {
-  // ê¸°ì¡´ ì¸ì ì­ì 
+  // 기존 세션 삭제
   await sb3(`repaint_sessions?month=eq.${month}`, { method:'DELETE', prefer:'' });
-  // ì ì¸ì ìì±
+  // 새 세션 생성
   const sess = await sb3('repaint_sessions', {
     method: 'POST',
     body: { month, scrap_price: scrap }
   });
   const sessId = Array.isArray(sess) ? sess[0].id : sess.id;
-  // ìì´í ì ì¥
+  // 아이템 저장
   const items = rows.filter(r => r.name).map(r => ({
     session_id: sessId,
     name: r.name, thickness: r.thickness,
@@ -1387,9 +1388,9 @@ async function t3SaveSession(month, scrap, rows) {
   if (items.length) await sb3('repaint_items', { method:'POST', body: items });
 }
 
-// Supabaseìì ì ì²´ ì¤ì  ë¡ë
+// Supabase에서 전체 실적 로드
 
-// Supabaseì íì¤ìê° ì ì¥
+// Supabase에 표준원가 저장
 async function t3SaveStdCostToSB(month, fileName, data) {
   await sb3(`repaint_stdcost?month=eq.${month}`, { method:'DELETE', prefer:'' });
   await sb3('repaint_stdcost', {
@@ -1398,7 +1399,7 @@ async function t3SaveStdCostToSB(month, fileName, data) {
   });
 }
 
-// Supabaseìì íì¤ìê° ë¡ë
+// Supabase에서 표준원가 로드
 
 
 function t3Debug() {
@@ -1406,56 +1407,56 @@ function t3Debug() {
   const curMonth = +document.getElementById('t3_sel_month').value;
   const curMap = (T3.monthStdCost[curMonth] && T3.monthStdCost[curMonth].data) || T3.stdCost || {};
   const keys = Object.keys(curMap);
-  const speedKeys = keys.filter(k => k.includes('ì¤í¼ëëë°ì¹¨_1.4'));
+  const speedKeys = keys.filter(k => k.includes('스피드랙받침_1.4'));
   const row0 = T3.inputRows[0] || {};
   const lookupKey = row0.name + '_' + (row0.thickness||'') + '_' + (+row0.size);
   const found = curMap[lookupKey];
   out.textContent = [
-    'ð íì¬ ì: ' + curMonth,
-    'ð¦ ì ì¥ë ì: ' + Object.keys(T3.monthStdCost).join(', '),
-    'ð¦ curMap í¤ ì: ' + keys.length,
-    'ð ì¤í¼ëëë°ì¹¨_1.4 í¤: ' + (speedKeys.slice(0,5).join(', ') || 'ìì'),
+    '📅 현재 월: ' + curMonth,
+    '📦 저장된 월: ' + Object.keys(T3.monthStdCost).join(', '),
+    '📦 curMap 키 수: ' + keys.length,
+    '🔍 스피드랙받침_1.4 키: ' + (speedKeys.slice(0,5).join(', ') || '없음'),
     '',
-    'ð 1í name=' + row0.name + ' thickness=' + row0.thickness + ' size=' + row0.size,
-    'ð ì¡°í í¤: ' + lookupKey,
-    'â ê²°ê³¼: ' + JSON.stringify(found || 'ìì'),
+    '📝 1행 name=' + row0.name + ' thickness=' + row0.thickness + ' size=' + row0.size,
+    '🔑 조회 키: ' + lookupKey,
+    '✅ 결과: ' + JSON.stringify(found || '없음'),
   ].join('\n');
 }
 
 
-// Tabí¤ë¡ ì ê° ì´ë
+// Tab키로 셀 간 이동
 function t3TabKey(e, el) {
   if (e.key !== 'Tab') return;
   e.preventDefault();
 
-  // ìë ¥ ê°ë¥í íë ìì (ê°ì í ê¸°ì¤)
+  // 입력 가능한 필드 순서 (같은 행 기준)
   const TAB_ORDER = ['size', 'qty', 'repaint', 'stdcost'];
   const i   = +el.dataset.i;
   const f   = el.dataset.f;
   const cur = TAB_ORDER.indexOf(f);
   if (cur === -1) return;
 
-  // blur ë¨¼ì  (íì¬ ê° ì ì¥)
+  // blur 먼저 (현재 값 저장)
   t3CellInput(el);
 
   let nextF, nextI;
   if (e.shiftKey) {
-    // Shift+Tab: ì´ì  ì¹¸
+    // Shift+Tab: 이전 칸
     if (cur > 0) { nextF = TAB_ORDER[cur - 1]; nextI = i; }
     else         { nextF = TAB_ORDER[TAB_ORDER.length - 1]; nextI = i - 1; }
   } else {
-    // Tab: ë¤ì ì¹¸
+    // Tab: 다음 칸
     if (cur < TAB_ORDER.length - 1) { nextF = TAB_ORDER[cur + 1]; nextI = i; }
     else                              { nextF = TAB_ORDER[0];       nextI = i + 1; }
   }
 
-  // ë¤ì íì´ ìì¼ë©´ ìë ì¶ê°
+  // 다음 행이 없으면 자동 추가
   if (nextI >= T3.inputRows.length) {
     T3.inputRows.push({});
     t3RenderInput();
   }
 
-  // í¬ì»¤ì¤ ì´ë
+  // 포커스 이동
   const target = document.querySelector(
     `#t3_input_tbody input[data-i="${nextI}"][data-f="${nextF}"]`
   );
@@ -1466,7 +1467,7 @@ function t3SaveToStorage() {
   try {
     localStorage.setItem('t3_saved', JSON.stringify(T3.saved));
     localStorage.setItem('t3_monthStdCost', JSON.stringify(T3.monthStdCost));
-  } catch(e) { console.warn('localStorage ì ì¥ ì¤í¨:', e); }
+  } catch(e) { console.warn('localStorage 저장 실패:', e); }
 }
 
 function t3UpdateStdSavedList() {
@@ -1477,17 +1478,17 @@ function t3UpdateStdSavedList() {
     <span style="display:inline-flex;align-items:center;gap:4px;
       background:rgba(110,64,201,0.08);border:1px solid rgba(110,64,201,0.25);
       color:var(--accent5);padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600">
-      ð ${m}ì
+      📋 ${m}월
       <button onclick="t3DelStdCost(${m})"
-        style="border:none;background:none;cursor:pointer;color:var(--accent5);font-size:11px;padding:0 2px;line-height:1">â</button>
+        style="border:none;background:none;cursor:pointer;color:var(--accent5);font-size:11px;padding:0 2px;line-height:1">✕</button>
     </span>`).join('');
 }
 
 function t3DelStdCost(month) {
-  if (!confirm(`${month}ì íì¤ìê°ë¥¼ ì­ì íê² ìµëê¹?`)) return;
+  if (!confirm(`${month}월 표준원가를 삭제하겠습니까?`)) return;
   delete T3.monthStdCost[month];
   t3UpdateStdSavedList();
-  // íì¬ ì í ìì´ë©´ ì´ê¸°í
+  // 현재 선택 월이면 초기화
   if (+document.getElementById('t3_sel_month').value === month) {
     T3.stdCost = {};
     document.getElementById('t3_std_status').textContent = '';
@@ -1503,7 +1504,7 @@ function t3UpdateStdSavedList() {
   el.innerHTML = months.map(m =>
     `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(110,64,201,0.1);
       border:1px solid rgba(110,64,201,0.25);border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;color:var(--accent5)">
-      ${m}ì â
+      ${m}월 ✅
     </span>`
   ).join('');
 }
@@ -1511,19 +1512,19 @@ function t3UpdateStdSavedList() {
 function t3DownloadMonth(month) {
   const s = T3.saved.find(x => x.month === month);
   if (!s) return;
-  const headers = ['íëª','ê·ê²©','ìë','ëê»','ëì´','ë¬´ê²(kg)','ë§ê³ ì² ë¨ê°','ë§ê³ ì² (ì)','ì¬ëì¥ë¹ì©','íì¤ìê°','ê°ë¹ììµ','ì´ììµ'];
+  const headers = ['품명','규격','수량','두께','높이','무게(kg)','막고철단가','막고철(원)','재도장비용','표준원가','개당손익','총손익'];
   const data = s.rows.map(r => {
     const { weight, sAmt, std, perPL, totPL } = t3CalcRow(r, s.scrap);
     return [r.name, r.size, r.qty, r.thick, r.height,
       weight.toFixed(4), s.scrap, Math.round(sAmt), r.repaint, std, Math.round(perPL), Math.round(totPL)];
   });
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers,...data]), month+'ì');
-  XLSX.writeFile(wb, 'ì¬ëì¥ì¤ì _'+month+'ì_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers,...data]), month+'월');
+  XLSX.writeFile(wb, '재도장실적_'+month+'월_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 
 // ===================================================
-// TAB 4: ê´ë¦¬íí©
+// TAB 4: 관리현황
 // ===================================================
 const SB3  = 'https://kxlzdnfudvdwzlveqklh.supabase.co';
 const KEY3 = 'sb_publishable_8aTbER8PYcFprysUFig85A_CgXDC319';
@@ -1532,17 +1533,17 @@ const KEY4 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZ
 const H4   = { 'apikey': KEY4, 'Authorization': `Bearer ${KEY4}` };
 
 const VIEWS4 = [
-  { id: 'frame',   label: 'ð íë ì ë°ë©' },
-  { id: 'rack',    label: 'ð¦ ê²½Â·ì¤ëë ë°ë©' },
-  { id: 'plywood', label: 'ðªµ í©í ë°ë©' },
-  { id: 'defect',  label: 'â  ë¶ë ì§ê³' },
-  { id: 'powder',  label: 'ð¨ ë¶ì²´ ë¶ë' },
+  { id: 'frame',   label: '🏗 프레임 반납' },
+  { id: 'rack',    label: '📦 경·중량랙 반납' },
+  { id: 'plywood', label: '🪵 합판 반납' },
+  { id: 'defect',  label: '⚠ 불량 집계' },
+  { id: 'powder',  label: '🎨 분체 불량' },
 ];
 
-// ê³µì  ìí
+// 공유 상태
 const st4 = { cur: 'frame', data: {}, filtered: {}, page: {}, PS: 50, loaded: {}, _colsDef: {}, selMonth: {}, selDate: {} };
 
-// ââ ì ì²´ ë°ì´í° ê°ì ¸ì¤ê¸° (1000ê±´ íê³ íì´ì§ë¤ì´ì) ââ
+// ── 전체 데이터 가져오기 (1000건 한계 페이지네이션) ──
 async function sb4(table, baseParams = '') {
   const Hc = { ...H4, 'Prefer': 'count=exact' };
   const r0  = await fetch(`${SB4}/rest/v1/${table}?${baseParams}&limit=1`, { headers: Hc });
@@ -1559,24 +1560,24 @@ async function sb4(table, baseParams = '') {
   return all;
 }
 
-// ââ íë ì íì/ìì íì± (ì ì­) ââ
+// ── 프레임 타입/색상 파싱 (전역) ──
 function parseFrameType(r) {
   const t = (r._thickness || '').trim();
-  if (t === 'V2')  return 'íëí¸(V2)';
-  if (t === '120') return 'ì¤í¼ëë120';
-  if (t === '160') return 'ì¤í¼ëë160';
-  if (t === '200') return 'ì¤í¼ëë200';
-  if (t === '')    return 'íëí¸';
+  if (t === 'V2')  return '홈던트(V2)';
+  if (t === '120') return '스피드랙120';
+  if (t === '160') return '스피드랙160';
+  if (t === '200') return '스피드랙200';
+  if (t === '')    return '홈던트';
   return t || '-';
 }
 function parseFrameColor(r) {
   const c = (r._color || '').trim();
-  if (c === 'WH') return 'íì´í¸';
-  if (c === 'BK') return 'ë¸ë';
+  if (c === 'WH') return '화이트';
+  if (c === 'BK') return '블랙';
   return c || '-';
 }
 
-// ââ ê³µíµ ì í¸ ââ
+// ── 공통 유틸 ──
 function fmtDt(s) {
   try {
     const d = new Date(s);
@@ -1587,7 +1588,7 @@ function dtCell(row, today) {
   const dt  = fmtDt(row.created_at || '');
   const isT = (row.created_at || '').startsWith(today);
   return isT
-    ? `<td><span class="td-mono" style="color:var(--accent2);font-size:11px">ð¢ ${dt}</span></td>`
+    ? `<td><span class="td-mono" style="color:var(--accent2);font-size:11px">🟢 ${dt}</span></td>`
     : `<td><span class="td-mono col-gray" style="font-size:11px">${dt}</span></td>`;
 }
 function card(lbl, val, sub, cls = 'vc-blue') {
@@ -1605,7 +1606,7 @@ function aggTable(headers, rows) {
     </table></div></div>`;
 }
 
-// ââ ì ì í UI ìì± ââ
+// ── 월 선택 UI 생성 ──
 function buildDateFilter(id, data) {
   const mm = {};
   data.forEach(r => {
@@ -1621,32 +1622,32 @@ function buildDateFilter(id, data) {
   return `<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;
     padding:13px 15px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">
 
-    <!-- ì ì í í -->
+    <!-- 월 선택 행 -->
     <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
-      <span style="font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;min-width:50px">ð ì ì í</span>
+      <span style="font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;min-width:50px">📅 월 선택</span>
       <button class="v4-mbtn ${selM==='all'?'v4-mbtn-on':''}" onclick="setMonth4('${id}','all')">
-        ì ì²´ <span class="v4-mcnt">${data.length.toLocaleString()}</span>
+        전체 <span class="v4-mcnt">${data.length.toLocaleString()}</span>
       </button>
       ${months.map(m => {
         const [y, mo] = m.split('-');
         return `<button class="v4-mbtn ${selM===m?'v4-mbtn-on':''}" onclick="setMonth4('${id}','${m}')">
-          ${y}ë ${parseInt(mo)}ì <span class="v4-mcnt">${mm[m].toLocaleString()}</span>
+          ${y}년 ${parseInt(mo)}월 <span class="v4-mcnt">${mm[m].toLocaleString()}</span>
         </button>`;
       }).join('')}
     </div>
 
-    <!-- ë ì§ ì í í -->
+    <!-- 날짜 선택 행 -->
     <div style="display:flex;align-items:center;gap:10px;padding-top:8px;border-top:1px solid var(--border)">
-      <span style="font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;min-width:50px">ð ë ì§</span>
+      <span style="font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;min-width:50px">📆 날짜</span>
 
-      <!-- date inputì ì§ì  ì¤íì¼ë§í´ì ë²í¼ì²ë¼ ë³´ì´ê² -->
+      <!-- date input을 직접 스타일링해서 버튼처럼 보이게 -->
       <label style="display:inline-flex;align-items:center;gap:6px;
         padding:5px 12px;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer;
         border:1.5px solid ${selD ? 'var(--accent)' : 'var(--border)'};
         background:${selD ? 'var(--accent)' : 'var(--surface)'};
         color:${selD ? 'white' : 'var(--text2)'};
         font-family:'Noto Sans KR',sans-serif;white-space:nowrap;transition:all 0.15s">
-        ð
+        📆
         <input type="date" id="datepick_${id}"
           value="${selD}"
           style="border:none;background:transparent;outline:none;cursor:pointer;
@@ -1655,19 +1656,19 @@ function buildDateFilter(id, data) {
             color-scheme:${selD ? 'dark' : 'light'};
             padding:0;margin:0;width:${selD ? '90px' : '100px'}"
           onchange="setDate4('${id}', this.value)">
-        ${selD ? `<span onclick="clearDate4('${id}')" title="ì´ê¸°í"
-          style="margin-left:2px;cursor:pointer;opacity:0.85;font-size:13px">â</span>` : ''}
+        ${selD ? `<span onclick="clearDate4('${id}')" title="초기화"
+          style="margin-left:2px;cursor:pointer;opacity:0.85;font-size:13px">✕</span>` : ''}
       </label>
 
       ${selD ? `<span style="font-size:12px;color:var(--text2);font-weight:600">
-        â <span style="color:var(--accent);font-family:'JetBrains Mono',monospace">${dayCnt.toLocaleString()}</span>ê±´
-      </span>` : '<span style="font-size:11px;color:var(--text3)">ë ì§ë¥¼ ì ííë©´ í´ë¹ ì¼ì ë°ì´í°ë§ íìë©ëë¤</span>'}
+        → <span style="color:var(--accent);font-family:'JetBrains Mono',monospace">${dayCnt.toLocaleString()}</span>건
+      </span>` : '<span style="font-size:11px;color:var(--text3)">날짜를 선택하면 해당 일자 데이터만 표시됩니다</span>'}
     </div>
   </div>`;
 }
 function setMonth4(id, month) {
   st4.selMonth[id] = month;
-  st4.selDate[id]  = '';          // ì ë°ê¾¸ë©´ ë ì§ ì´ê¸°í
+  st4.selDate[id]  = '';          // 월 바꾸면 날짜 초기화
   applyAllFilters4(id);
 }
 
@@ -1678,81 +1679,81 @@ function setDate4(id, date) {
 
 function clearDate4(id) {
   st4.selDate[id] = '';
-  // inputë ì´ê¸°í
+  // input도 초기화
   const inp = document.getElementById('datepick_' + id);
   if (inp) inp.value = '';
   applyAllFilters4(id);
 }
 
-// ââ ê³µíµ íí° ì ì© ââ
+// ── 공통 필터 적용 ──
 function applyAllFilters4(id) {
   const today = new Date().toISOString().split('T')[0];
   let data = st4.data[id] || [];
 
-  // 1) ì íí°
+  // 1) 월 필터
   const selM = st4.selMonth[id] || 'all';
   if (selM !== 'all') {
     data = data.filter(r => (r.created_at || '').startsWith(selM));
   }
 
-  // 1-2) ë ì§ íí° (ì íí°ë³´ë¤ ì¢ì ë²ì)
+  // 1-2) 날짜 필터 (월 필터보다 좁은 범위)
   const selD = st4.selDate[id] || '';
   if (selD) {
     data = data.filter(r => (r.created_at || '').startsWith(selD));
   }
 
-  // 2) ì¹´íê³ ë¦¬/ì í ìë í¸
+  // 2) 카테고리/유형 셀렉트
   ['_f1', '_f2'].forEach(suf => {
     const el = document.getElementById(id + suf);
     if (el && el.value) data = data.filter(r => r[el.dataset.key] === el.value);
   });
 
-  // 3) íì¤í¸ ê²ì
+  // 3) 텍스트 검색
   const q = (document.getElementById(id + '_q') || {}).value?.trim().toLowerCase() || '';
   if (q) data = data.filter(r => Object.values(r).some(v => String(v || '').toLowerCase().includes(q)));
 
   st4.filtered[id] = data;
   st4.page[id]     = 0;
 
-  // ì§ê³ ì¹´ë + ì§ê³ íì´ë¸ ê°±ì 
+  // 집계 카드 + 집계 테이블 갱신
   updateSummary4(id, data, today);
   renderRows4(id, today);
 
-  // ì/ë ì§ íí° UI ì ì²´ ê°±ì  (ê±´ì ë°ì)
+  // 월/날짜 필터 UI 전체 갱신 (건수 반영)
   renderDateFilter(id, st4.data[id] || []);
 }
 
-// ââ ì§ê³ ì¹´ë/íì´ë¸ ê°±ì  ââ
+// ── 집계 카드/테이블 갱신 ──
 function updateSummary4(id, data, today) {
   const el = document.getElementById(id + '_summary');
   if (!el) return;
 
   const todayCnt = data.filter(r => (r.created_at || '').startsWith(today)).length;
   const selLabel = st4.selMonth[id] === 'all' || !st4.selMonth[id]
-    ? 'ì ì²´ ê¸°ê°' : (() => { const [y,m]=st4.selMonth[id].split('-'); return `${y}ë ${parseInt(m)}ì`; })();
+    ? '전체 기간' : (() => { const [y,m]=st4.selMonth[id].split('-'); return `${y}년 ${parseInt(m)}월`; })();
 
   if (id === 'frame') {
-    // ë¡ì° ë°ì´í° ê¸°ì¤ ì§ê³
+    // 로우 데이터 기준 집계
     const sumR  = data.reduce((s,r)=>s+(+r.received_quantity||0), 0);
     const sumRe = data.reduce((s,r)=>s+(+r.recycle_quantity||0),  0);
     const sumD  = data.reduce((s,r)=>s+(+r.dispose_quantity||0),  0);
-    // ì ììë = ìê³  - ì¬íì© - íê¸°
+    // 정상수량 = 입고 - 재활용 - 폐기
     const sumN  = sumR - sumRe - sumD;
     const dispRate = sumR ? Math.round(sumD / sumR * 100) : 0;
 
-    // ì¹´íê³ ë¦¬ + íìë³ ì§ê³
+    // 카테고리 + 타입별 집계
     const catMap = {};
     data.forEach(r => {
-      const c    = r.category   || 'ê¸°í';
-      const typ  = parseFrameType(r);   // ì¸ì JOIN ê° ì¬ì©
+      const c    = r.category   || '기타';
+      const typ  = parseFrameType(r);   // 세션 JOIN 값 사용
       const recv = +r.received_quantity||0;
       const re   = +r.recycle_quantity||0;
       const d    = +r.dispose_quantity||0;
       const n    = recv - re - d;
-      // ì¹´íê³ ë¦¬ í©ê³
+      // 카테고리 합계
       if (!catMap[c]) catMap[c] = { recv:0, re:0, d:0, n:0, types:{} };
       catMap[c].recv += recv; catMap[c].re += re; catMap[c].d += d; catMap[c].n += n;
-      // íìë³ ì§ê³
+      // 타입별 집계
       if (!catMap[c].types[typ]) catMap[c].types[typ] = { recv:0, re:0, d:0, n:0, cnt:0 };
       catMap[c].types[typ].recv += recv; catMap[c].types[typ].re += re;
       catMap[c].types[typ].d   += d;    catMap[c].types[typ].n  += n;
@@ -1760,28 +1761,28 @@ function updateSummary4(id, data, today) {
     });
     const cats = Object.entries(catMap).sort((a,b) => b[1].recv - a[1].recv);
 
-    // íì ë°°ì§ (ì§ê³ íì´ë¸ì© ì¸ë¼ì¸)
+    // 타입 배지 (집계 테이블용 인라인)
     const TYPE_STYLE = {
-      'íëí¸(V2)':  'background:#dbeafe;color:#1d4ed8',
-      'íëí¸':      'background:#ede9fe;color:#6d28d9',
-      'ì¤í¼ëë120': 'background:#dcfce7;color:#166534',
-      'ì¤í¼ëë160': 'background:#d1fae5;color:#065f46',
-      'ì¤í¼ëë200': 'background:#a7f3d0;color:#064e3b',
+      '홈던트(V2)':  'background:#dbeafe;color:#1d4ed8',
+      '홈던트':      'background:#ede9fe;color:#6d28d9',
+      '스피드랙120': 'background:#dcfce7;color:#166534',
+      '스피드랙160': 'background:#d1fae5;color:#065f46',
+      '스피드랙200': 'background:#a7f3d0;color:#064e3b',
     };
     function typBadgeSmall(t) {
       const s = TYPE_STYLE[t] || 'background:#f3f4f6;color:#374151';
       return `<span style="${s};padding:1px 6px;border-radius:6px;font-size:11px;font-weight:600">${t}</span>`;
     }
 
-    // ìì½ëì¸ ì¹´íê³ ë¦¬ ì§ê³ íì´ë¸
+    // 아코디언 카테고리 집계 테이블
     const catRows = cats.map(([c, v]) => {
       const typeList = Object.entries(v.types).sort((a,b) => b[1].recv - a[1].recv);
       const key = btoa(encodeURIComponent(c)).replace(/=/g,'');
       const typeRows = typeList.map(([typ, tv]) => `
         <tr class="frame-size-row" id="sizerow_frame_${key}" style="display:none;background:rgba(9,105,218,0.03)">
-          <td style="padding-left:32px">â³</td>
+          <td style="padding-left:32px">↳</td>
           <td>${typBadgeSmall(typ)}</td>
-          <td class="td-mono td-right col-gray" style="font-size:12px">${tv.cnt}ê±´</td>
+          <td class="td-mono td-right col-gray" style="font-size:12px">${tv.cnt}건</td>
           <td class="td-mono td-right col-blue" style="font-size:12px">${tv.recv.toLocaleString()}</td>
           <td class="td-mono td-right col-green" style="font-size:12px">${Math.max(0,tv.n).toLocaleString()}</td>
           <td class="td-mono td-right col-gray" style="font-size:12px">${tv.re.toLocaleString()}</td>
@@ -1790,9 +1791,9 @@ function updateSummary4(id, data, today) {
         </tr>`).join('');
       return `
         <tr class="frame-cat-row" onclick="toggleFrameCat('${key}')" style="cursor:pointer">
-          <td style="width:28px;font-size:11px;color:var(--accent)" id="arrow_${key}">â¶</td>
+          <td style="width:28px;font-size:11px;color:var(--accent)" id="arrow_${key}">▶</td>
           <td class="td-name">${c}</td>
-          <td class="td-mono td-right col-gray" style="font-size:12px">${typeList.length}íì</td>
+          <td class="td-mono td-right col-gray" style="font-size:12px">${typeList.length}타입</td>
           <td class="td-mono td-right col-blue">${v.recv.toLocaleString()}</td>
           <td class="td-mono td-right col-green">${Math.max(0,v.n).toLocaleString()}</td>
           <td class="td-mono td-right col-gray">${v.re.toLocaleString()}</td>
@@ -1804,51 +1805,51 @@ function updateSummary4(id, data, today) {
 
     el.innerHTML = `
       <div class="v4-sumgrid">
-        ${card('ê±´ì ('+selLabel+')', data.length, 'ê±´', 'vc-blue')}
-        ${card('ì¤ë ìë ¥', todayCnt, today, 'vc-green')}
-        ${card('ì´ ìê³ ìë', sumR, 'ê°', 'vc-blue')}
-        ${card('ì ì ìë', sumN < 0 ? 0 : sumN, 'ê° (ìê³ -ì¬íì©-íê¸°)', 'vc-green')}
-        ${card('ì¬íì© ìë', sumRe, 'ê°', 'vc-gray')}
-        ${card('íê¸° ìë', sumD, 'ê°', 'vc-red')}
-        ${card('íê¸°ì¨', sumR ? dispRate+'%' : '-', 'íê¸°Ã·ìê³ ', dispRate>=50?'vc-red':dispRate>=20?'vc-yellow':'vc-green')}
+        ${card('건수 ('+selLabel+')', data.length, '건', 'vc-blue')}
+        ${card('오늘 입력', todayCnt, today, 'vc-green')}
+        ${card('총 입고수량', sumR, '개', 'vc-blue')}
+        ${card('정상 수량', sumN < 0 ? 0 : sumN, '개 (입고-재활용-폐기)', 'vc-green')}
+        ${card('재활용 수량', sumRe, '개', 'vc-gray')}
+        ${card('폐기 수량', sumD, '개', 'vc-red')}
+        ${card('폐기율', sumR ? dispRate+'%' : '-', '폐기÷입고', dispRate>=50?'vc-red':dispRate>=20?'vc-yellow':'vc-green')}
       </div>
-      <div class="v4-stitle">ð ì¹´íê³ ë¦¬ë³ ì§ê³ (${selLabel}) <span style="font-size:12px;font-weight:400;color:var(--text2)">â ì¹´íê³ ë¦¬ í´ë¦­ ì ê·ê²©ë³ ìì¸ í¼ì¹¨</span></div>
+      <div class="v4-stitle">📊 카테고리별 집계 (${selLabel}) <span style="font-size:12px;font-weight:400;color:var(--text2)">— 카테고리 클릭 시 규격별 상세 펼침</span></div>
       <div class="table-wrap" style="margin-bottom:20px">
         <div class="table-scroll" style="max-height:400px"><table>
           <thead><tr>
             <th style="width:28px"></th>
-            <th>ì¹´íê³ ë¦¬</th>
-            <th style="text-align:right">íì ì</th>
-            <th style="text-align:right">ìê³ </th>
-            <th style="text-align:right">ì ì</th>
-            <th style="text-align:right">ì¬íì©</th>
-            <th style="text-align:right">íê¸°</th>
-            <th style="text-align:right">íê¸°ì¨</th>
+            <th>카테고리</th>
+            <th style="text-align:right">타입 수</th>
+            <th style="text-align:right">입고</th>
+            <th style="text-align:right">정상</th>
+            <th style="text-align:right">재활용</th>
+            <th style="text-align:right">폐기</th>
+            <th style="text-align:right">폐기율</th>
           </tr></thead>
           <tbody>${catRows}</tbody>
         </table></div>
       </div>`;
 
   } else if (id === 'rack') {
-    const heavy = data.filter(r=>r.category==='ì¤ëë');
-    const light = data.filter(r=>r.category==='ê²½ëë');
+    const heavy = data.filter(r=>r.category==='중량랙');
+    const light = data.filter(r=>r.category==='경량랙');
     const sumRe = data.reduce((s,r)=>s+(+r.recycle_quantity||0),0);
     const sumD  = data.reduce((s,r)=>s+(+r.dispose_quantity||0),0);
     const typeMap={};
-    data.forEach(r=>{const t=r.product_type||'ê¸°í';if(!typeMap[t])typeMap[t]={h:0,l:0,re:0,d:0};if(r.category==='ì¤ëë')typeMap[t].h+=(+r.received_quantity||0);else typeMap[t].l+=(+r.received_quantity||0);typeMap[t].re+=(+r.recycle_quantity||0);typeMap[t].d+=(+r.dispose_quantity||0);});
+    data.forEach(r=>{const t=r.product_type||'기타';if(!typeMap[t])typeMap[t]={h:0,l:0,re:0,d:0};if(r.category==='중량랙')typeMap[t].h+=(+r.received_quantity||0);else typeMap[t].l+=(+r.received_quantity||0);typeMap[t].re+=(+r.recycle_quantity||0);typeMap[t].d+=(+r.dispose_quantity||0);});
     const types=Object.entries(typeMap).sort((a,b)=>(b[1].h+b[1].l)-(a[1].h+a[1].l));
     el.innerHTML=`
       <div class="v4-sumgrid">
-        ${card('ê±´ì ('+selLabel+')',data.length,'ê±´','vc-blue')}
-        ${card('ì¤ë ìë ¥',todayCnt,today,'vc-green')}
-        ${card('ì¤ëë',heavy.length,'í­ëª©','vc-blue')}
-        ${card('ê²½ëë',light.length,'í­ëª©','vc-yellow')}
-        ${card('ì´ ì¬íì©',sumRe,'ê°','vc-green')}
-        ${card('ì´ íê¸°',sumD,'ê°','vc-red')}
+        ${card('건수 ('+selLabel+')',data.length,'건','vc-blue')}
+        ${card('오늘 입력',todayCnt,today,'vc-green')}
+        ${card('중량랙',heavy.length,'항목','vc-blue')}
+        ${card('경량랙',light.length,'항목','vc-yellow')}
+        ${card('총 재활용',sumRe,'개','vc-green')}
+        ${card('총 폐기',sumD,'개','vc-red')}
       </div>
-      <div class="v4-stitle">ð ì íì íë³ ì§ê³ (${selLabel})</div>
+      <div class="v4-stitle">📊 제품유형별 집계 (${selLabel})</div>
       ${aggTable(
-        [{l:'ì íì í'},{l:'ì¤ëë',r:1},{l:'ê²½ëë',r:1},{l:'ì¬íì©',r:1},{l:'íê¸°',r:1},{l:'íê¸°ì¨',r:1}],
+        [{l:'제품유형'},{l:'중량랙',r:1},{l:'경량랙',r:1},{l:'재활용',r:1},{l:'폐기',r:1},{l:'폐기율',r:1}],
         types.map(([t,v])=>`<tr><td class="td-name">${t}</td>
           <td class="td-mono td-right col-blue">${v.h.toLocaleString()}</td>
           <td class="td-mono td-right col-yellow">${v.l.toLocaleString()}</td>
@@ -1862,19 +1863,19 @@ function updateSummary4(id, data, today) {
     const sumRe=data.reduce((s,r)=>s+(+r.recycle_quantity||0),0);
     const sumD=data.reduce((s,r)=>s+(+r.dispose_quantity||0),0);
     const thkMap={};
-    data.forEach(r=>{const t=r.thickness||'ê¸°í';if(!thkMap[t])thkMap[t]={r:0,re:0,d:0,edge:0,side:0,surf:0,cross:0};thkMap[t].r+=(+r.received_quantity||0);thkMap[t].re+=(+r.recycle_quantity||0);thkMap[t].d+=(+r.dispose_quantity||0);thkMap[t].edge+=(+r.dispose_edge||0);thkMap[t].side+=(+r.dispose_side||0);thkMap[t].surf+=(+r.dispose_surface||0);thkMap[t].cross+=(+r.dispose_cross_grain||0);});
+    data.forEach(r=>{const t=r.thickness||'기타';if(!thkMap[t])thkMap[t]={r:0,re:0,d:0,edge:0,side:0,surf:0,cross:0};thkMap[t].r+=(+r.received_quantity||0);thkMap[t].re+=(+r.recycle_quantity||0);thkMap[t].d+=(+r.dispose_quantity||0);thkMap[t].edge+=(+r.dispose_edge||0);thkMap[t].side+=(+r.dispose_side||0);thkMap[t].surf+=(+r.dispose_surface||0);thkMap[t].cross+=(+r.dispose_cross_grain||0);});
     const thks=Object.entries(thkMap).sort((a,b)=>b[1].r-a[1].r);
     el.innerHTML=`
       <div class="v4-sumgrid">
-        ${card('ê±´ì ('+selLabel+')',data.length,'ê±´','vc-blue')}
-        ${card('ì¤ë ìë ¥',todayCnt,today,'vc-green')}
-        ${card('ì´ ìê³ ',sumR,'ì¥','vc-blue')}
-        ${card('ì´ ì¬íì©',sumRe,'ì¥','vc-green')}
-        ${card('ì´ íê¸°',sumD,'ì¥','vc-red')}
+        ${card('건수 ('+selLabel+')',data.length,'건','vc-blue')}
+        ${card('오늘 입력',todayCnt,today,'vc-green')}
+        ${card('총 입고',sumR,'장','vc-blue')}
+        ${card('총 재활용',sumRe,'장','vc-green')}
+        ${card('총 폐기',sumD,'장','vc-red')}
       </div>
-      <div class="v4-stitle">ð ëê»ë³ ì§ê³ (${selLabel})</div>
+      <div class="v4-stitle">📊 두께별 집계 (${selLabel})</div>
       ${aggTable(
-        [{l:'ëê»'},{l:'ìê³ ',r:1},{l:'ì¬íì©',r:1},{l:'íê¸°(í©ê³)',r:1},{l:'íëë¦¬',r:1},{l:'ìë©´',r:1},{l:'íë©´',r:1},{l:'ê²°',r:1}],
+        [{l:'두께'},{l:'입고',r:1},{l:'재활용',r:1},{l:'폐기(합계)',r:1},{l:'테두리',r:1},{l:'옆면',r:1},{l:'표면',r:1},{l:'결',r:1}],
         thks.map(([t,v])=>`<tr><td class="td-mono col-blue">${t}</td>
           <td class="td-mono td-right">${v.r.toLocaleString()}</td>
           <td class="td-mono td-right col-green">${v.re.toLocaleString()}</td>
@@ -1890,19 +1891,19 @@ function updateSummary4(id, data, today) {
     const sumRe=data.reduce((s,r)=>s+(+r.repaint_quantity||0),0);
     const sumN=data.reduce((s,r)=>s+(+r.normal_quantity||0),0);
     const catMap={};
-    data.forEach(r=>{const c=r.category||'ê¸°í';if(!catMap[c])catMap[c]={d:0,re:0,n:0};catMap[c].d+=(+r.dispose_quantity||0);catMap[c].re+=(+r.repaint_quantity||0);catMap[c].n+=(+r.normal_quantity||0);});
+    data.forEach(r=>{const c=r.category||'기타';if(!catMap[c])catMap[c]={d:0,re:0,n:0};catMap[c].d+=(+r.dispose_quantity||0);catMap[c].re+=(+r.repaint_quantity||0);catMap[c].n+=(+r.normal_quantity||0);});
     const cats=Object.entries(catMap).sort((a,b)=>(b[1].d+b[1].re+b[1].n)-(a[1].d+a[1].re+a[1].n));
     el.innerHTML=`
       <div class="v4-sumgrid">
-        ${card('ê±´ì ('+selLabel+')',data.length,'ê±´','vc-blue')}
-        ${card('ì¤ë ìë ¥',todayCnt,today,'vc-green')}
-        ${card('ì´ íê¸°',sumD,'ê°','vc-red')}
-        ${card('ì´ ì¬ëì¥',sumRe,'ê°','vc-yellow')}
-        ${card('ì´ ì ì',sumN,'ê°','vc-green')}
+        ${card('건수 ('+selLabel+')',data.length,'건','vc-blue')}
+        ${card('오늘 입력',todayCnt,today,'vc-green')}
+        ${card('총 폐기',sumD,'개','vc-red')}
+        ${card('총 재도장',sumRe,'개','vc-yellow')}
+        ${card('총 정상',sumN,'개','vc-green')}
       </div>
-      <div class="v4-stitle">ð ì¹´íê³ ë¦¬ë³ ë¶ë ì§ê³ (${selLabel})</div>
+      <div class="v4-stitle">📊 카테고리별 불량 집계 (${selLabel})</div>
       ${aggTable(
-        [{l:'ì¹´íê³ ë¦¬'},{l:'íê¸°',r:1},{l:'ì¬ëì¥',r:1},{l:'ì ì',r:1},{l:'í©ê³',r:1}],
+        [{l:'카테고리'},{l:'폐기',r:1},{l:'재도장',r:1},{l:'정상',r:1},{l:'합계',r:1}],
         cats.map(([c,v])=>`<tr><td class="td-name">${c}</td>
           <td class="td-mono td-right col-red">${v.d.toLocaleString()}</td>
           <td class="td-mono td-right col-yellow">${v.re.toLocaleString()}</td>
@@ -1914,23 +1915,23 @@ function updateSummary4(id, data, today) {
     const sumD=data.reduce((s,r)=>s+(+r.dispose_quantity||0),0);
     const sumRe=data.reduce((s,r)=>s+(+r.repaint_quantity||0),0);
     const catMap={};
-    data.forEach(r=>{const c=r.category||'ê¸°í';if(!catMap[c])catMap[c]={d:0,re:0};catMap[c].d+=(+r.dispose_quantity||0);catMap[c].re+=(+r.repaint_quantity||0);});
+    data.forEach(r=>{const c=r.category||'기타';if(!catMap[c])catMap[c]={d:0,re:0};catMap[c].d+=(+r.dispose_quantity||0);catMap[c].re+=(+r.repaint_quantity||0);});
     const cats=Object.entries(catMap).sort((a,b)=>(b[1].d+b[1].re)-(a[1].d+a[1].re));
     const typeMap={};
-    data.forEach(r=>{const t=r.defect_type||'ê¸°í';if(!typeMap[t])typeMap[t]={cnt:0,d:0,re:0};typeMap[t].cnt++;typeMap[t].d+=(+r.dispose_quantity||0);typeMap[t].re+=(+r.repaint_quantity||0);});
+    data.forEach(r=>{const t=r.defect_type||'기타';if(!typeMap[t])typeMap[t]={cnt:0,d:0,re:0};typeMap[t].cnt++;typeMap[t].d+=(+r.dispose_quantity||0);typeMap[t].re+=(+r.repaint_quantity||0);});
     const dtypes=Object.entries(typeMap).sort((a,b)=>b[1].cnt-a[1].cnt);
     el.innerHTML=`
       <div class="v4-sumgrid">
-        ${card('ê±´ì ('+selLabel+')',data.length,'ê±´','vc-blue')}
-        ${card('ì¤ë ìë ¥',todayCnt,today,'vc-green')}
-        ${card('ì´ íê¸°',sumD,'ê°','vc-red')}
-        ${card('ì´ ì¬ëì¥',sumRe,'ê°','vc-yellow')}
+        ${card('건수 ('+selLabel+')',data.length,'건','vc-blue')}
+        ${card('오늘 입력',todayCnt,today,'vc-green')}
+        ${card('총 폐기',sumD,'개','vc-red')}
+        ${card('총 재도장',sumRe,'개','vc-yellow')}
       </div>
       <div class="v4-2col">
         <div>
-          <div class="v4-stitle">ð ì¹´íê³ ë¦¬ë³ ë¶ì²´ ë¶ë (${selLabel})</div>
+          <div class="v4-stitle">📊 카테고리별 분체 불량 (${selLabel})</div>
           ${aggTable(
-            [{l:'ì¹´íê³ ë¦¬'},{l:'íê¸°',r:1},{l:'ì¬ëì¥',r:1},{l:'í©ê³',r:1}],
+            [{l:'카테고리'},{l:'폐기',r:1},{l:'재도장',r:1},{l:'합계',r:1}],
             cats.map(([c,v])=>`<tr><td class="td-name">${c}</td>
               <td class="td-mono td-right col-red">${v.d.toLocaleString()}</td>
               <td class="td-mono td-right col-yellow">${v.re.toLocaleString()}</td>
@@ -1938,9 +1939,9 @@ function updateSummary4(id, data, today) {
           )}
         </div>
         <div>
-          <div class="v4-stitle">â  ë¶ëì íë³ íí© (${selLabel})</div>
+          <div class="v4-stitle">⚠ 불량유형별 현황 (${selLabel})</div>
           ${aggTable(
-            [{l:'ë¶ëì í'},{l:'ê±´ì',r:1},{l:'íê¸°',r:1},{l:'ì¬ëì¥',r:1}],
+            [{l:'불량유형'},{l:'건수',r:1},{l:'폐기',r:1},{l:'재도장',r:1}],
             dtypes.map(([t,v])=>`<tr><td class="td-name">${t}</td>
               <td class="td-mono td-right col-gray">${v.cnt.toLocaleString()}</td>
               <td class="td-mono td-right col-red">${v.d.toLocaleString()}</td>
@@ -1951,7 +1952,7 @@ function updateSummary4(id, data, today) {
   }
 }
 
-// ââ ë¡ì° ë°ì´í° ë ë ââ
+// ── 로우 데이터 렌더 ──
 function renderRows4(id, today) {
   const data  = st4.filtered[id] || [];
   const page  = st4.page[id] || 0;
@@ -1971,17 +1972,17 @@ function renderRows4(id, today) {
     </tr>`;
   }).join('');
 
-  // íì´ì§ë¤ì´ì
+  // 페이지네이션
   const pgEl = document.getElementById(id + '_pg');
   if (!pgEl) return;
-  let btns = `<button class="v4-pgbtn" onclick="v4GoPage('${id}',${page-1})" ${page===0?'disabled':''}>â¹</button>`;
+  let btns = `<button class="v4-pgbtn" onclick="v4GoPage('${id}',${page-1})" ${page===0?'disabled':''}>‹</button>`;
   for (let p = 0; p < total; p++) {
-    if (total > 8 && p > 1 && p < page - 1) { if(p===2) btns += '<span style="padding:3px 5px;color:var(--text3)">â¦</span>'; continue; }
-    if (total > 8 && p < total - 2 && p > page + 1) { if(p===total-3) btns += '<span style="padding:3px 5px;color:var(--text3)">â¦</span>'; continue; }
+    if (total > 8 && p > 1 && p < page - 1) { if(p===2) btns += '<span style="padding:3px 5px;color:var(--text3)">…</span>'; continue; }
+    if (total > 8 && p < total - 2 && p > page + 1) { if(p===total-3) btns += '<span style="padding:3px 5px;color:var(--text3)">…</span>'; continue; }
     btns += `<button class="v4-pgbtn ${p===page?'v4pgactive':''}" onclick="v4GoPage('${id}',${p})">${p+1}</button>`;
   }
-  btns += `<button class="v4-pgbtn" onclick="v4GoPage('${id}',${page+1})" ${page>=total-1?'disabled':''}>âº</button>`;
-  pgEl.innerHTML = `<span>${page*ps+1}â${Math.min(page*ps+ps, data.length)} / ${data.length}ê±´ (ì ì²´ ${(st4.data[id]||[]).length}ê±´)</span>
+  btns += `<button class="v4-pgbtn" onclick="v4GoPage('${id}',${page+1})" ${page>=total-1?'disabled':''}>›</button>`;
+  pgEl.innerHTML = `<span>${page*ps+1}–${Math.min(page*ps+ps, data.length)} / ${data.length}건 (전체 ${(st4.data[id]||[]).length}건)</span>
     <div style="display:flex;gap:4px">${btns}</div>`;
 }
 
@@ -1992,7 +1993,7 @@ function v4GoPage(id, p) {
   renderRows4(id, new Date().toISOString().split('T')[0]);
 }
 
-// ââ í­ ì´ê¸°í ââ
+// ── 탭 초기화 ──
 async function initDb() {
   document.getElementById('viewTabs4').innerHTML = VIEWS4.map(v =>
     `<button class="v4tab-btn ${v.id==='frame'?'v4active':''}" id="v4tab_${v.id}" onclick="selectView4('${v.id}')">${v.label}</button>`
@@ -2002,10 +2003,10 @@ async function initDb() {
     const dot = document.getElementById('dbDot4');
     dot.style.background   = 'var(--accent2)';
     dot.style.animation    = 'v4-pulse 2s infinite';
-    document.getElementById('dbLabel4').textContent = 'â ì°ê²°ë¨';
+    document.getElementById('dbLabel4').textContent = '● 연결됨';
   } catch(e) {
     document.getElementById('dbDot4').style.background = 'var(--accent3)';
-    document.getElementById('dbLabel4').textContent    = 'ì°ê²° ì¤í¨';
+    document.getElementById('dbLabel4').textContent    = '연결 실패';
   }
 }
 
@@ -2021,8 +2022,8 @@ async function selectView4(id) {
 async function loadView4(id) {
   const el    = document.getElementById('view4_' + id);
   el.style.display = 'block';
-  const names = { frame:'íë ì ë°ë©', rack:'ê²½Â·ì¤ëë ë°ë©', plywood:'í©í ë°ë©', defect:'ë¶ë ì§ê³', powder:'ë¶ì²´ ë¶ë' };
-  el.innerHTML = `<div class="v4-loading"><div class="v4-spin"></div><span>${names[id]} ì ì²´ ë°ì´í° ë¶ë¬ì¤ë ì¤... (ì ìë§ ê¸°ë¤ë ¤ ì£¼ì¸ì)</span></div>`;
+  const names = { frame:'프레임 반납', rack:'경·중량랙 반납', plywood:'합판 반납', defect:'불량 집계', powder:'분체 불량' };
+  el.innerHTML = `<div class="v4-loading"><div class="v4-spin"></div><span>${names[id]} 전체 데이터 불러오는 중... (잠시만 기다려 주세요)</span></div>`;
   const today  = new Date().toISOString().split('T')[0];
   try {
     if (id === 'frame')        await buildFrame4(el, today);
@@ -2032,9 +2033,9 @@ async function loadView4(id) {
     else if (id === 'powder')  await buildPowder4(el, today);
     st4.loaded[id] = true;
   } catch(e) {
-    el.innerHTML = `<div style="color:var(--accent3);padding:20px">ì¤ë¥: ${e.message}</div>`;
+    el.innerHTML = `<div style="color:var(--accent3);padding:20px">오류: ${e.message}</div>`;
   }
-  document.getElementById('lastRefresh4').textContent = `ê°±ì : ${new Date().toLocaleTimeString('ko-KR')}`;
+  document.getElementById('lastRefresh4').textContent = `갱신: ${new Date().toLocaleTimeString('ko-KR')}`;
 }
 
 async function refreshAll4() {
@@ -2047,15 +2048,15 @@ async function refreshAll4() {
   icon.style.animation = '';
 }
 
-// ââ ê³µíµ ë¼ë HTML ìì± ââ
+// ── 공통 뼈대 HTML 생성 ──
 function buildShell4(id, thead) {
   return `
     <div id="${id}_month_filter"></div>
     <div id="${id}_summary"></div>
-    <div class="v4-stitle">ð ë¡ì° ë°ì´í°</div>
+    <div class="v4-stitle">📋 로우 데이터</div>
     <div class="v4-fbar" id="${id}_fbar"></div>
     <div class="table-wrap"><div class="table-scroll" style="max-height:500px">
-      <table><thead><tr><th>#</th><th>ìë ¥ì¼ì</th>${thead}</tr></thead>
+      <table><thead><tr><th>#</th><th>입력일시</th>${thead}</tr></thead>
         <tbody id="${id}_tbody"></tbody>
     </table></div></div>
     <div class="v4-pg" id="${id}_pg"></div>`;
@@ -2065,12 +2066,12 @@ function renderDateFilter(id, data) {
   document.getElementById(id + '_month_filter').innerHTML = buildDateFilter(id, data);
 }
 
-// ââ ìì ë¤ì´ë¡ë ââ
+// ── 엑셀 다운로드 ──
 function toggleFrameCat(key) {
   const rows   = document.querySelectorAll(`[id="sizerow_frame_${key}"]`);
   const arrow  = document.getElementById('arrow_' + key);
-  const isOpen = arrow && arrow.textContent === 'â¼';
-  if (arrow) arrow.textContent = isOpen ? 'â¶' : 'â¼';
+  const isOpen = arrow && arrow.textContent === '▼';
+  if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
   rows.forEach(r => {
     r.style.display = isOpen ? 'none' : 'table-row';
   });
@@ -2078,7 +2079,7 @@ function toggleFrameCat(key) {
 
 function v4dl(id, keys, labels) {
   const data = st4.filtered[id] || [];
-  if (!data.length) { alert('ë¤ì´ë¡ëí  ë°ì´í°ê° ììµëë¤'); return; }
+  if (!data.length) { alert('다운로드할 데이터가 없습니다'); return; }
   const ws = [labels, ...data.map(r => keys.map(k => {
     if (k === 'created_at' && r[k]) return new Date(r[k]).toLocaleString('ko-KR');
     return r[k] ?? '';
@@ -2087,25 +2088,25 @@ function v4dl(id, keys, labels) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ws), id);
   const n = new Date();
   const selM  = st4.selMonth[id] || 'all';
-  const suffix = selM === 'all' ? 'ì ì²´' : selM.replace('-','ë')+'ì';
+  const suffix = selM === 'all' ? '전체' : selM.replace('-','년')+'월';
   XLSX.writeFile(wb, `${id}_${suffix}_${n.getFullYear()}${String(n.getMonth()+1).padStart(2,'0')}${String(n.getDate()).padStart(2,'0')}.xlsx`);
 }
 
-// âââââââââââââââââââââââââââââââââââââââââ
-// ê° íë©´ ë¹ë
-// âââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────
+// 각 화면 빌드
+// ─────────────────────────────────────────
 
-// ââ íë ì ë°ë© ââ
+// ── 프레임 반납 ──
 async function buildFrame4(el, today) {
-  // frame_return_items ì ì²´ ë¡ë
+  // frame_return_items 전체 로드
   const data = await sb4('frame_return_items', 'select=*&order=created_at.desc');
 
-  // frame_return_sessions ì ì²´ ë¡ë í Mapì¼ë¡ ë§ë¤ê¸°
+  // frame_return_sessions 전체 로드 후 Map으로 만들기
   const sessions = await sb4('frame_return_sessions', 'select=id,color,thickness');
   const sessMap  = {};
   sessions.forEach(s => { sessMap[s.id] = s; });
 
-  // itemsì color, thickness ë³í©
+  // items에 color, thickness 병합
   data.forEach(r => {
     const sess   = sessMap[r.session_id] || {};
     r._color     = sess.color     || '';
@@ -2119,14 +2120,14 @@ async function buildFrame4(el, today) {
   st4._colsDef.frame = r => {
     const typ   = parseFrameType(r);
     const color = parseFrameColor(r);
-    const colorCls = color==='ë¸ë'?'col-gray':color==='íì´í¸'?'col-blue':'';
+    const colorCls = color==='블랙'?'col-gray':color==='화이트'?'col-blue':'';
     const BADGE_STYLES = {
-      'íëí¸(V2)':  'background:#dbeafe;color:#1d4ed8',
-      'íëí¸':      'background:#ede9fe;color:#6d28d9',
-      'ì¤í¼ëë120': 'background:#dcfce7;color:#166534',
-      'ì¤í¼ëë160': 'background:#d1fae5;color:#065f46',
-      'ì¤í¼ëë200': 'background:#a7f3d0;color:#064e3b',
-      'ì¤í¼ëë':    'background:#dcfce7;color:#166534',
+      '홈던트(V2)':  'background:#dbeafe;color:#1d4ed8',
+      '홈던트':      'background:#ede9fe;color:#6d28d9',
+      '스피드랙120': 'background:#dcfce7;color:#166534',
+      '스피드랙160': 'background:#d1fae5;color:#065f46',
+      '스피드랙200': 'background:#a7f3d0;color:#064e3b',
+      '스피드랙':    'background:#dcfce7;color:#166534',
     };
     const bStyle  = BADGE_STYLES[typ] || '';
     const typBadge = bStyle
@@ -2144,29 +2145,29 @@ async function buildFrame4(el, today) {
 
   const catList = [...new Set(data.map(r=>r.category).filter(Boolean))].sort();
   el.innerHTML = buildShell4('frame',
-    `<th>ì¹´íê³ ë¦¬</th><th>ê·ê²©</th><th>íì</th><th>ìì</th>
-     <th style="text-align:right">ìê³ </th><th style="text-align:right">ì¬íì©</th><th style="text-align:right">íê¸°</th>`);
+    `<th>카테고리</th><th>규격</th><th>타입</th><th>색상</th>
+     <th style="text-align:right">입고</th><th style="text-align:right">재활용</th><th style="text-align:right">폐기</th>`);
 
   document.getElementById('frame_fbar').innerHTML = `
-    <input type="text" id="frame_q" placeholder="ð ê²ì (ì¹´íê³ ë¦¬, ê·ê²©, ì íì½ë...)" oninput="applyAllFilters4('frame')">
+    <input type="text" id="frame_q" placeholder="🔍 검색 (카테고리, 규격, 제품코드...)" oninput="applyAllFilters4('frame')">
     <select id="frame_f1" data-key="category" onchange="applyAllFilters4('frame')">
-      <option value="">ì ì²´ ì¹´íê³ ë¦¬</option>${catList.map(c=>`<option value="${c}">${c}</option>`).join('')}
+      <option value="">전체 카테고리</option>${catList.map(c=>`<option value="${c}">${c}</option>`).join('')}
     </select>
-    <button class="btn-download" onclick="v4dl('frame',['created_at','category','size','product_code','received_quantity','recycle_quantity','dispose_quantity'],['ìë ¥ì¼ì','ì¹´íê³ ë¦¬','ê·ê²©','ì íì½ë','ìê³ ','ì¬íì©','íê¸°'])">â¬ ìì</button>`;
+    <button class="btn-download" onclick="v4dl('frame',['created_at','category','size','product_code','received_quantity','recycle_quantity','dispose_quantity'],['입력일시','카테고리','규격','제품코드','입고','재활용','폐기'])">⬇ 엑셀</button>`;
 
   renderDateFilter('frame', data);
   updateSummary4('frame', data, today);
   renderRows4('frame', today);
 }
 
-// ââ ê²½Â·ì¤ëë ë°ë© ââ
+// ── 경·중량랙 반납 ──
 async function buildRack4(el, today) {
   const data = await sb4('rack_return_items', 'select=*&order=created_at.desc');
   st4.data.rack    = data;
   st4.filtered.rack = data;
   st4.page.rack     = 0;
   st4._colsDef.rack = r => `
-    <td><span class="badge-status ${r.category==='ì¤ëë'?'badge-ok':'badge-warn'}">${r.category||'-'}</span></td>
+    <td><span class="badge-status ${r.category==='중량랙'?'badge-ok':'badge-warn'}">${r.category||'-'}</span></td>
     <td class="td-name">${r.product_type||'-'}</td>
     <td class="td-mono" style="font-size:11px">${r.product_code||'-'}</td>
     <td class="td-mono col-blue">${r.specifications||'-'}</td>
@@ -2177,26 +2178,26 @@ async function buildRack4(el, today) {
 
   const typeList = [...new Set(data.map(r=>r.product_type).filter(Boolean))].sort();
   el.innerHTML = buildShell4('rack',
-    `<th>ë¶ë¥</th><th>ì í</th><th>ì íì½ë</th><th>ê·ê²©</th>
-     <th style="text-align:right">ë¨ê°</th><th style="text-align:right">ìê³ </th>
-     <th style="text-align:right">ì¬íì©</th><th style="text-align:right">íê¸°</th>`);
+    `<th>분류</th><th>유형</th><th>제품코드</th><th>규격</th>
+     <th style="text-align:right">단가</th><th style="text-align:right">입고</th>
+     <th style="text-align:right">재활용</th><th style="text-align:right">폐기</th>`);
 
   document.getElementById('rack_fbar').innerHTML = `
-    <input type="text" id="rack_q" placeholder="ð ê²ì (ì íì½ë, ê·ê²©...)" oninput="applyAllFilters4('rack')">
+    <input type="text" id="rack_q" placeholder="🔍 검색 (제품코드, 규격...)" oninput="applyAllFilters4('rack')">
     <select id="rack_f1" data-key="category" onchange="applyAllFilters4('rack')">
-      <option value="">ì ì²´ (ê²½+ì¤ëë)</option><option value="ì¤ëë">ì¤ëë</option><option value="ê²½ëë">ê²½ëë</option>
+      <option value="">전체 (경+중량랙)</option><option value="중량랙">중량랙</option><option value="경량랙">경량랙</option>
     </select>
     <select id="rack_f2" data-key="product_type" onchange="applyAllFilters4('rack')">
-      <option value="">ì ì²´ ì í</option>${typeList.map(t=>`<option value="${t}">${t}</option>`).join('')}
+      <option value="">전체 유형</option>${typeList.map(t=>`<option value="${t}">${t}</option>`).join('')}
     </select>
-    <button class="btn-download" onclick="v4dl('rack',['created_at','category','product_type','product_code','specifications','price','received_quantity','recycle_quantity','dispose_quantity'],['ìë ¥ì¼ì','ë¶ë¥','ì í','ì íì½ë','ê·ê²©','ë¨ê°','ìê³ ','ì¬íì©','íê¸°'])">â¬ ìì</button>`;
+    <button class="btn-download" onclick="v4dl('rack',['created_at','category','product_type','product_code','specifications','price','received_quantity','recycle_quantity','dispose_quantity'],['입력일시','분류','유형','제품코드','규격','단가','입고','재활용','폐기'])">⬇ 엑셀</button>`;
 
   renderDateFilter('rack', data);
   updateSummary4('rack', data, today);
   renderRows4('rack', today);
 }
 
-// ââ í©í ë°ë© ââ
+// ── 합판 반납 ──
 async function buildPlywood4(el, today) {
   const data = await sb4('plywood_return_items', 'select=*&order=created_at.desc');
   st4.data.plywood    = data;
@@ -2215,23 +2216,23 @@ async function buildPlywood4(el, today) {
 
   const thkList = [...new Set(data.map(r=>r.thickness).filter(Boolean))].sort();
   el.innerHTML = buildShell4('plywood',
-    `<th>ëê»</th><th>ì¬ì´ì¦</th><th>ì íì½ë</th>
-     <th style="text-align:right">ìê³ </th><th style="text-align:right">ì¬íì©</th><th style="text-align:right">íê¸°</th>
-     <th style="text-align:right">íëë¦¬</th><th style="text-align:right">ìë©´</th><th style="text-align:right">íë©´</th>`);
+    `<th>두께</th><th>사이즈</th><th>제품코드</th>
+     <th style="text-align:right">입고</th><th style="text-align:right">재활용</th><th style="text-align:right">폐기</th>
+     <th style="text-align:right">테두리</th><th style="text-align:right">옆면</th><th style="text-align:right">표면</th>`);
 
   document.getElementById('plywood_fbar').innerHTML = `
-    <input type="text" id="plywood_q" placeholder="ð ê²ì (ì¬ì´ì¦, ì íì½ë...)" oninput="applyAllFilters4('plywood')">
+    <input type="text" id="plywood_q" placeholder="🔍 검색 (사이즈, 제품코드...)" oninput="applyAllFilters4('plywood')">
     <select id="plywood_f1" data-key="thickness" onchange="applyAllFilters4('plywood')">
-      <option value="">ì ì²´ ëê»</option>${thkList.map(t=>`<option value="${t}">${t}</option>`).join('')}
+      <option value="">전체 두께</option>${thkList.map(t=>`<option value="${t}">${t}</option>`).join('')}
     </select>
-    <button class="btn-download" onclick="v4dl('plywood',['created_at','thickness','size','product_code','received_quantity','recycle_quantity','dispose_quantity','dispose_edge','dispose_side','dispose_surface','dispose_cross_grain'],['ìë ¥ì¼ì','ëê»','ì¬ì´ì¦','ì íì½ë','ìê³ ','ì¬íì©','íê¸°','íëë¦¬','ìë©´','íë©´','ê²°'])">â¬ ìì</button>`;
+    <button class="btn-download" onclick="v4dl('plywood',['created_at','thickness','size','product_code','received_quantity','recycle_quantity','dispose_quantity','dispose_edge','dispose_side','dispose_surface','dispose_cross_grain'],['입력일시','두께','사이즈','제품코드','입고','재활용','폐기','테두리','옆면','표면','결'])">⬇ 엑셀</button>`;
 
   renderDateFilter('plywood', data);
   updateSummary4('plywood', data, today);
   renderRows4('plywood', today);
 }
 
-// ââ ë¶ë ì§ê³ ââ
+// ── 불량 집계 ──
 async function buildDefect4(el, today) {
   const data = await sb4('defect_items', 'select=*&order=created_at.desc');
   st4.data.defect    = data;
@@ -2248,22 +2249,22 @@ async function buildDefect4(el, today) {
 
   const catList = [...new Set(data.map(r=>r.category).filter(Boolean))].sort();
   el.innerHTML = buildShell4('defect',
-    `<th>ì¹´íê³ ë¦¬</th><th>ì¬ì´ì¦</th><th>ì íì½ë</th><th>ê±´ë¬¼</th>
-     <th style="text-align:right">íê¸°</th><th style="text-align:right">ì¬ëì¥</th><th style="text-align:right">ì ì</th>`);
+    `<th>카테고리</th><th>사이즈</th><th>제품코드</th><th>건물</th>
+     <th style="text-align:right">폐기</th><th style="text-align:right">재도장</th><th style="text-align:right">정상</th>`);
 
   document.getElementById('defect_fbar').innerHTML = `
-    <input type="text" id="defect_q" placeholder="ð ê²ì (ì¹´íê³ ë¦¬, ì¬ì´ì¦, ê±´ë¬¼...)" oninput="applyAllFilters4('defect')">
+    <input type="text" id="defect_q" placeholder="🔍 검색 (카테고리, 사이즈, 건물...)" oninput="applyAllFilters4('defect')">
     <select id="defect_f1" data-key="category" onchange="applyAllFilters4('defect')">
-      <option value="">ì ì²´ ì¹´íê³ ë¦¬</option>${catList.map(c=>`<option value="${c}">${c}</option>`).join('')}
+      <option value="">전체 카테고리</option>${catList.map(c=>`<option value="${c}">${c}</option>`).join('')}
     </select>
-    <button class="btn-download" onclick="v4dl('defect',['created_at','category','size','product_code','building','dispose_quantity','repaint_quantity','normal_quantity'],['ìë ¥ì¼ì','ì¹´íê³ ë¦¬','ì¬ì´ì¦','ì íì½ë','ê±´ë¬¼','íê¸°','ì¬ëì¥','ì ì'])">â¬ ìì</button>`;
+    <button class="btn-download" onclick="v4dl('defect',['created_at','category','size','product_code','building','dispose_quantity','repaint_quantity','normal_quantity'],['입력일시','카테고리','사이즈','제품코드','건물','폐기','재도장','정상'])">⬇ 엑셀</button>`;
 
   renderDateFilter('defect', data);
   updateSummary4('defect', data, today);
   renderRows4('defect', today);
 }
 
-// ââ ë¶ì²´ ë¶ë ââ
+// ── 분체 불량 ──
 async function buildPowder4(el, today) {
   const data = await sb4('powder_defect_items', 'select=*&order=created_at.desc');
   st4.data.powder    = data;
@@ -2281,18 +2282,18 @@ async function buildPowder4(el, today) {
   const catList   = [...new Set(data.map(r=>r.category).filter(Boolean))].sort();
   const typeList  = [...new Set(data.map(r=>r.defect_type).filter(Boolean))].sort();
   el.innerHTML = buildShell4('powder',
-    `<th>ì¹´íê³ ë¦¬</th><th>ì¬ì´ì¦</th><th>ì íì½ë</th><th>ê±´ë¬¼</th><th>ë¶ëì í</th>
-     <th style="text-align:right">íê¸°</th><th style="text-align:right">ì¬ëì¥</th>`);
+    `<th>카테고리</th><th>사이즈</th><th>제품코드</th><th>건물</th><th>불량유형</th>
+     <th style="text-align:right">폐기</th><th style="text-align:right">재도장</th>`);
 
   document.getElementById('powder_fbar').innerHTML = `
-    <input type="text" id="powder_q" placeholder="ð ê²ì (ì¹´íê³ ë¦¬, ì¬ì´ì¦, ë¶ëì í...)" oninput="applyAllFilters4('powder')">
+    <input type="text" id="powder_q" placeholder="🔍 검색 (카테고리, 사이즈, 불량유형...)" oninput="applyAllFilters4('powder')">
     <select id="powder_f1" data-key="category" onchange="applyAllFilters4('powder')">
-      <option value="">ì ì²´ ì¹´íê³ ë¦¬</option>${catList.map(c=>`<option value="${c}">${c}</option>`).join('')}
+      <option value="">전체 카테고리</option>${catList.map(c=>`<option value="${c}">${c}</option>`).join('')}
     </select>
     <select id="powder_f2" data-key="defect_type" onchange="applyAllFilters4('powder')">
-      <option value="">ì ì²´ ë¶ëì í</option>${typeList.map(t=>`<option value="${t}">${t}</option>`).join('')}
+      <option value="">전체 불량유형</option>${typeList.map(t=>`<option value="${t}">${t}</option>`).join('')}
     </select>
-    <button class="btn-download" onclick="v4dl('powder',['created_at','category','size','product_code','building','defect_type','dispose_quantity','repaint_quantity'],['ìë ¥ì¼ì','ì¹´íê³ ë¦¬','ì¬ì´ì¦','ì íì½ë','ê±´ë¬¼','ë¶ëì í','íê¸°','ì¬ëì¥'])">â¬ ìì</button>`;
+    <button class="btn-download" onclick="v4dl('powder',['created_at','category','size','product_code','building','defect_type','dispose_quantity','repaint_quantity'],['입력일시','카테고리','사이즈','제품코드','건물','불량유형','폐기','재도장'])">⬇ 엑셀</button>`;
 
   renderDateFilter('powder', data);
   updateSummary4('powder', data, today);

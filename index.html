@@ -356,6 +356,45 @@ tr:hover td { background: rgba(9,105,218,0.03); }
   font-size: 10px;
   font-style: italic;
 }
+
+  /* ===== TAB5: 공인성적서/인증서 ===== */
+  .cert-section { background:#fff; border:1px solid #e0e4ea; border-radius:12px; margin-bottom:18px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.05); }
+  .cert-section-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; cursor:pointer; background:#f8f9fb; border-bottom:1px solid transparent; transition:background 0.2s; user-select:none; }
+  .cert-section-header:hover { background:#eef1f7; }
+  .cert-section-header.open { background:#eef1f7; border-bottom:1px solid #e0e4ea; }
+  .cert-section-title { font-size:15px; font-weight:700; color:#222; display:flex; align-items:center; gap:10px; }
+  .cert-icon { font-size:18px; }
+  .cert-count { font-size:11px; background:#4a90d9; color:#fff; border-radius:12px; padding:2px 9px; font-weight:600; }
+  .cert-arrow { font-size:12px; color:#888; transition:transform 0.25s; }
+  .cert-arrow.open { transform:rotate(180deg); }
+  .cert-section-body { display:none; padding:22px; background:#fff; }
+  .cert-section-body.open { display:block; }
+  .cert-upload-zone { border:2px dashed #c0c8d8; border-radius:10px; padding:26px; text-align:center; cursor:pointer; transition:border-color 0.2s,background 0.2s; margin-bottom:18px; background:#fafbfd; position:relative; }
+  .cert-upload-zone:hover { border-color:#4a90d9; background:#f0f6ff; }
+  .cert-upload-zone input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+  .cert-upload-icon { font-size:30px; margin-bottom:7px; }
+  .cert-upload-text { font-size:14px; color:#555; font-weight:500; }
+  .cert-upload-sub { font-size:12px; color:#aaa; margin-top:3px; }
+  .cert-file-list { display:flex; flex-direction:column; gap:9px; }
+  .cert-file-item { display:flex; align-items:center; justify-content:space-between; background:#f4f6fa; border:1px solid #e2e6ef; border-radius:8px; padding:11px 15px; transition:background 0.15s; }
+  .cert-file-item:hover { background:#e9edf5; }
+  .cert-file-info { display:flex; align-items:center; gap:11px; flex:1; min-width:0; }
+  .cert-file-ext { font-size:10px; font-weight:700; background:#4a90d9; color:#fff; padding:3px 7px; border-radius:5px; flex-shrink:0; text-transform:uppercase; }
+  .cert-file-ext.pdf { background:#e74c3c; }
+  .cert-file-ext.jpg,.cert-file-ext.jpeg,.cert-file-ext.png { background:#27ae60; }
+  .cert-file-ext.xlsx,.cert-file-ext.xls { background:#217346; }
+  .cert-file-ext.docx,.cert-file-ext.doc { background:#2b579a; }
+  .cert-file-name { font-size:13px; color:#333; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:380px; }
+  .cert-file-size { font-size:11px; color:#999; flex-shrink:0; margin-left:6px; }
+  .cert-file-date { font-size:11px; color:#bbb; flex-shrink:0; margin-left:6px; }
+  .cert-file-actions { display:flex; gap:7px; flex-shrink:0; margin-left:10px; }
+  .cert-btn { padding:5px 12px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; border:none; transition:opacity 0.15s; }
+  .cert-btn:hover { opacity:0.8; }
+  .cert-btn-view { background:#4a90d9; color:#fff; }
+  .cert-btn-dl { background:#27ae60; color:#fff; }
+  .cert-btn-del { background:#f0f0f0; color:#e74c3c; border:1px solid #e0e0e0; }
+  .cert-empty { text-align:center; color:#bbb; font-size:13px; padding:16px 0 6px; }
+  .cert-uploading { text-align:center; color:#4a90d9; font-size:13px; padding:10px; }
 </style>
 </head>
 <body>
@@ -371,6 +410,68 @@ tr:hover td { background: rgba(9,105,218,0.03); }
   <button class="tab-btn" onclick="switchTab('tab2',this)">💰 리퍼 금액 계산</button>
   <button class="tab-btn" onclick="switchTab('tab3',this)">🎨 재도장 실적</button>
   <button class="tab-btn" onclick="switchTab('tab4',this)">📊 관리현황</button>
+  <button class="tab-btn" onclick="switchTab('tab5',this)">📋 공인성적서/인증서</button>
+</div>
+
+<!-- ===== TAB 5: 공인성적서/인증서 ===== -->
+<div id="tab5" class="tab-content">
+  <div class="main" style="padding:32px 24px; max-width:960px; margin:0 auto;">
+    <div style="margin-bottom:28px;">
+      <h2 style="font-size:20px;font-weight:800;color:#222;margin:0 0 6px;">📋 공인성적서 / 인증서</h2>
+      <p style="font-size:13px;color:#888;margin:0;">항목을 클릭해 펼치고, 파일을 업로드하면 누구나 확인 및 다운로드할 수 있습니다.</p>
+    </div>
+
+    <!-- ⚙️ 역학 시험 -->
+    <div class="cert-section" id="cert-sec-1">
+      <div class="cert-section-header" onclick="certToggle('1')">
+        <div class="cert-section-title"><span class="cert-icon">⚙️</span> 역학 시험 <span class="cert-count" id="cert-count-1">0건</span></div>
+        <span class="cert-arrow" id="cert-arrow-1">▼</span>
+      </div>
+      <div class="cert-section-body" id="cert-body-1">
+        <div class="cert-upload-zone" id="cert-zone-1">
+          <input type="file" id="cert-input-1" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc" onchange="certUpload('mechanics',this.files)" onclick="event.stopPropagation()">
+          <div class="cert-upload-icon">📂</div>
+          <div class="cert-upload-text">파일을 드래그하거나 클릭하여 업로드</div>
+          <div class="cert-upload-sub">PDF, JPG, PNG, Excel, Word 지원 (최대 50MB)</div>
+        </div>
+        <div class="cert-file-list" id="cert-list-1"><div class="cert-empty">업로드된 파일이 없습니다.</div></div>
+      </div>
+    </div>
+
+    <!-- 🔬 물리 시험 -->
+    <div class="cert-section" id="cert-sec-2">
+      <div class="cert-section-header" onclick="certToggle('2')">
+        <div class="cert-section-title"><span class="cert-icon">🔬</span> 물리 시험 <span class="cert-count" id="cert-count-2">0건</span></div>
+        <span class="cert-arrow" id="cert-arrow-2">▼</span>
+      </div>
+      <div class="cert-section-body" id="cert-body-2">
+        <div class="cert-upload-zone" id="cert-zone-2">
+          <input type="file" id="cert-input-2" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc" onchange="certUpload('physics',this.files)" onclick="event.stopPropagation()">
+          <div class="cert-upload-icon">📂</div>
+          <div class="cert-upload-text">파일을 드래그하거나 클릭하여 업로드</div>
+          <div class="cert-upload-sub">PDF, JPG, PNG, Excel, Word 지원 (최대 50MB)</div>
+        </div>
+        <div class="cert-file-list" id="cert-list-2"><div class="cert-empty">업로드된 파일이 없습니다.</div></div>
+      </div>
+    </div>
+
+    <!-- 🏆 인증서 -->
+    <div class="cert-section" id="cert-sec-3">
+      <div class="cert-section-header" onclick="certToggle('3')">
+        <div class="cert-section-title"><span class="cert-icon">🏆</span> 인증서 <span class="cert-count" id="cert-count-3">0건</span></div>
+        <span class="cert-arrow" id="cert-arrow-3">▼</span>
+      </div>
+      <div class="cert-section-body" id="cert-body-3">
+        <div class="cert-upload-zone" id="cert-zone-3">
+          <input type="file" id="cert-input-3" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc" onchange="certUpload('certification',this.files)" onclick="event.stopPropagation()">
+          <div class="cert-upload-icon">📂</div>
+          <div class="cert-upload-text">파일을 드래그하거나 클릭하여 업로드</div>
+          <div class="cert-upload-sub">PDF, JPG, PNG, Excel, Word 지원 (최대 50MB)</div>
+        </div>
+        <div class="cert-file-list" id="cert-list-3"><div class="cert-empty">업로드된 파일이 없습니다.</div></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ===== TAB 1: 재고 분석기 ===== -->
@@ -2473,6 +2574,166 @@ async function buildPowder4(el, today) {
   updateSummary4('powder', data, today);
   renderRows4('powder', today);
 }
+
+// ===== TAB5: 공인성적서/인증서 Supabase Storage 연동 =====
+const CERT_BUCKET = 'certificates';
+const CERT_FOLDER_MAP = { mechanics: '1', physics: '2', certification: '3' };
+const CERT_FOLDER_NUM = { mechanics: '1', physics: '2', certification: '3' };
+const CERT_FOLDERS = ['mechanics', 'physics', 'certification'];
+
+function certFolderToNum(folder) {
+  return CERT_FOLDER_MAP[folder] || '1';
+}
+
+// 섹션 토글
+function certToggle(num) {
+  const body = document.getElementById('cert-body-' + num);
+  const arrow = document.getElementById('cert-arrow-' + num);
+  const header = document.querySelector('#cert-sec-' + num + ' .cert-section-header');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  arrow.classList.toggle('open', !isOpen);
+  header.classList.toggle('open', !isOpen);
+}
+
+// 파일 크기 포맷
+function certFmtSize(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(1) + ' MB';
+}
+
+// 확장자 추출
+function certExt(name) { return (name.split('.').pop() || '').toLowerCase(); }
+
+// Supabase Storage fetch helper
+async function sbStorage(method, path, body, extraHeaders) {
+  const res = await fetch(SB3 + '/storage/v1/' + path, {
+    method: method || 'GET',
+    headers: {
+      'apikey': KEY3,
+      'Authorization': 'Bearer ' + KEY3,
+      ...extraHeaders
+    },
+    body: body || undefined
+  });
+  return res;
+}
+
+// 파일 목록 로드 (특정 폴더)
+async function certLoadFiles(folder) {
+  const num = certFolderToNum(folder);
+  const listEl = document.getElementById('cert-list-' + num);
+  const countEl = document.getElementById('cert-count-' + num);
+  try {
+    const res = await sbStorage('POST', 'object/list/' + CERT_BUCKET, 
+      JSON.stringify({ prefix: folder + '/', limit: 200, offset: 0, sortBy: { column: 'created_at', order: 'desc' } }),
+      { 'Content-Type': 'application/json' }
+    );
+    const files = await res.json();
+    if (!Array.isArray(files)) { console.error('파일 목록 오류:', files); return; }
+    const realFiles = files.filter(f => f.name && f.name !== '.emptyFolderPlaceholder');
+    countEl.textContent = realFiles.length + '건';
+    listEl.innerHTML = '';
+    if (realFiles.length === 0) {
+      listEl.innerHTML = '<div class="cert-empty">업로드된 파일이 없습니다.</div>';
+      return;
+    }
+    realFiles.forEach(f => {
+      const ext = certExt(f.name);
+      const publicUrl = SB3 + '/storage/v1/object/public/' + CERT_BUCKET + '/' + folder + '/' + f.name;
+      const size = f.metadata && f.metadata.size ? certFmtSize(f.metadata.size) : '-';
+      const date = f.created_at ? f.created_at.substring(0,10) : '';
+      const item = document.createElement('div');
+      item.className = 'cert-file-item';
+      item.innerHTML = `
+        <div class="cert-file-info">
+          <span class="cert-file-ext ${ext}">${ext}</span>
+          <span class="cert-file-name" title="${f.name}">${f.name}</span>
+          <span class="cert-file-size">${size}</span>
+          <span class="cert-file-date">${date}</span>
+        </div>
+        <div class="cert-file-actions">
+          <a class="cert-btn cert-btn-view" href="${publicUrl}" target="_blank">👁 보기</a>
+          <a class="cert-btn cert-btn-dl" href="${publicUrl}" download="${f.name}">⬇ 다운로드</a>
+          <button class="cert-btn cert-btn-del" onclick="certDelete('${folder}','${f.name}')">✕ 삭제</button>
+        </div>
+      `;
+      listEl.appendChild(item);
+    });
+  } catch(e) { console.error('certLoadFiles 오류:', e); }
+}
+
+// 파일 업로드
+async function certUpload(folder, files) {
+  const num = certFolderToNum(folder);
+  const listEl = document.getElementById('cert-list-' + num);
+  if (!files || files.length === 0) return;
+  listEl.innerHTML = '<div class="cert-uploading">⏳ 업로드 중...</div>';
+  for (const file of Array.from(files)) {
+    const path = folder + '/' + file.name;
+    try {
+      const res = await fetch(SB3 + '/storage/v1/object/' + CERT_BUCKET + '/' + encodeURIComponent(path), {
+        method: 'POST',
+        headers: {
+          'apikey': KEY3,
+          'Authorization': 'Bearer ' + KEY3,
+          'Content-Type': file.type || 'application/octet-stream',
+          'x-upsert': 'true'
+        },
+        body: file
+      });
+      const result = await res.json();
+      if (result.error) console.error('업로드 오류:', result.error);
+    } catch(e) { console.error('업로드 실패:', e); }
+  }
+  document.getElementById('cert-input-' + num).value = '';
+  await certLoadFiles(folder);
+}
+
+// 파일 삭제
+async function certDelete(folder, fileName) {
+  if (!confirm('「' + fileName + '」을(를) 삭제하시겠습니까?')) return;
+  const path = folder + '/' + fileName;
+  try {
+    const res = await fetch(SB3 + '/storage/v1/object/' + CERT_BUCKET, {
+      method: 'DELETE',
+      headers: {
+        'apikey': KEY3,
+        'Authorization': 'Bearer ' + KEY3,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ prefixes: [path] })
+    });
+    await certLoadFiles(folder);
+  } catch(e) { console.error('삭제 오류:', e); }
+}
+
+// 탭5 열릴 때 파일 목록 로드 (switchTab 후크)
+const _origSwitchTab = window.switchTab;
+window.switchTab = function(tabId, btn) {
+  _origSwitchTab(tabId, btn);
+  if (tabId === 'tab5') {
+    CERT_FOLDERS.forEach(f => certLoadFiles(f));
+  }
+};
+
+// 드래그앤드롭
+['1','2','3'].forEach(num => {
+  const folderMap = {'1':'mechanics','2':'physics','3':'certification'};
+  const zone = document.getElementById('cert-zone-' + num);
+  if (!zone) return;
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor='#4a90d9'; zone.style.background='#f0f6ff'; });
+  zone.addEventListener('dragleave', () => { zone.style.borderColor=''; zone.style.background=''; });
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.style.borderColor=''; zone.style.background='';
+    certUpload(folderMap[num], e.dataTransfer.files);
+  });
+  // 클릭 이벤트
+  zone.addEventListener('click', () => document.getElementById('cert-input-' + num).click());
+});
+
 </script>
 </body>
 </html>

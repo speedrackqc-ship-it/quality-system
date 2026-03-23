@@ -2842,12 +2842,42 @@ const CERT_SECTION_MAP = { mechanics:'1', chemistry:'2', certification:'3' };
 const CERT_SECTIONS = ['mechanics','chemistry','certification'];
 
 function certGetFolderKey(section) { return 'cert_folders_' + section; }
+async function certGetFoldersFromSB(section) {
+  try {
+    const res = await fetch(SB3 + '/rest/v1/cert_folders?section=eq.' + section + '&order=created_at.asc', {
+      headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3 }
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const rows = await res.json();
+    if (Array.isArray(rows) && rows.length > 0) {
+      const folders = rows.map(r => ({ id: r.id, name: r.name }));
+      localStorage.setItem(certGetFolderKey(section), JSON.stringify(folders));
+      return folders;
+    }
+  } catch(e) { console.warn('cert 폴더 SB 로드 실패:', e); }
+  return null;
+}
 function certGetFolders(section) {
   try { return JSON.parse(localStorage.getItem(certGetFolderKey(section)) || '[]'); } catch(e) { return []; }
 }
-function certSaveFolders(section, folders) {
+async function certSaveFolders(section, folders) {
   localStorage.setItem(certGetFolderKey(section), JSON.stringify(folders));
+  try {
+    await fetch(SB3 + '/rest/v1/cert_folders?section=eq.' + section, {
+      method: 'DELETE',
+      headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json' }
+    });
+    if (folders.length > 0) {
+      await fetch(SB3 + '/rest/v1/cert_folders', {
+        method: 'POST',
+        headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify(folders.map(f => ({ id: f.id, section: section, name: f.name })))
+      });
+    }
+  } catch(e) { console.warn('cert 폴더 SB 저장 실패:', e); }
 }
+
+
 
 function certToggle(num) {
   const body = document.getElementById('cert-body-' + num);
@@ -2876,37 +2906,44 @@ function certAddFolder(section) {
   setTimeout(() => {
     const inp = document.getElementById('cert-fname-' + newF.id);
     if (inp) { inp.focus(); inp.select(); }
-  }, 60);
+  }, 50);
 }
 
 function certRenameFolder(section, folderId, newName) {
   const folders = certGetFolders(section);
   const f = folders.find(f => f.id === folderId);
-  if (f) { f.name = newName.trim() || f.name; certSaveFolders(section, folders); }
+  if (f && newName.trim() && f.name !== newName.trim()) {
+    f.name = newName.trim();
+    certSaveFolders(section, folders);
+  }
 }
 
 async function certDeleteFolder(section, folderId) {
   const folders = certGetFolders(section);
   const f = folders.find(f => f.id === folderId);
   if (!f) return;
-  if (!confirm('폴더 「' + f.name + '」와 안의 파일을 모두 삭제할까요?')) return;
-  const prefix = section + '/' + folderId + '/';
+  if (!confirm('폴더 \'' + f.name + '\' 와 안의 파일을 모두 삭제할까요?')) return;
+  const prefix = section + '/' + folderId;
   try {
     const listRes = await fetch(SB3 + '/storage/v1/object/list/' + CERT_BUCKET, {
-      method:'POST', headers:{'apikey':KEY3,'Authorization':'Bearer '+KEY3,'Content-Type':'application/json'},
-      body: JSON.stringify({ prefix, limit:200 })
+      method: 'POST',
+      headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefix: prefix, limit: 1000 })
     });
     const files = await listRes.json();
-    if (Array.isArray(files) && files.length > 0) {
+    if (Array.isArray(files) && files.length) {
       await fetch(SB3 + '/storage/v1/object/' + CERT_BUCKET, {
-        method:'DELETE', headers:{'apikey':KEY3,'Authorization':'Bearer '+KEY3,'Content-Type':'application/json'},
-        body: JSON.stringify({ prefixes: files.map(fi => prefix + fi.name) })
+        method: 'DELETE',
+        headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prefixes: files.map(fi => prefix + '/' + fi.name) })
       });
     }
   } catch(e) {}
-  certSaveFolders(section, folders.filter(f => f.id !== folderId));
+  await certSaveFolders(section, folders.filter(f => f.id !== folderId));
   certRenderSection(section);
 }
+
+
 
 async function certLoadFolder(section, folderId, listEl) {
   const prefix = section + '/' + folderId + '/';
@@ -3108,7 +3145,12 @@ function certRenderSection(section) {
 const _origSwitchTabCert = window.switchTab;
 window.switchTab = function(tabId, btn) {
   _origSwitchTabCert(tabId, btn);
-  if (tabId === 'tab5') CERT_SECTIONS.forEach(s => certRenderSection(s));
+  if (tabId === 'tab5') {
+    CERT_SECTIONS.forEach(async s => {
+      await certGetFoldersFromSB(s);
+      certRenderSection(s);
+    });
+  }
 };
 
 </script>

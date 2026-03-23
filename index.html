@@ -464,7 +464,13 @@ tr:hover td { background: rgba(9,105,218,0.03); }
       </div>
       <div class="t2-annual-nums">
         <div class="t2-annual-block">
-          <span class="t2-annual-unit">총 생산수량</span>
+          <span class="t2-annual-unit">총 리퍼 포장 수량</span>
+          <span class="t2-annual-val" id="t2AnnualPkg">0</span>
+          <span class="t2-annual-unit2">개</span>
+        </div>
+        <div class="t2-annual-divider"></div>
+        <div class="t2-annual-block">
+          <span class="t2-annual-unit">총 리퍼 판매 수량</span>
           <span class="t2-annual-val" id="t2AnnualQty">0</span>
           <span class="t2-annual-unit2">개</span>
         </div>
@@ -488,12 +494,16 @@ tr:hover td { background: rgba(9,105,218,0.03); }
 
   <!-- ③ 선택 월 요약 카드 -->
   <div class="t2-month-cards">
+    <div class="t2-mcard t2-mcard-green">
+      <div class="t2-mcard-label">📦 <span id="t2SelMonthLabel">선택한 달</span> 리퍼 포장 수량</div>
+      <div class="t2-mcard-val"><span id="t2MonthPkg">0</span><em>개</em></div>
+    </div>
     <div class="t2-mcard t2-mcard-blue">
-      <div class="t2-mcard-label">📦 <span id="t2SelMonthLabel">선택한 달</span> 생산수량</div>
+      <div class="t2-mcard-label">📦 <span id="t2SelMonthLabel2">선택한 달</span> 리퍼 판매 수량</div>
       <div class="t2-mcard-val"><span id="t2MonthQty">0</span><em>개</em></div>
     </div>
     <div class="t2-mcard t2-mcard-yellow">
-      <div class="t2-mcard-label">💰 <span id="t2SelMonthLabel2">선택한 달</span> 합계 금액</div>
+      <div class="t2-mcard-label">💰 <span id="t2SelMonthLabel3">선택한 달</span> 합계 금액</div>
       <div class="t2-mcard-val t2-mcard-money"><span id="t2MonthAmt">0</span><em>원</em></div>
     </div>
   </div>
@@ -506,7 +516,11 @@ tr:hover td { background: rgba(9,105,218,0.03); }
     </div>
     <div class="t2-input-row-wrap">
       <div class="t2-input-field">
-        <label>📦 생산수량 (개)</label>
+        <label>📦 리퍼 포장 수량 (개)</label>
+        <input type="number" id="t2InputPkg" placeholder="예: 1500" min="0">
+      </div>
+      <div class="t2-input-field">
+        <label>📦 리퍼 판매 수량 (개)</label>
         <input type="number" id="t2InputQty" placeholder="예: 1250" min="0">
       </div>
       <div class="t2-input-field">
@@ -944,17 +958,20 @@ function t2UpdateDashboard() {
   document.getElementById('t2AnnualYear').textContent = t2Year;
   document.getElementById('t2YearLabel').textContent  = t2Year;
 
-  let annualQty = 0, annualAmt = 0;
+  let annualPkg = 0, annualQty = 0, annualAmt = 0;
   const hasDataMonths = new Set();
   for (const key of Object.keys(mon)) {
     if (key.startsWith(yearStr)) {
+      annualPkg += mon[key].pkg    || 0;
       annualQty += mon[key].qty    || 0;
       annualAmt += mon[key].amount || 0;
-      if ((mon[key].qty || 0) > 0 || (mon[key].amount || 0) > 0) {
+      if ((mon[key].pkg || 0) > 0 || (mon[key].qty || 0) > 0 || (mon[key].amount || 0) > 0) {
         hasDataMonths.add(key.substring(5, 7));
       }
     }
   }
+  const apEl = document.getElementById('t2AnnualPkg');
+  if (apEl) apEl.textContent = annualPkg.toLocaleString();
   document.getElementById('t2AnnualQty').textContent = annualQty.toLocaleString();
   document.getElementById('t2AnnualAmt').textContent = annualAmt.toLocaleString();
 
@@ -972,22 +989,28 @@ function t2UpdateDashboard() {
     }).join('');
   }
 
-  let selQty = 0, selAmt = 0, selLabel = '';
+  let selPkg = 0, selQty = 0, selAmt = 0, selLabel = '';
   if (t2SelMonth) {
-    const d = mon[t2SelMonth] || { qty: 0, amount: 0 };
+    const d = mon[t2SelMonth] || { pkg: 0, qty: 0, amount: 0 };
+    selPkg   = d.pkg    || 0;
     selQty   = d.qty    || 0;
     selAmt   = d.amount || 0;
     const mm = parseInt(t2SelMonth.split('-')[1]);
     selLabel = mm + '월';
   } else {
+    selPkg   = annualPkg;
     selQty   = annualQty;
     selAmt   = annualAmt;
     selLabel = t2Year + '년 전체';
   }
   const lbl1 = document.getElementById('t2SelMonthLabel');
   const lbl2 = document.getElementById('t2SelMonthLabel2');
+  const lbl3 = document.getElementById('t2SelMonthLabel3');
   if (lbl1) lbl1.textContent = selLabel;
   if (lbl2) lbl2.textContent = selLabel;
+  if (lbl3) lbl3.textContent = selLabel;
+  const pkgEl = document.getElementById('t2MonthPkg');
+  if (pkgEl) pkgEl.textContent = selPkg.toLocaleString();
   document.getElementById('t2MonthQty').textContent = selQty.toLocaleString();
   document.getElementById('t2MonthAmt').textContent = selAmt.toLocaleString();
 
@@ -1004,24 +1027,28 @@ function t2RenderInputPanel() {
   if (!t2SelMonth) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
   const mon = t2MonLoad();
-  const d   = mon[t2SelMonth] || { qty: 0, amount: 0 };
+  const d   = mon[t2SelMonth] || { pkg: 0, qty: 0, amount: 0 };
   const mm  = parseInt(t2SelMonth.split('-')[1]);
   const yy  = t2SelMonth.split('-')[0];
   document.getElementById('t2PanelTitle').textContent = yy + '년 ' + mm + '월 직접 입력';
+  const pEl = document.getElementById('t2InputPkg');
   const qEl = document.getElementById('t2InputQty');
   const aEl = document.getElementById('t2InputAmt');
+  if (pEl) pEl.value = d.pkg    || '';
   if (qEl) qEl.value = d.qty    || '';
   if (aEl) aEl.value = d.amount || '';
 }
 
 function t2SaveMonthly() {
   if (!t2SelMonth) return;
+  const pkgRaw = (document.getElementById('t2InputPkg').value || '0').replace(/,/g,'');
   const qtyRaw = (document.getElementById('t2InputQty').value || '0').replace(/,/g,'');
   const amtRaw = (document.getElementById('t2InputAmt').value || '0').replace(/,/g,'');
+  const pkg    = parseInt(pkgRaw)  || 0;
   const qty    = parseInt(qtyRaw)  || 0;
   const amount = parseInt(amtRaw)  || 0;
   const mon = t2MonLoad();
-  mon[t2SelMonth] = { qty, amount };
+  mon[t2SelMonth] = { pkg, qty, amount };
   t2MonSave(mon);
   t2UpdateDashboard();
   const btn = document.getElementById('t2SaveMonBtn');

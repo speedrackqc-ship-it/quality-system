@@ -935,209 +935,250 @@ function setupDrop(zoneId, inputId, onFile) {
 // TAB 2: 리퍼 실적
 // ===================================================
 const T2_KEY     = 't2_records_v2';
-const T2_MON_KEY = 't2_monthly_v1';
-
+const T2_MON_KEY = 't2_monthly_v1'; // localStorage 백업용 키 (읽기 전용 마이그레이션)
 let pkgData = null, discData = null, calcResult = [];
 let t2Year = new Date().getFullYear();
 let t2SelMonth = null;
+let _t2MonCache = null; // Supabase에서 불러온 월별 데이터 캐시
 
-function t2Load() {
-  try { return JSON.parse(localStorage.getItem(T2_KEY) || '[]'); } catch(e) { return []; }
+// ── Supabase API (SB3 재활용) ──
+async function t2SbFetch(path, opt) {
+  opt = opt || {};
+  const res = await fetch(SB3 + '/rest/v1/' + path, {
+    headers: {
+      'apikey': KEY3,
+      'Authorization': 'Bearer ' + KEY3,
+      'Content-Type': 'application/json',
+      'Prefer': opt.prefer || 'return=representation'
+    },
+    method: opt.method || 'GET',
+    body: opt.body ? JSON.stringify(opt.body) : undefined
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const txt = await res.text();
+  return txt ? JSON.parse(txt) : null;
 }
-function t2Save(arr) { localStorage.setItem(T2_KEY, JSON.stringify(arr)); }
-function t2MonLoad() {
-  try { return JSON.parse(localStorage.getItem(T2_MON_KEY) || '{}'); } catch(e) { return {}; }
+
+// ── 월별 데이터 Supabase에서 로드 ──
+async function t2MonLoadSB() {
+  try {
+    const rows = await t2SbFetch('refurb_monthly?select=*');
+    const obj = {};
+    (rows || []).forEach(function(r) {
+      obj[r.month_key] = { pkg: r.pkg || 0, qty: r.qty || 0, amount: r.amount || 0 };
+    });
+    _t2MonCache = obj;
+    return obj;
+  } catch(e) {
+    console.warn('t2 Supabase 로드 실패, localStorage 사용:', e);
+    try { return JSON.parse(localStorage.getItem(T2_MON_KEY) || '{}'); } catch(e2) { return {}; }
+  }
 }
-function t2MonSave(obj) { localStorage.setItem(T2_MON_KEY, JSON.stringify(obj)); }
+
+// ── 월별 데이터 Supabase에 저장 (upsert) ──
+async function t2MonSaveSB(monthKey, pkg, qty, amount) {
+  try {
+    // upsert: month_key가 있으면 UPDATE, 없으면 INSERT
+    await t2SbFetch('refurb_monthly?month_key=eq.' + encodeURIComponent(monthKey), {
+      method: 'DELETE', prefer: ''
+    });
+    await t2SbFetch('refurb_monthly', {
+      method: 'POST',
+      body: { month_key: monthKey, pkg: pkg, qty: qty, amount: amount }
+    });
+    // 캐시 갱신
+    if (!_t2MonCache) _t2MonCache = {};
+    _t2MonCache[monthKey] = { pkg: pkg, qty: qty, amount: amount };
+    // localStorage에도 백업
+    try { localStorage.setItem(T2_MON_KEY, JSON.stringify(_t2MonCache)); } catch(e) {}
+  } catch(e) {
+    console.error('t2 저장 오류:', e);
+    // localStorage 폴백
+    try {
+      var obj = JSON.parse(localStorage.getItem(T2_MON_KEY) || '{}');
+      obj[monthKey] = { pkg: pkg, qty: qty, amount: amount };
+      localStorage.setItem(T2_MON_KEY, JSON.stringify(obj));
+      if (!_t2MonCache) _t2MonCache = {};
+      _t2MonCache[monthKey] = { pkg: pkg, qty: qty, amount: amount };
+    } catch(e2) {}
+    throw e;
+  }
+}
 
 function t2ShiftYear(delta) {
-  t2Year += delta; t2SelMonth = null; t2UpdateDashboard();
+  t2Year += delta;
+  t2SelMonth = null;
+  t2UpdateDashboard();
 }
 
 function t2UpdateDashboard() {
-  const mon = t2MonLoad();
-  const yearStr = String(t2Year);
+  var mon = _t2MonCache || {};
+  var yearStr = String(t2Year);
   document.getElementById('t2AnnualYear').textContent = t2Year;
-  document.getElementById('t2YearLabel').textContent  = t2Year;
-
-  let annualPkg = 0, annualQty = 0, annualAmt = 0;
-  const hasDataMonths = new Set();
-  for (const key of Object.keys(mon)) {
+  document.getElementById('t2YearLabel').textContent = t2Year;
+  var annualPkg = 0, annualQty = 0, annualAmt = 0;
+  var hasDataMonths = {};
+  for (var key in mon) {
     if (key.startsWith(yearStr)) {
-      annualPkg += mon[key].pkg    || 0;
-      annualQty += mon[key].qty    || 0;
+      annualPkg += mon[key].pkg || 0;
+      annualQty += mon[key].qty || 0;
       annualAmt += mon[key].amount || 0;
       if ((mon[key].pkg || 0) > 0 || (mon[key].qty || 0) > 0 || (mon[key].amount || 0) > 0) {
-        hasDataMonths.add(key.substring(5, 7));
+        hasDataMonths[key.substring(5, 7)] = true;
       }
     }
   }
-  const apEl = document.getElementById('t2AnnualPkg');
+  var apEl = document.getElementById('t2AnnualPkg');
   if (apEl) apEl.textContent = annualPkg.toLocaleString();
   document.getElementById('t2AnnualQty').textContent = annualQty.toLocaleString();
   document.getElementById('t2AnnualAmt').textContent = annualAmt.toLocaleString();
-
-  const LABELS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-  const container = document.getElementById('t2MonthTabs');
+  var LABELS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  var container = document.getElementById('t2MonthTabs');
   if (container) {
-    container.innerHTML = LABELS.map((label, i) => {
-      const mm  = String(i + 1).padStart(2, '0');
-      const key = yearStr + '-' + mm;
-      const has = hasDataMonths.has(mm);
-      const active = t2SelMonth === key ? 'active' : '';
-      return `<button class="t2-mtab ${active}" onclick="t2SelectMonth('${key}')">
-        ${has ? '<span class=\"t2-mtab-dot\"></span>' : ''}${label}
-      </button>`;
+    container.innerHTML = LABELS.map(function(label, i) {
+      var mm = String(i + 1).padStart(2, '0');
+      var mkey = yearStr + '-' + mm;
+      var has = hasDataMonths[mm];
+      var active = t2SelMonth === mkey ? 'active' : '';
+      return '<button class="t2-mtab ' + active + '" onclick="t2SelectMonth(\'' + mkey + '\')">' +
+        (has ? '<span class="t2-mtab-dot"></span>' : '') + label + '</button>';
     }).join('');
   }
-
-  let selPkg = 0, selQty = 0, selAmt = 0, selLabel = '';
+  var selPkg = 0, selQty = 0, selAmt = 0, selLabel = '';
   if (t2SelMonth) {
-    const d = mon[t2SelMonth] || { pkg: 0, qty: 0, amount: 0 };
-    selPkg   = d.pkg    || 0;
-    selQty   = d.qty    || 0;
-    selAmt   = d.amount || 0;
-    const mm = parseInt(t2SelMonth.split('-')[1]);
-    selLabel = mm + '월';
+    var d = mon[t2SelMonth] || { pkg: 0, qty: 0, amount: 0 };
+    selPkg = d.pkg || 0; selQty = d.qty || 0; selAmt = d.amount || 0;
+    var mm2 = parseInt(t2SelMonth.split('-')[1]);
+    selLabel = mm2 + '월';
   } else {
-    selPkg   = annualPkg;
-    selQty   = annualQty;
-    selAmt   = annualAmt;
+    selPkg = annualPkg; selQty = annualQty; selAmt = annualAmt;
     selLabel = t2Year + '년 전체';
   }
-  const lbl1 = document.getElementById('t2SelMonthLabel');
-  const lbl2 = document.getElementById('t2SelMonthLabel2');
-  const lbl3 = document.getElementById('t2SelMonthLabel3');
+  var lbl1 = document.getElementById('t2SelMonthLabel');
+  var lbl2 = document.getElementById('t2SelMonthLabel2');
+  var lbl3 = document.getElementById('t2SelMonthLabel3');
   if (lbl1) lbl1.textContent = selLabel;
   if (lbl2) lbl2.textContent = selLabel;
   if (lbl3) lbl3.textContent = selLabel;
-  const pkgEl = document.getElementById('t2MonthPkg');
+  var pkgEl = document.getElementById('t2MonthPkg');
   if (pkgEl) pkgEl.textContent = selPkg.toLocaleString();
   document.getElementById('t2MonthQty').textContent = selQty.toLocaleString();
   document.getElementById('t2MonthAmt').textContent = selAmt.toLocaleString();
-
   t2RenderInputPanel();
 }
 
 function t2SelectMonth(key) {
-  t2SelMonth = key; t2UpdateDashboard();
+  t2SelMonth = key;
+  t2UpdateDashboard();
 }
 
 function t2RenderInputPanel() {
-  const panel = document.getElementById('t2MonthInputPanel');
+  var panel = document.getElementById('t2MonthInputPanel');
   if (!panel) return;
   if (!t2SelMonth) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
-  const mon = t2MonLoad();
-  const d   = mon[t2SelMonth] || { pkg: 0, qty: 0, amount: 0 };
-  const mm  = parseInt(t2SelMonth.split('-')[1]);
-  const yy  = t2SelMonth.split('-')[0];
+  var mon = _t2MonCache || {};
+  var d = mon[t2SelMonth] || { pkg: 0, qty: 0, amount: 0 };
+  var mm = parseInt(t2SelMonth.split('-')[1]);
+  var yy = t2SelMonth.split('-')[0];
   document.getElementById('t2PanelTitle').textContent = yy + '년 ' + mm + '월 직접 입력';
-  const pEl = document.getElementById('t2InputPkg');
-  const qEl = document.getElementById('t2InputQty');
-  const aEl = document.getElementById('t2InputAmt');
-  if (pEl) pEl.value = d.pkg    || '';
-  if (qEl) qEl.value = d.qty    || '';
+  var pEl = document.getElementById('t2InputPkg');
+  var qEl = document.getElementById('t2InputQty');
+  var aEl = document.getElementById('t2InputAmt');
+  if (pEl) pEl.value = d.pkg || '';
+  if (qEl) qEl.value = d.qty || '';
   if (aEl) aEl.value = d.amount || '';
 }
 
 function t2SaveMonthly() {
   if (!t2SelMonth) return;
-  const pkgRaw = (document.getElementById('t2InputPkg').value || '0').replace(/,/g,'');
-  const qtyRaw = (document.getElementById('t2InputQty').value || '0').replace(/,/g,'');
-  const amtRaw = (document.getElementById('t2InputAmt').value || '0').replace(/,/g,'');
-  const pkg    = parseInt(pkgRaw)  || 0;
-  const qty    = parseInt(qtyRaw)  || 0;
-  const amount = parseInt(amtRaw)  || 0;
-  const mon = t2MonLoad();
-  mon[t2SelMonth] = { pkg, qty, amount };
-  t2MonSave(mon);
-  t2UpdateDashboard();
-  const btn = document.getElementById('t2SaveMonBtn');
-  if (btn) {
-    const orig = btn.textContent;
-    btn.textContent = '✅ 저장됨!';
-    btn.style.background = '#22c55e';
-    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 1500);
-  }
+  var pkgRaw = (document.getElementById('t2InputPkg').value || '0').replace(/,/g,'');
+  var qtyRaw = (document.getElementById('t2InputQty').value || '0').replace(/,/g,'');
+  var amtRaw = (document.getElementById('t2InputAmt').value || '0').replace(/,/g,'');
+  var pkg = parseInt(pkgRaw) || 0;
+  var qty = parseInt(qtyRaw) || 0;
+  var amount = parseInt(amtRaw) || 0;
+  var btn = document.getElementById('t2SaveMonBtn');
+  if (btn) { btn.textContent = '⏳ 저장 중...'; btn.disabled = true; }
+  t2MonSaveSB(t2SelMonth, pkg, qty, amount).then(function() {
+    t2UpdateDashboard();
+    if (btn) {
+      var orig = '💾 저장하기';
+      btn.textContent = '✅ 저장됨!';
+      btn.style.background = '#22c55e';
+      btn.disabled = false;
+      setTimeout(function() { btn.textContent = orig; btn.style.background = ''; }, 1500);
+    }
+  }).catch(function(e) {
+    if (btn) { btn.textContent = '❌ 저장 실패'; btn.disabled = false; setTimeout(function(){ btn.textContent = '💾 저장하기'; }, 2000); }
+    alert('저장 실패: ' + e.message + '\n(로컬에는 임시 저장됨)');
+    t2UpdateDashboard();
+  });
 }
 
 function readExcelByHeader(data) {
-  const wb   = XLSX.read(data, { type: 'array' });
-  const ws   = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  var wb = XLSX.read(data, { type: 'array' });
+  var ws = wb.Sheets[wb.SheetNames[0]];
+  var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
   if (!rows.length) return [];
-  const hdrIdx = rows[0].filter(String).length >= (rows[1] || []).filter(String).length ? 0 : 1;
-  const headers = rows[hdrIdx].map(String);
-  return rows.slice(hdrIdx + 1).map(row => {
-    const obj = {};
-    headers.forEach((h, i) => { obj[h] = row[i] ?? ''; });
+  var hdrIdx = rows[0].filter(String).length >= (rows[1] || []).filter(String).length ? 0 : 1;
+  var headers = rows[hdrIdx].map(String);
+  return rows.slice(hdrIdx + 1).map(function(row) {
+    var obj = {};
+    headers.forEach(function(h, i) { obj[h] = row[i] !== undefined ? row[i] : ''; });
     return obj;
   });
 }
 
 function findPrice(row) {
   if (!discData) return 0;
-  const name  = String(row['공정품명'] ?? '');
-  const spec  = String(row['공정품규격'] ?? '').replace(/\*5S$/i,'*5단').replace(/\s+5S$/i,' 5단');
-  const brand = name.includes('스피드랙') ? '스피드랙'
-              : (name.includes('H하우스') || name.includes('홈던트하우스')) ? '홈던트하우스' : null;
+  var name = String(row['공정품명'] !== undefined ? row['공정품명'] : '');
+  var spec = String(row['공정품규격'] !== undefined ? row['공정품규격'] : '').replace(/\*5S$/i,'*5단').replace(/\s+5S$/i,' 5단');
+  var brand = name.includes('스피드랙') ? '스피드랙' : (name.includes('H하우스') || name.includes('홈던트하우스')) ? '홈던트하우스' : null;
   if (!brand) return 0;
-  const cands = discData.filter(r => {
-    const pname = String(r['상품명'] ?? '');
-    return brand === '스피드랙' ? pname.includes('스피드랙')
-                                : (pname.includes('홈던트하우스') || pname.includes('H하우스'));
+  var cands = discData.filter(function(r) {
+    var pname = String(r['상품명'] !== undefined ? r['상품명'] : '');
+    return brand === '스피드랙' ? pname.includes('스피드랙') : (pname.includes('홈던트하우스') || pname.includes('H하우스'));
   });
-  for (const c of cands) {
-    const iname = String(c['품목명'] ?? '').replace(/\*5S$/i,'*5단').replace(/\s+5S$/i,' 5단');
-    if (iname === spec) return Number(String(c['할인가']??'0').replace(/,/g,'')) || 0;
+  for (var ci = 0; ci < cands.length; ci++) {
+    var c = cands[ci];
+    var iname = String(c['품목명'] !== undefined ? c['품목명'] : '').replace(/\*5S$/i,'*5단').replace(/\s+5S$/i,' 5단');
+    if (iname === spec) return Number(String(c['할인가'] !== undefined ? c['할인가'] : '0').replace(/,/g,'')) || 0;
   }
   return 0;
 }
 
 function runCalc() {
   if (!pkgData || !discData) { alert('두 파일을 모두 업로드해주세요!'); return; }
-  const includeZero = document.getElementById('toggleZeroPrice').classList.contains('on');
-  const rows = pkgData.filter(r => r['공정품명'] && String(r['생산사업장']??'') !== 'TOTAL');
-  let result = rows.map(r => {
-    const qty   = parseInt(r['생산수량']??r['포장수량']??r['수량']??r['생산량']??0) || 0;
-    const price = findPrice(r);
-    return {
-      _id: Date.now()+Math.random(),
-      작업일: String(r['작업일']??''),
-      공정품명: String(r['공정품명']??''),
-      공정품규격: String(r['공정품규격']??''),
-      _qty: qty, _price: price, _amount: qty*price
-    };
+  var includeZero = document.getElementById('toggleZeroPrice').classList.contains('on');
+  var rows = pkgData.filter(function(r) { return r['공정품명'] && String(r['생산사업장'] !== undefined ? r['생산사업장'] : '') !== 'TOTAL'; });
+  var result = rows.map(function(r) {
+    var qty = parseInt(r['생산수량'] || r['포장수량'] || r['수량'] || r['생산량'] || 0) || 0;
+    var price = findPrice(r);
+    return { _id: Date.now()+Math.random(), 작업일: String(r['작업일'] || ''), 공정품명: String(r['공정품명'] || ''), 공정품규격: String(r['공정품규격'] || ''), _qty: qty, _price: price, _amount: qty*price };
   });
-  if (!includeZero) result = result.filter(r => r._price !== 0);
+  if (!includeZero) result = result.filter(function(r) { return r._price !== 0; });
   calcResult = result;
-
-  const totalQty = calcResult.reduce((s,r)=>s+r._qty, 0);
-  const totalAmt = calcResult.reduce((s,r)=>s+r._amount, 0);
-  document.getElementById('tableBody2').innerHTML = calcResult.map((r,i) => {
-    const pCls = r._price === 0 ? 'col-red' : 'col-yellow';
-    return `<tr>
-      <td class="td-mono col-gray" style="text-align:center">${i+1}</td>
-      <td style="font-size:12px;text-align:center">${r.작업일??''}</td>
-      <td class="td-name">${r.공정품명??''}</td>
-      <td class="td-mono td-center col-blue">${r.공정품규격??''}</td>
-      <td class="td-mono td-right col-green">${(r._qty).toLocaleString()}</td>
-      <td class="td-mono td-right ${pCls}">${(r._price).toLocaleString()}</td>
-      <td class="td-mono td-right" style="font-weight:800">${(r._amount).toLocaleString()}</td>
-    </tr>`;
+  var totalQty = calcResult.reduce(function(s,r){ return s+r._qty; }, 0);
+  var totalAmt = calcResult.reduce(function(s,r){ return s+r._amount; }, 0);
+  document.getElementById('tableBody2').innerHTML = calcResult.map(function(r,i) {
+    var pCls = r._price === 0 ? 'col-red' : 'col-yellow';
+    return '<tr><td class="td-mono col-gray" style="text-align:center">'+(i+1)+'</td>' +
+      '<td style="font-size:12px;text-align:center">'+(r.작업일||'')+'</td>' +
+      '<td class="td-name">'+(r.공정품명||'')+'</td>' +
+      '<td class="td-mono td-center col-blue">'+(r.공정품규격||'')+'</td>' +
+      '<td class="td-mono td-right col-green">'+r._qty.toLocaleString()+'</td>' +
+      '<td class="td-mono td-right '+pCls+'">'+r._price.toLocaleString()+'</td>' +
+      '<td class="td-mono td-right" style="font-weight:800">'+r._amount.toLocaleString()+'</td></tr>';
   }).join('');
-  document.getElementById('tableFoot2').innerHTML = `<tr class="tfoot-row">
-    <td colspan="4" style="font-size:12px;color:var(--text2);padding:8px 10px">합계 ${calcResult.length}건</td>
-    <td class="td-mono td-right col-green">${totalQty.toLocaleString()}</td>
-    <td></td>
-    <td class="td-mono td-right col-yellow" style="font-weight:800;font-size:15px">${totalAmt.toLocaleString()}</td>
-  </tr>`;
-  const firstDate = calcResult.find(r=>r.작업일)?.작업일 || '';
-  document.getElementById('t2TableTitle').textContent =
-    firstDate ? firstDate.substring(0,7).replace('-','년 ')+'월 계산 결과' : '계산 결과';
-  const _s = document.getElementById('t2CalcSummary');
-  if(_s){ _s.style.display=''; document.getElementById('t2SumQty').textContent=totalQty.toLocaleString(); document.getElementById('t2SumAmt').textContent=totalAmt.toLocaleString(); }
+  document.getElementById('tableFoot2').innerHTML = '<tr class="tfoot-row">' +
+    '<td colspan="4" style="font-size:12px;color:var(--text2);padding:8px 10px">합계 '+calcResult.length+'건</td>' +
+    '<td class="td-mono td-right col-green">'+totalQty.toLocaleString()+'</td><td></td>' +
+    '<td class="td-mono td-right col-yellow" style="font-weight:800;font-size:15px">'+totalAmt.toLocaleString()+'</td></tr>';
+  var firstDate = (calcResult.find(function(r){ return r.작업일; }) || {}).작업일 || '';
+  document.getElementById('t2TableTitle').textContent = firstDate ? firstDate.substring(0,7).replace('-','년 ')+'월 계산 결과' : '계산 결과';
+  var _s = document.getElementById('t2CalcSummary');
+  if (_s) { _s.style.display=''; document.getElementById('t2SumQty').textContent=totalQty.toLocaleString(); document.getElementById('t2SumAmt').textContent=totalAmt.toLocaleString(); }
   showFade(document.getElementById('resultsArea2'));
 }
 
@@ -1145,40 +1186,42 @@ function t2Reset() {
   calcResult = []; pkgData = null; discData = null;
   document.getElementById('tableBody2').innerHTML = '';
   document.getElementById('tableFoot2').innerHTML = '';
-  ['badge2a','badge2b'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
-  ['file2a','file2b'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  const _s2=document.getElementById('t2CalcSummary'); if(_s2) _s2.style.display='none';
+  ['badge2a','badge2b'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
+  ['file2a','file2b'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  var _s2 = document.getElementById('t2CalcSummary');
+  if (_s2) _s2.style.display='none';
   document.getElementById('resultsArea2').style.display = 'none';
 }
 
 function downloadExcel2() {
   if (!calcResult.length) return;
-  const rows = calcResult.map(r=>({
-    '작업일':r.작업일,'공정품명':r.공정품명,'공정품규격':r.공정품규격,
-    '생산수량':r._qty,'단가':r._price,'최종금액':r._amount
-  }));
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
+  var rows = calcResult.map(function(r){ return {'작업일':r.작업일,'공정품명':r.공정품명,'공정품규격':r.공정품규격,'생산수량':r._qty,'단가':r._price,'최종금액':r._amount}; });
+  var ws = XLSX.utils.json_to_sheet(rows);
+  var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '리퍼계산');
   XLSX.writeFile(wb, '리퍼금액계산_'+new Date().toISOString().substring(0,10)+'.xlsx');
 }
 
 function t2Init() {
   t2SelMonth = new Date().toISOString().substring(0,7);
-  t2UpdateDashboard();
-
-  setupDrop('zone2a', 'file2a', file => {
-    const reader = new FileReader();
-    reader.onload = e => {
+  // Supabase에서 월별 데이터 로드 후 대시보드 초기화
+  t2MonLoadSB().then(function() {
+    t2UpdateDashboard();
+  }).catch(function() {
+    t2UpdateDashboard();
+  });
+  setupDrop('zone2a', 'file2a', function(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
       pkgData = readExcelByHeader(new Uint8Array(e.target.result));
       document.getElementById('name2a').textContent = file.name;
       document.getElementById('badge2a').style.display = '';
     };
     reader.readAsArrayBuffer(file);
   });
-  setupDrop('zone2b', 'file2b', file => {
-    const reader = new FileReader();
-    reader.onload = e => {
+  setupDrop('zone2b', 'file2b', function(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
       discData = readExcelByHeader(new Uint8Array(e.target.result));
       document.getElementById('name2b').textContent = file.name;
       document.getElementById('badge2b').style.display = '';

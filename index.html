@@ -379,6 +379,8 @@ tr:hover td { background: rgba(9,105,218,0.03); }
   .cert-upload-zone:hover{border-color:#4a90d9;background:#f0f6ff}
   .cert-upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
   .cert-upload-icon{font-size:24px;margin-bottom:5px}.cert-upload-text{font-size:13px;color:#666;font-weight:500}.cert-upload-sub{font-size:11px;color:#aaa;margin-top:2px}
+  .cert-folder-upload-btn{margin-top:8px;padding:5px 14px;border-radius:6px;border:1.5px solid #4a90d9;background:#f0f6ff;color:#2563eb;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s}
+  .cert-folder-upload-btn:hover{background:#dbeafe}
   .cert-file-list{display:flex;flex-direction:column;gap:7px}
   .cert-file-item{display:flex;align-items:center;justify-content:space-between;background:#f4f6fa;border:1px solid #e2e6ef;border-radius:7px;padding:9px 13px}
   .cert-file-item:hover{background:#e9edf5}
@@ -2896,20 +2898,46 @@ async function certLoadFolder(section, folderId, listEl) {
   } catch(e) { listEl.innerHTML = '<div class="cert-empty">오류: ' + e.message + '</div>'; }
 }
 
-async function certUpload(section, folderId, files) {
+// 폴더 드래그 시 FileSystemEntry 재귀 탐색 헬퍼
+async function certGetFilesFromItems(items) {
+  const fileList = [];
+  async function traverseEntry(entry) {
+    if (entry.isFile) {
+      await new Promise(res => entry.file(f => { fileList.push(f); res(); }, res));
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      let entries = [];
+      await new Promise(res => { (function read() { reader.readEntries(batch => { if (!batch.length) { res(); return; } entries = entries.concat([...batch]); read(); }); })(); });
+      for (const e of entries) await traverseEntry(e);
+    }
+  }
+  for (const item of Array.from(items)) {
+    const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+    if (entry) await traverseEntry(entry);
+    else if (item.kind === 'file') { const f = item.getAsFile(); if (f) fileList.push(f); }
+  }
+  return fileList;
+}
+
+async function certUploadFiles(section, folderId, files) {
   if (!files || !files.length) return;
   const listEl = document.getElementById('cert-flist-' + folderId);
-  if (listEl) listEl.innerHTML = '<div class="cert-uploading">⏳ 업로드 중...</div>';
-  for (const file of Array.from(files)) {
+  if (listEl) listEl.innerHTML = '<div class="cert-uploading">⏳ 업로드 중... (0/' + files.length + ')</div>';
+  let done = 0;
+  for (const file of files) {
     const path = section + '/' + folderId + '/' + file.name;
     try {
       await fetch(SB3 + '/storage/v1/object/' + CERT_BUCKET + '/' + encodeURIComponent(path), {
         method:'POST', headers:{'apikey':KEY3,'Authorization':'Bearer '+KEY3,'Content-Type':file.type||'application/octet-stream','x-upsert':'true'}, body:file
       });
     } catch(e) {}
+    done++;
+    if (listEl) listEl.innerHTML = '<div class="cert-uploading">⏳ 업로드 중... (' + done + '/' + files.length + ')</div>';
   }
   const inp = document.getElementById('cert-finput-' + folderId);
+  const inpDir = document.getElementById('cert-finput-dir-' + folderId);
   if (inp) inp.value = '';
+  if (inpDir) inpDir.value = '';
   if (listEl) await certLoadFolder(section, folderId, listEl);
   certUpdateCount(section);
 }
@@ -2966,10 +2994,13 @@ function certRenderSection(section) {
       <div class="cert-folder-body">
         <div class="cert-upload-zone" onclick="document.getElementById('cert-finput-${folder.id}').click()">
           <input type="file" id="cert-finput-${folder.id}" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc"
-            onchange="certUpload('${section}','${folder.id}',this.files)" onclick="event.stopPropagation()">
+            onchange="certUploadFiles('${section}','${folder.id}',Array.from(this.files))" onclick="event.stopPropagation()">
+          <input type="file" id="cert-finput-dir-${folder.id}" webkitdirectory multiple
+            onchange="certUploadFiles('${section}','${folder.id}',Array.from(this.files))" onclick="event.stopPropagation()" style="display:none">
           <div class="cert-upload-icon">📂</div>
           <div class="cert-upload-text">클릭 또는 드래그하여 업로드</div>
-          <div class="cert-upload-sub">PDF, JPG, PNG, Excel, Word · 최대 50MB</div>
+          <div class="cert-upload-sub">PDF, JPG, PNG, Excel, Word · 최대 50MB · 폴더 드래그 가능</div>
+          <button class="cert-folder-upload-btn" onclick="event.stopPropagation();document.getElementById('cert-finput-dir-${folder.id}').click()">📁 폴더 선택</button>
         </div>
         <div class="cert-file-list" id="cert-flist-${folder.id}">
           <div class="cert-empty">업로드된 파일이 없습니다.</div>
@@ -2981,7 +3012,16 @@ function certRenderSection(section) {
     const zone = block.querySelector('.cert-upload-zone');
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor='#4a90d9'; zone.style.background='#f0f6ff'; });
     zone.addEventListener('dragleave', () => { zone.style.borderColor=''; zone.style.background=''; });
-    zone.addEventListener('drop', e => { e.preventDefault(); zone.style.borderColor=''; zone.style.background=''; certUpload(section, folder.id, e.dataTransfer.files); });
+    zone.addEventListener('drop', async e => {
+      e.preventDefault(); zone.style.borderColor=''; zone.style.background='';
+      const items = e.dataTransfer.items;
+      if (items && items.length) {
+        const files = await certGetFilesFromItems(items);
+        if (files.length) certUploadFiles(section, folder.id, files);
+      } else {
+        certUploadFiles(section, folder.id, Array.from(e.dataTransfer.files));
+      }
+    });
   });
 }
 

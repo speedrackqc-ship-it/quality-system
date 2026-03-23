@@ -610,6 +610,11 @@ tr:hover td { background: rgba(9,105,218,0.03); }
     <div class="t2-table-top">
       <span class="t2-table-title" id="t2TableTitle">계산 결과</span>
       <div class="t2-table-actions">
+        <div class="t2-calc-summary" id="t2CalcSummary" style="display:none">
+          <span class="t2-sum-item">📦 <strong id="t2SumQty">0</strong>개</span>
+          <span class="t2-sum-divider">|</span>
+          <span class="t2-sum-item">💰 <strong id="t2SumAmt">0</strong>원</span>
+        </div>
         <button class="btn-reset-red" onclick="t2Reset()">🗑 결과 초기화</button>
         <button class="btn-download yellow" onclick="downloadExcel2()">⬇ 엑셀 다운로드</button>
       </div>
@@ -935,6 +940,9 @@ tr:hover td { background: rgba(9,105,218,0.03); }
 .t2-save-btn:hover{background:#f59e0b;transform:translateY(-1px);}
 .t2-save-btn:active{transform:translateY(0);}
 @media(max-width:640px){.t2-input-row-wrap{flex-direction:column;}}
+.t2-calc-summary{display:flex;align-items:center;gap:8px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600;color:var(--text1);}
+.t2-calc-summary strong{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:800;color:var(--accent-yellow);}
+.t2-sum-divider{color:var(--border);font-size:16px;margin:0 2px;}
 </style>
 
 <script>
@@ -1233,6 +1241,8 @@ function runCalc() {
   const firstDate = calcResult.find(r=>r.작업일)?.작업일 || '';
   document.getElementById('t2TableTitle').textContent =
     firstDate ? firstDate.substring(0,7).replace('-','년 ')+'월 계산 결과' : '계산 결과';
+  const _s = document.getElementById('t2CalcSummary');
+  if(_s){ _s.style.display=''; document.getElementById('t2SumQty').textContent=totalQty.toLocaleString(); document.getElementById('t2SumAmt').textContent=totalAmt.toLocaleString(); }
   showFade(document.getElementById('resultsArea2'));
 }
 
@@ -1242,6 +1252,7 @@ function t2Reset() {
   document.getElementById('tableFoot2').innerHTML = '';
   ['badge2a','badge2b'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
   ['file2a','file2b'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  const _s2=document.getElementById('t2CalcSummary'); if(_s2) _s2.style.display='none';
   document.getElementById('resultsArea2').style.display = 'none';
 }
 

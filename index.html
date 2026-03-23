@@ -1260,6 +1260,25 @@ function downloadExcel2() {
 function t2Init() {
   t2SelMonth = new Date().toISOString().substring(0,7);
   t2UpdateDashboard();
+
+  setupDrop('zone2a', 'file2a', file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      pkgData = readExcelByHeader(new Uint8Array(e.target.result));
+      document.getElementById('name2a').textContent = file.name;
+      document.getElementById('badge2a').style.display = '';
+    };
+    reader.readAsArrayBuffer(file);
+  });
+  setupDrop('zone2b', 'file2b', file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      discData = readExcelByHeader(new Uint8Array(e.target.result));
+      document.getElementById('name2b').textContent = file.name;
+      document.getElementById('badge2b').style.display = '';
+    };
+    reader.readAsArrayBuffer(file);
+  });
 }
 t2Init();
 

@@ -3006,15 +3006,18 @@ function certRenderSection(section) {
         <button class="cert-folder-del-btn" onclick="certDeleteFolder('${section}','${folder.id}')">✕ 삭제</button>
       </div>
       <div class="cert-folder-body">
-        <div class="cert-upload-zone" onclick="document.getElementById('cert-finput-${folder.id}').click()">
+        <div class="cert-upload-zone" id="cert-zone-${folder.id}">
           <input type="file" id="cert-finput-${folder.id}" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc"
-            onchange="certUploadFiles('${section}','${folder.id}',Array.from(this.files))" onclick="event.stopPropagation()">
+            onchange="certUploadFiles('${section}','${folder.id}',Array.from(this.files))" style="display:none">
           <input type="file" id="cert-finput-dir-${folder.id}" webkitdirectory multiple
-            onchange="certUploadFiles('${section}','${folder.id}',Array.from(this.files))" onclick="event.stopPropagation()" style="display:none">
+            onchange="certUploadFiles('${section}','${folder.id}',Array.from(this.files))" style="display:none">
           <div class="cert-upload-icon">📂</div>
-          <div class="cert-upload-text">클릭 또는 드래그하여 업로드</div>
-          <div class="cert-upload-sub">PDF, JPG, PNG, Excel, Word · 최대 50MB · 폴더 드래그 가능</div>
-          <button class="cert-folder-upload-btn" onclick="event.stopPropagation();document.getElementById('cert-finput-dir-${folder.id}').click()">📁 폴더 선택</button>
+          <div class="cert-upload-text">클릭하여 파일 선택</div>
+          <div class="cert-upload-sub">PDF, JPG, PNG, Excel, Word · 최대 50MB</div>
+          <div style="display:flex;gap:8px;margin-top:8px;justify-content:center">
+            <button class="cert-folder-upload-btn" onclick="event.stopPropagation();document.getElementById('cert-finput-${folder.id}').click()">📄 파일 선택</button>
+            <button class="cert-folder-upload-btn" onclick="event.stopPropagation();document.getElementById('cert-finput-dir-${folder.id}').click()">📁 폴더 선택</button>
+          </div>
         </div>
         <div class="cert-file-list" id="cert-flist-${folder.id}">
           <div class="cert-empty">업로드된 파일이 없습니다.</div>
@@ -3024,6 +3027,10 @@ function certRenderSection(section) {
     const listEl = document.getElementById('cert-flist-' + folder.id);
     certLoadFolder(section, folder.id, listEl).then(() => certUpdateCount(section));
     const zone = block.querySelector('.cert-upload-zone');
+    zone.addEventListener('click', function(e) {
+      if (e.target.tagName === 'BUTTON') return; // 버튼 클릭은 버튼 자체가 처리
+      document.getElementById('cert-finput-' + folder.id).click();
+    });
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor='#4a90d9'; zone.style.background='#f0f6ff'; });
     zone.addEventListener('dragleave', () => { zone.style.borderColor=''; zone.style.background=''; });
     zone.addEventListener('drop', async e => {

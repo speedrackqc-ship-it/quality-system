@@ -8,6 +8,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
+const SB3  = 'https://kxlzdnfudvdwzlveqklh.supabase.co';
+const KEY3 = 'sb_publishable_8aTbER8PYcFprysUFig85A_CgXDC319';
+const SB4  = 'https://gigfzkyrmudcdksgpeoo.supabase.co';
+const KEY4 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpZ2Z6a3lybXVkY2Rrc2dwZW9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MTQyNDgsImV4cCI6MjA4MDk5MDI0OH0.wd1CXZF0Nwl4PqugWOYBIz1LELyuE_wgIGMEDvo27x8';
+const H4   = { 'apikey': KEY4, 'Authorization': `Bearer ${KEY4}` };
+
 // Supabase에서 표준원가 로드
 async function t3LoadStdCostFromSB() {
   try {
@@ -2060,11 +2066,6 @@ function t3DownloadMonth(month) {
 // ===================================================
 // TAB 4: 관리현황
 // ===================================================
-const SB3  = 'https://kxlzdnfudvdwzlveqklh.supabase.co';
-const KEY3 = 'sb_publishable_8aTbER8PYcFprysUFig85A_CgXDC319';
-const SB4  = 'https://gigfzkyrmudcdksgpeoo.supabase.co';
-const KEY4 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpZ2Z6a3lybXVkY2Rrc2dwZW9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MTQyNDgsImV4cCI6MjA4MDk5MDI0OH0.wd1CXZF0Nwl4PqugWOYBIz1LELyuE_wgIGMEDvo27x8';
-const H4   = { 'apikey': KEY4, 'Authorization': `Bearer ${KEY4}` };
 
 const VIEWS4 = [
   { id: 'frame',   label: '🏗 프레임 반납' },

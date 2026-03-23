@@ -2906,26 +2906,30 @@ async function certGetFilesFromEntries(entries) {
     if (!entry) return;
     if (entry._file) { fileList.push(entry._file); return; }
     if (entry.isFile) {
-      await new Promise(res => entry.file(
-        f => { fileList.push(f); res(); },
-        err => { res(); }
-      ));
+      await new Promise(function(resolve) {
+        entry.file(function(f) { fileList.push(f); resolve(); }, function() { resolve(); });
+      });
     } else if (entry.isDirectory) {
       const reader = entry.createReader();
-      const readAll = () => new Promise(res => {
-        const batch = [];
-        (function read() {
-          reader.readEntries(b => {
-            if (!b.length) { res(batch); return; }
-            batch.push(...b); read();
-          }, err => res(batch));
-        })();
+      await new Promise(function(resolve) {
+        var all = [];
+        function read() {
+          reader.readEntries(function(batch) {
+            if (!batch.length) { resolve(all); return; }
+            all = all.concat(batch); read();
+          }, function() { resolve(all); });
+        }
+        read();
+      }).then(async function(children) {
+        for (var i = 0; i < children.length; i++) {
+          await traverseEntry(children[i]);
+        }
       });
-      const children = await readAll();
-      for (const child of children) await traverseEntry(child);
     }
   }
-  for (const entry of entries) await traverseEntry(entry);
+  for (var i = 0; i < entries.length; i++) {
+    await traverseEntry(entries[i]);
+  }
   return fileList;
 }
 
@@ -3045,13 +3049,6 @@ function certRenderSection(section) {
       } else {
         const listEl = document.getElementById('cert-flist-' + folder.id);
         if (listEl) listEl.innerHTML = '<div class="cert-empty">⚠ 파일을 찾을 수 없습니다. 폴더 선택 버튼을 이용해보세요.</div>';
-      }
-    });
-        }
-        const files = await certGetFilesFromEntries(entries);
-        if (files.length) certUploadFiles(section, folder.id, files);
-      } else {
-        certUploadFiles(section, folder.id, Array.from(e.dataTransfer.files));
       }
     });
   });

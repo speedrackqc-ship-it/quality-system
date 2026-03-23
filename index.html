@@ -2906,12 +2906,23 @@ async function certGetFilesFromEntries(entries) {
     if (!entry) return;
     if (entry._file) { fileList.push(entry._file); return; }
     if (entry.isFile) {
-      await new Promise(res => entry.file(f => { fileList.push(f); res(); }, () => res()));
+      await new Promise(res => entry.file(
+        f => { fileList.push(f); res(); },
+        err => { res(); }
+      ));
     } else if (entry.isDirectory) {
       const reader = entry.createReader();
-      let batch = [];
-      await new Promise(res => { (function read() { reader.readEntries(b => { if (!b.length) { res(); return; } batch = batch.concat([...b]); read(); }); })(); });
-      for (const e of batch) await traverseEntry(e);
+      const readAll = () => new Promise(res => {
+        const batch = [];
+        (function read() {
+          reader.readEntries(b => {
+            if (!b.length) { res(batch); return; }
+            batch.push(...b); read();
+          }, err => res(batch));
+        })();
+      });
+      const children = await readAll();
+      for (const child of children) await traverseEntry(child);
     }
   }
   for (const entry of entries) await traverseEntry(entry);
@@ -3013,14 +3024,29 @@ function certRenderSection(section) {
     zone.addEventListener('dragleave', () => { zone.style.borderColor=''; zone.style.background=''; });
     zone.addEventListener('drop', async e => {
       e.preventDefault(); zone.style.borderColor=''; zone.style.background='';
+      const allFiles = [];
+      const entries = [];
       const items = e.dataTransfer.items;
       if (items && items.length) {
-        // DataTransferItemList는 이벤트 종료 후 cleared되므로 동기적으로 entries 먼저 추출
-        const entries = [];
         for (let i = 0; i < items.length; i++) {
           const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
-          if (entry) entries.push(entry);
-          else if (items[i].kind === 'file') entries.push({ _file: items[i].getAsFile() });
+          if (entry) { entries.push(entry); }
+          else if (items[i].kind === 'file') { const f = items[i].getAsFile(); if (f) allFiles.push(f); }
+        }
+      } else if (e.dataTransfer.files && e.dataTransfer.files.length) {
+        allFiles.push(...Array.from(e.dataTransfer.files));
+      }
+      if (entries.length) {
+        const traversed = await certGetFilesFromEntries(entries);
+        allFiles.push(...traversed);
+      }
+      if (allFiles.length) {
+        certUploadFiles(section, folder.id, allFiles);
+      } else {
+        const listEl = document.getElementById('cert-flist-' + folder.id);
+        if (listEl) listEl.innerHTML = '<div class="cert-empty">⚠ 파일을 찾을 수 없습니다. 폴더 선택 버튼을 이용해보세요.</div>';
+      }
+    });
         }
         const files = await certGetFilesFromEntries(entries);
         if (files.length) certUploadFiles(section, folder.id, files);

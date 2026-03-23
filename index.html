@@ -512,7 +512,7 @@ tr:hover td { background: rgba(9,105,218,0.03); }
 <div id="tab2" class="tab-content">
 <div class="main t2-main">
 
-  <!-- ★ 1. 연도 TOTAL 대시보드 (최상단 / 가장 중요) -->
+  <!-- ① 연도 TOTAL 대시보드 -->
   <div class="t2-annual-banner">
     <div class="t2-annual-left">
       <div class="t2-annual-label">
@@ -539,10 +539,10 @@ tr:hover td { background: rgba(9,105,218,0.03); }
     </div>
   </div>
 
-  <!-- ★ 2. 월 탭 -->
+  <!-- ② 월 탭 -->
   <div class="t2-month-tabs" id="t2MonthTabs"></div>
 
-  <!-- ★ 3. 선택 월 요약 카드 -->
+  <!-- ③ 선택 월 요약 카드 -->
   <div class="t2-month-cards">
     <div class="t2-mcard t2-mcard-green">
       <div class="t2-mcard-label">📦 <span id="t2SelMonthLabel">선택한 달</span> 총 건수</div>
@@ -558,83 +558,45 @@ tr:hover td { background: rgba(9,105,218,0.03); }
     </div>
   </div>
 
-  <!-- ★ 4. 장부 기록 입력 폼 -->
-  <div class="t2-entry-panel">
-    <div class="t2-entry-title">✏️ 장부 기록</div>
-    <div class="t2-entry-grid">
-      <div class="t2-entry-field">
-        <label>작업일</label>
-        <input id="t2eDate" class="t2-einp" type="date">
-      </div>
-      <div class="t2-entry-field">
-        <label>공정품명</label>
-        <input id="t2eName" class="t2-einp" placeholder="예) 스피드랙 조립품">
-      </div>
-      <div class="t2-entry-field">
-        <label>공정품규격</label>
-        <input id="t2eSpec" class="t2-einp" placeholder="예) 900*450*1800*5단">
-      </div>
-      <div class="t2-entry-field">
-        <label>생산수량</label>
-        <input id="t2eQty" class="t2-einp t2-einp-num" type="number" min="0" placeholder="0" oninput="t2ePreview()">
-      </div>
-      <div class="t2-entry-field">
-        <label>단가 (원)</label>
-        <input id="t2ePrice" class="t2-einp t2-einp-num" type="number" min="0" placeholder="0" oninput="t2ePreview()">
-      </div>
-      <div class="t2-entry-field t2-entry-preview-field">
-        <label>최종 금액 (자동)</label>
-        <div class="t2-preview-amt" id="t2ePreview">-</div>
-      </div>
+  <!-- ④ 파일 업로드 + 계산 옵션 -->
+  <div class="info-box">
+    <strong>사용 방법:</strong> 생산실적(포장수량) 파일과 할인가 파일을 각각 업로드 후 계산을 실행하세요.<br>
+    브랜드(<strong>스피드랙</strong>, <strong>H하우스 → 홈던트하우스</strong>) 자동 매칭 및 규격(<strong>*5S → *5단</strong>) 변환이 적용됩니다.
+  </div>
+  <div class="upload-pair">
+    <div class="upload-mini" id="zone2a" onclick="document.getElementById('file2a').click()">
+      <div class="icon">🏭</div>
+      <h3>생산실적 (포장수량) 파일</h3>
+      <p>header=1 형식의 .xlsx</p>
+      <input type="file" id="file2a" accept=".xlsx,.xls">
+      <div id="badge2a" style="display:none" class="badge-yellow">✅ <span id="name2a"></span></div>
     </div>
-    <button class="t2-save-btn" onclick="t2SaveRecord()">📒 장부 기록</button>
+    <div class="upload-mini" id="zone2b" onclick="document.getElementById('file2b').click()">
+      <div class="icon">💲</div>
+      <h3>할인가 파일</h3>
+      <p>상품명 / 품목명 / 할인가 포함 .xlsx</p>
+      <input type="file" id="file2b" accept=".xlsx,.xls">
+      <div id="badge2b" style="display:none" class="badge-yellow">✅ <span id="name2b"></span></div>
+    </div>
+  </div>
+  <div class="panel" style="margin-top:14px">
+    <div class="panel-title">⚙ 계산 옵션</div>
+    <div class="toggle-row" style="border-top:none;padding-top:0">
+      <span>단가 0원 항목도 결과에 포함 (매칭 실패 항목 확인용)</span>
+      <div class="toggle" id="toggleZeroPrice" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <button class="btn-run yellow" onclick="runCalc()">💰 금액 계산 실행</button>
   </div>
 
-  <!-- ★ 5. 해당 월 상세 내역 표 -->
-  <div class="t2-table-area">
+  <!-- ⑤ 계산 결과 표 -->
+  <div id="resultsArea2" style="display:none">
     <div class="t2-table-top">
-      <span class="t2-table-title" id="t2TableTitle">내역</span>
+      <span class="t2-table-title" id="t2TableTitle">계산 결과</span>
       <div class="t2-table-actions">
-        <button class="t2-ref-btn" id="t2RefToggle" onclick="t2ToggleRef()">📎 참고 단가표 보기</button>
-        <button class="btn-download yellow" onclick="t2Download()">⬇ 엑셀 다운로드</button>
+        <button class="btn-reset-red" onclick="t2Reset()">🗑 결과 초기화</button>
+        <button class="btn-download yellow" onclick="downloadExcel2()">⬇ 엑셀 다운로드</button>
       </div>
     </div>
-
-    <!-- 참고용 단가 패널 (접이식) -->
-    <div id="t2RefPanel" class="t2-ref-panel" style="display:none">
-      <div class="t2-ref-inner">
-        <div class="t2-ref-header">
-          <span>📎 참고용 단가 리스트 — 엑셀에서 불러온 데이터 (실제 장부에 기록되지 않음)</span>
-          <div class="t2-ref-uploads">
-            <label class="t2-ref-upload-btn">
-              🏭 생산실적 업로드
-              <input type="file" id="file2a" accept=".xlsx,.xls" style="display:none">
-            </label>
-            <label class="t2-ref-upload-btn">
-              💲 단가표 업로드
-              <input type="file" id="file2b" accept=".xlsx,.xls" style="display:none">
-            </label>
-            <button class="t2-ref-calc-btn" onclick="t2RefCalc()">계산 실행</button>
-          </div>
-        </div>
-        <div id="t2RefStatus" class="t2-ref-status">파일을 업로드하면 단가 참고표가 여기 표시됩니다.</div>
-        <div class="table-scroll" id="t2RefTableWrap" style="display:none">
-          <table class="t2-ref-table">
-            <thead><tr>
-              <th>#</th><th>작업일</th><th>공정품명</th>
-              <th style="text-align:center">공정품규격</th>
-              <th style="text-align:right">수량</th>
-              <th style="text-align:right">단가</th>
-              <th style="text-align:right">금액</th>
-              <th>장부에 추가</th>
-            </tr></thead>
-            <tbody id="t2RefBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- 실제 장부 표 -->
     <div class="table-wrap"><div class="table-scroll">
       <table>
         <thead><tr>
@@ -645,10 +607,9 @@ tr:hover td { background: rgba(9,105,218,0.03); }
           <th style="text-align:right">생산수량</th>
           <th style="text-align:right">단가</th>
           <th style="text-align:right">최종 금액</th>
-          <th style="text-align:center">삭제</th>
         </tr></thead>
-        <tbody id="t2Body"></tbody>
-        <tfoot><tr id="t2Foot"></tr></tfoot>
+        <tbody id="tableBody2"></tbody>
+        <tfoot id="tableFoot2"></tfoot>
       </table>
     </div></div>
   </div>
@@ -845,6 +806,7 @@ tr:hover td { background: rgba(9,105,218,0.03); }
 @media(max-width:700px){ .v4-2col { grid-template-columns:1fr; } }
 
 
+
 /* ── TAB2 리퍼 금액 계산 전용 스타일 ──────────────── */
 
 /* 연도 TOTAL 배너 */
@@ -858,7 +820,7 @@ tr:hover td { background: rgba(9,105,218,0.03); }
 }
 .t2-annual-left { display: flex; flex-direction: column; gap: 12px; }
 .t2-annual-label {
-  font-size: 13px; font-weight: 700; color: #6ee7a0; letter-spacing: .5px; text-transform: uppercase;
+  font-size: 13px; font-weight: 700; color: #6ee7a0; letter-spacing: .5px;
 }
 .t2-annual-label span { font-size: 15px; }
 .t2-annual-nums { display: flex; align-items: center; gap: 28px; }
@@ -886,8 +848,7 @@ tr:hover td { background: rgba(9,105,218,0.03); }
 
 /* 월 탭 */
 .t2-month-tabs {
-  display: flex; gap: 6px; flex-wrap: wrap;
-  margin-bottom: 14px;
+  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px;
 }
 .t2-mtab {
   padding: 6px 16px; border-radius: 20px; border: 1px solid var(--border);
@@ -895,17 +856,13 @@ tr:hover td { background: rgba(9,105,218,0.03); }
   font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s;
 }
 .t2-mtab:hover { border-color: var(--accent-yellow); color: var(--text1); }
-.t2-mtab.active {
-  background: var(--accent-yellow); color: #111;
-  border-color: var(--accent-yellow);
-}
+.t2-mtab.active { background: var(--accent-yellow); color: #111; border-color: var(--accent-yellow); }
 .t2-mtab .t2-mtab-dot {
   display: inline-block; width: 6px; height: 6px;
-  background: currentColor; border-radius: 50%; margin-right: 4px;
-  opacity: .6;
+  background: currentColor; border-radius: 50%; margin-right: 4px; opacity: .6;
 }
 
-/* 월 요약 카드 3개 */
+/* 월 요약 카드 */
 .t2-month-cards {
   display: grid; grid-template-columns: repeat(3,1fr);
   gap: 12px; margin-bottom: 20px;
@@ -926,120 +883,25 @@ tr:hover td { background: rgba(9,105,218,0.03); }
 .t2-mcard-green  .t2-mcard-val { color: #4ade80; }
 .t2-mcard-blue   .t2-mcard-val { color: #60a5fa; }
 .t2-mcard-yellow .t2-mcard-val { color: #fbbf24; }
-.t2-mcard-money { color: #fbbf24 !important; }
 .t2-mcard-val em { font-size: 13px; font-weight: 600; color: var(--text2); font-style: normal; }
 
-/* 장부 기록 입력 패널 */
-.t2-entry-panel {
-  background: var(--panel-bg); border: 1px solid var(--border);
-  border-radius: 12px; padding: 18px 20px; margin-bottom: 18px;
-}
-.t2-entry-title {
-  font-size: 14px; font-weight: 700; color: var(--text1);
-  margin-bottom: 14px;
-}
-.t2-entry-grid {
-  display: grid;
-  grid-template-columns: 160px 1fr 1fr 130px 150px 160px;
-  gap: 10px; align-items: end; margin-bottom: 12px;
-}
-.t2-entry-field { display: flex; flex-direction: column; gap: 5px; }
-.t2-entry-field label { font-size: 11px; color: var(--text2); font-weight: 600; }
-.t2-einp {
-  height: 36px; padding: 0 10px; border-radius: 8px;
-  border: 1px solid var(--border); background: var(--bg);
-  color: var(--text1); font-size: 13px; box-sizing: border-box; width: 100%;
-}
-.t2-einp:focus { outline: none; border-color: var(--accent-yellow); box-shadow: 0 0 0 2px rgba(202,162,55,.15); }
-.t2-einp-num { text-align: right; font-family: 'JetBrains Mono', monospace; }
-.t2-preview-amt {
-  height: 36px; border-radius: 8px; border: 1px dashed #5a4a10;
-  background: #1a1400; color: #fbbf24;
-  font-size: 16px; font-weight: 800; font-family: 'JetBrains Mono', monospace;
-  display: flex; align-items: center; justify-content: flex-end; padding: 0 12px;
-}
-.t2-save-btn {
-  height: 40px; padding: 0 28px; border-radius: 8px; border: none;
-  background: linear-gradient(135deg, #d4a017, #b8860b);
-  color: #111; font-size: 14px; font-weight: 800; cursor: pointer;
-  box-shadow: 0 2px 8px rgba(180,130,0,.3);
-}
-.t2-save-btn:hover { filter: brightness(1.1); }
-.t2-entry-preview-field .t2-preview-amt { font-size: 15px; }
-
-/* 표 영역 */
-.t2-table-area { margin-top: 0; }
+/* 결과 표 영역 헤더 */
 .t2-table-top {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 10px; flex-wrap: wrap; gap: 8px;
+  margin-bottom: 10px; flex-wrap: wrap; gap: 8px; margin-top: 16px;
 }
 .t2-table-title { font-size: 15px; font-weight: 700; color: var(--text1); }
 .t2-table-actions { display: flex; gap: 8px; }
-.t2-ref-btn {
+.btn-reset-red {
   height: 34px; padding: 0 14px; border-radius: 7px;
-  border: 1px solid var(--border); background: var(--panel-bg);
-  color: var(--text2); font-size: 13px; cursor: pointer;
+  background: #2d1515; border: 1px solid #a03030;
+  color: #ff6b6b; font-size: 13px; font-weight: 600; cursor: pointer;
 }
-.t2-ref-btn:hover, .t2-ref-btn.open { border-color: var(--accent-yellow); color: var(--text1); }
+.btn-reset-red:hover { background: #3a1a1a; }
 
-/* 참고 단가 패널 */
-.t2-ref-panel {
-  background: #0e1520; border: 1px solid #1e3a5a;
-  border-radius: 12px; margin-bottom: 14px; overflow: hidden;
-}
-.t2-ref-inner { padding: 16px 18px; }
-.t2-ref-header {
-  display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: wrap; gap: 10px; margin-bottom: 12px;
-}
-.t2-ref-header > span { font-size: 12px; color: #60a5fa; font-weight: 600; }
-.t2-ref-uploads { display: flex; gap: 8px; flex-wrap: wrap; }
-.t2-ref-upload-btn {
-  display: inline-block; height: 32px; padding: 0 12px; border-radius: 6px;
-  border: 1px solid #1e3a5a; background: #0d1a2e; color: #60a5fa;
-  font-size: 12px; font-weight: 600; cursor: pointer; line-height: 32px;
-}
-.t2-ref-upload-btn:hover { border-color: #60a5fa; }
-.t2-ref-calc-btn {
-  height: 32px; padding: 0 14px; border-radius: 6px; border: none;
-  background: #1a4a7c; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer;
-}
-.t2-ref-calc-btn:hover { background: #1e5a96; }
-.t2-ref-status { font-size: 12px; color: var(--text2); padding: 6px 0; }
-.t2-ref-table th, .t2-ref-table td { font-size: 12px; }
-.t2-btn-copy {
-  padding: 3px 10px; border-radius: 5px; border: 1px solid #1e3a5a;
-  background: #0d1a2e; color: #60a5fa; font-size: 11px; cursor: pointer;
-}
-.t2-btn-copy:hover { background: #1a3a5c; }
-
-/* 삭제 버튼 */
-.t2-del {
-  width: 24px; height: 24px; border-radius: 50%; border: none;
-  background: #3a1515; color: #ff6b6b;
-  font-size: 12px; font-weight: 700; cursor: pointer;
-}
-.t2-del:hover { background: #6b2020; }
-
-/* 출처 배지 */
-.t2-badge {
-  display: inline-block; font-size: 10px; font-weight: 700;
-  padding: 1px 5px; border-radius: 4px; margin-left: 4px; vertical-align: middle;
-}
-.t2-badge-m { background: #1a3a1a; color: #4ade80; }
-
-/* tfoot 합계 강조 */
-.t2-tfoot-row td {
-  background: #1a1700 !important; font-weight: 800;
-  color: #fbbf24 !important; font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
-}
-
-@media (max-width: 800px) {
+@media (max-width: 640px) {
   .t2-annual-val { font-size: 28px; }
   .t2-month-cards { grid-template-columns: 1fr; }
-  .t2-entry-grid { grid-template-columns: 1fr 1fr; }
-  .t2-entry-preview-field { grid-column: 1/-1; }
 }
 </style>
 
@@ -1148,12 +1010,12 @@ function downloadExcel1() {
 }
 
 // ===================================================
-// TAB 2: 리퍼 금액 계산 (장부 관리 중심)
+// TAB 2: 리퍼 금액 계산
 // ===================================================
 const T2_KEY = 't2_records_v2';
+let pkgData = null, discData = null, calcResult = [];
 let t2Year = new Date().getFullYear();
-let t2SelMonth = null;          // 'YYYY-MM'
-let t2RefData  = [];            // 참고용 엑셀 데이터 (저장 안 됨)
+let t2SelMonth = null;
 
 // ── LocalStorage 헬퍼 ─────────────────────────────
 function t2Load() {
@@ -1164,312 +1026,200 @@ function t2Save(arr) { localStorage.setItem(T2_KEY, JSON.stringify(arr)); }
 // ── 연도 이동 ─────────────────────────────────────
 function t2ShiftYear(delta) {
   t2Year += delta;
-  document.getElementById('t2AnnualYear').textContent = t2Year;
-  document.getElementById('t2YearLabel').textContent  = t2Year;
   t2SelMonth = null;
-  t2Render();
+  t2UpdateDashboard();
 }
 
-// ── 월 탭 빌드 ────────────────────────────────────
-function t2BuildTabs() {
-  const all      = t2Load();
-  const MONTHS   = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-  const yearStr  = String(t2Year);
-  // 데이터가 있는 월 확인
-  const hasData  = new Set(
-    all.filter(r => String(r.작업일??'').startsWith(yearStr))
-       .map(r => String(r.작업일??'').substring(5,7))
-  );
-  const container = document.getElementById('t2MonthTabs');
-  if (!container) return;
-  container.innerHTML = MONTHS.map((label, i) => {
-    const mm  = String(i+1).padStart(2,'0');
-    const key = yearStr + '-' + mm;
-    const has = hasData.has(mm);
-    const active = t2SelMonth === key ? 'active' : '';
-    return `<button class="t2-mtab ${active}" onclick="t2SelectMonth('${key}')">
-      ${has ? '<span class=\"t2-mtab-dot\"></span>' : ''}${label}
-    </button>`;
-  }).join('');
-}
-
-// ── 월 선택 ───────────────────────────────────────
-function t2SelectMonth(key) {
-  t2SelMonth = key;
-  t2Render();
-}
-
-// ── 연도 TOTAL 집계 ───────────────────────────────
-function t2CalcAnnual() {
-  const all = t2Load().filter(r => String(r.작업일??'').startsWith(String(t2Year)));
-  return {
-    qty: all.reduce((s,r)=>s+(r._qty||0),0),
-    amt: all.reduce((s,r)=>s+(r._amount||0),0)
-  };
-}
-
-// ── 월 집계 ───────────────────────────────────────
-function t2CalcMonth(ym) {
-  const rows = t2Load().filter(r => String(r.작업일??'').startsWith(ym));
-  return {
-    count: rows.length,
-    qty  : rows.reduce((s,r)=>s+(r._qty||0),0),
-    amt  : rows.reduce((s,r)=>s+(r._amount||0),0),
-    rows
-  };
-}
-
-// ── 전체 렌더 ─────────────────────────────────────
-function t2Render() {
-  // 연도 TOTAL 업데이트
-  const annual = t2CalcAnnual();
-  document.getElementById('t2AnnualQty').textContent = annual.qty.toLocaleString();
-  document.getElementById('t2AnnualAmt').textContent = annual.amt.toLocaleString();
+// ── 연도·월 대시보드 업데이트 ─────────────────────
+function t2UpdateDashboard() {
+  const all = t2Load();
+  const yearStr = String(t2Year);
   document.getElementById('t2AnnualYear').textContent = t2Year;
   document.getElementById('t2YearLabel').textContent  = t2Year;
 
-  // 월 탭
-  t2BuildTabs();
+  // 연도 TOTAL
+  const yearRows = all.filter(r => String(r.작업일??'').startsWith(yearStr));
+  document.getElementById('t2AnnualQty').textContent = yearRows.reduce((s,r)=>s+(r._qty||0),0).toLocaleString();
+  document.getElementById('t2AnnualAmt').textContent = yearRows.reduce((s,r)=>s+(r._amount||0),0).toLocaleString();
+
+  // 월 탭 빌드
+  const hasData = new Set(yearRows.map(r => String(r.작업일??'').substring(5,7)));
+  const LABELS  = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  const container = document.getElementById('t2MonthTabs');
+  if (container) {
+    container.innerHTML = LABELS.map((label, i) => {
+      const mm  = String(i+1).padStart(2,'0');
+      const key = yearStr + '-' + mm;
+      const has = hasData.has(mm);
+      const active = t2SelMonth === key ? 'active' : '';
+      return `<button class="t2-mtab ${active}" onclick="t2SelectMonth('${key}')">
+        ${has ? '<span class=\"t2-mtab-dot\"></span>' : ''}${label}
+      </button>`;
+    }).join('');
+  }
 
   // 월 요약 카드
+  let cardRows;
   if (t2SelMonth) {
-    const m  = t2CalcMonth(t2SelMonth);
+    cardRows = all.filter(r => String(r.작업일??'').startsWith(t2SelMonth));
     const mm = parseInt(t2SelMonth.split('-')[1]);
     document.getElementById('t2SelMonthLabel').textContent = mm + '월';
-    document.getElementById('t2MonthCount').textContent    = m.count.toLocaleString();
-    document.getElementById('t2MonthQty').textContent      = m.qty.toLocaleString();
-    document.getElementById('t2MonthAmt').textContent      = m.amt.toLocaleString();
-    document.getElementById('t2TableTitle').textContent    = t2Year + '년 ' + mm + '월 내역';
-    t2RenderTable(m.rows);
   } else {
-    // 연도 전체 표시
-    const all = t2Load().filter(r => String(r.작업일??'').startsWith(String(t2Year)));
-    document.getElementById('t2SelMonthLabel').textContent = t2Year+'년 전체';
-    document.getElementById('t2MonthCount').textContent    = all.length.toLocaleString();
-    document.getElementById('t2MonthQty').textContent      = all.reduce((s,r)=>s+(r._qty||0),0).toLocaleString();
-    document.getElementById('t2MonthAmt').textContent      = all.reduce((s,r)=>s+(r._amount||0),0).toLocaleString();
-    document.getElementById('t2TableTitle').textContent    = t2Year + '년 전체 내역';
-    t2RenderTable(all);
+    cardRows = yearRows;
+    document.getElementById('t2SelMonthLabel').textContent = t2Year + '년 전체';
   }
+  document.getElementById('t2MonthCount').textContent = cardRows.length.toLocaleString();
+  document.getElementById('t2MonthQty').textContent   = cardRows.reduce((s,r)=>s+(r._qty||0),0).toLocaleString();
+  document.getElementById('t2MonthAmt').textContent   = cardRows.reduce((s,r)=>s+(r._amount||0),0).toLocaleString();
 }
 
-// ── 표 렌더 ───────────────────────────────────────
-function t2RenderTable(rows) {
-  const tbody = document.getElementById('t2Body');
-  const tfoot = document.getElementById('t2Foot');
-  if (!tbody) return;
-  const totalQty = rows.reduce((s,r)=>s+(r._qty||0),0);
-  const totalAmt = rows.reduce((s,r)=>s+(r._amount||0),0);
-  tbody.innerHTML = rows.map((r,i) => `<tr>
-    <td class="td-mono col-gray" style="text-align:center">${i+1}</td>
-    <td style="font-size:12px;text-align:center">${r.작업일??''}</td>
-    <td class="td-name">${r.공정품명??''}</td>
-    <td class="td-mono td-center col-blue" style="font-size:12px">${r.공정품규격??''}</td>
-    <td class="td-mono td-right col-green">${(r._qty||0).toLocaleString()}</td>
-    <td class="td-mono td-right col-yellow">${(r._price||0).toLocaleString()}</td>
-    <td class="td-mono td-right" style="font-weight:800">${(r._amount||0).toLocaleString()}</td>
-    <td style="text-align:center"><button class="t2-del" onclick="t2Del('${r._id}')">✕</button></td>
-  </tr>`).join('');
-  if (tfoot) tfoot.innerHTML = `
-    <td class="t2-tfoot-row" colspan="4" style="padding:10px;font-size:13px;color:var(--text2)">
-      합계 ${rows.length}건
-    </td>
-    <td class="t2-tfoot-row td-mono td-right" style="color:#4ade80">${totalQty.toLocaleString()}</td>
-    <td class="t2-tfoot-row"></td>
-    <td class="t2-tfoot-row td-mono td-right" style="font-size:16px;color:#fbbf24">${totalAmt.toLocaleString()}</td>
-    <td class="t2-tfoot-row"></td>
-  `;
+function t2SelectMonth(key) {
+  t2SelMonth = key;
+  t2UpdateDashboard();
 }
 
-// ── 장부 기록 저장 ────────────────────────────────
-function t2ePreview() {
-  const qty   = parseFloat(document.getElementById('t2eQty')?.value)   || 0;
-  const price = parseFloat(document.getElementById('t2ePrice')?.value) || 0;
-  const el = document.getElementById('t2ePreview');
-  if (el) el.textContent = (qty*price > 0) ? (qty*price).toLocaleString()+'원' : '-';
-}
-function t2SaveRecord() {
-  const date  = document.getElementById('t2eDate')?.value  || '';
-  const name  = document.getElementById('t2eName')?.value?.trim() || '';
-  const spec  = document.getElementById('t2eSpec')?.value?.trim() || '';
-  const qty   = parseInt(document.getElementById('t2eQty')?.value)   || 0;
-  const price = parseInt(document.getElementById('t2ePrice')?.value) || 0;
-  if (!name)   { alert('공정품명을 입력하세요.'); return; }
-  if (!date)   { alert('작업일을 입력하세요.'); return; }
-  const rec = {
-    _id: Date.now()+Math.random(),
-    작업일: date, 공정품명: name, 공정품규격: spec,
-    _qty: qty, _price: price, _amount: qty*price
-  };
-  const all = t2Load(); all.push(rec); t2Save(all);
-  ['t2eDate','t2eName','t2eSpec','t2eQty','t2ePrice'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.value='';
-  });
-  document.getElementById('t2ePreview').textContent = '-';
-  // 저장된 날짜로 월 자동 선택
-  t2SelMonth = date.substring(0,7);
-  t2Render();
-}
-
-// ── 행 삭제 ───────────────────────────────────────
-function t2Del(id) {
-  if (!confirm('이 항목을 삭제하시겠습니까?')) return;
-  t2Save(t2Load().filter(r => String(r._id) !== String(id)));
-  t2Render();
-}
-
-// ── 참고 단가 패널 토글 ───────────────────────────
-function t2ToggleRef() {
-  const panel = document.getElementById('t2RefPanel');
-  const btn   = document.getElementById('t2RefToggle');
-  if (!panel) return;
-  const isOpen = panel.style.display !== 'none';
-  panel.style.display = isOpen ? 'none' : 'block';
-  btn.classList.toggle('open', !isOpen);
-  btn.textContent = isOpen ? '📎 참고 단가표 보기' : '📎 참고 단가표 닫기';
-  // 파일 인풋 이벤트 연결
-  if (!isOpen) {
-    document.getElementById('file2a').onchange = e => {
-      const f = e.target.files[0]; if(f) t2RefLoadPkg(f);
-    };
-    document.getElementById('file2b').onchange = e => {
-      const f = e.target.files[0]; if(f) t2RefLoadDisc(f);
-    };
-  }
-}
-
-// ── 참고용 엑셀 로드 ──────────────────────────────
-let _t2PkgRef = null, _t2DiscRef = null;
-function t2RefReadExcel(file, cb) {
+// ── 엑셀 파일 읽기 (헤더 자동 감지) ──────────────
+function readExcelByHeader(file, cb) {
   const reader = new FileReader();
   reader.onload = e => {
     const wb   = XLSX.read(e.target.result, { type: 'array' });
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-    const r0sc = (rows[0]??[]).filter(v=>typeof v==='string'&&v.trim()).length;
-    const r1sc = (rows[1]??[]).filter(v=>typeof v==='string'&&v.trim()).length;
+    const r0sc = (rows[0]??[]).filter(v=>typeof v==='string'&&v.trim()!=='').length;
+    const r1sc = (rows[1]??[]).filter(v=>typeof v==='string'&&v.trim()!=='').length;
     const hi   = r0sc >= r1sc ? 0 : 1;
     const hdrs = rows[hi] ?? [];
-    const data = rows.slice(hi+1).map(row=>{
-      const obj={}; hdrs.forEach((h,i)=>{if(h!=null&&h!=='') obj[String(h).trim()]=row[i]??'';});
+    const data = rows.slice(hi+1).map(row => {
+      const obj = {};
+      hdrs.forEach((h,i) => { if(h!=null&&h!=='') obj[String(h).trim()] = row[i]??''; });
       return obj;
-    }).filter(r=>Object.values(r).some(v=>v!==''));
+    }).filter(r => Object.values(r).some(v => v!==''));
     cb(data);
   };
   reader.readAsArrayBuffer(file);
 }
-function t2RefLoadPkg(f) {
-  document.getElementById('t2RefStatus').textContent = '생산실적 로드 중...';
-  t2RefReadExcel(f, data => {
-    _t2PkgRef = data;
-    document.getElementById('t2RefStatus').textContent =
-      '✅ 생산실적 ' + f.name + ' (' + data.length + '행) 로드됨. 단가표도 업로드 후 [계산 실행]을 눌러주세요.';
-  });
-}
-function t2RefLoadDisc(f) {
-  document.getElementById('t2RefStatus').textContent = '단가표 로드 중...';
-  t2RefReadExcel(f, data => {
-    _t2DiscRef = data;
-    document.getElementById('t2RefStatus').textContent =
-      '✅ 단가표 ' + f.name + ' (' + data.length + '행) 로드됨.';
-  });
-}
-function t2RefFindPrice(row) {
-  if (!_t2DiscRef) return 0;
+setupDrop('zone2a', 'file2a', f => {
+  document.getElementById('name2a').textContent = f.name;
+  document.getElementById('badge2a').style.display = 'inline-flex';
+  readExcelByHeader(f, data => { pkgData = data; });
+});
+setupDrop('zone2b', 'file2b', f => {
+  document.getElementById('name2b').textContent = f.name;
+  document.getElementById('badge2b').style.display = 'inline-flex';
+  readExcelByHeader(f, data => { discData = data; });
+});
+
+// ── 단가 매칭 ─────────────────────────────────────
+function findPrice(row) {
   const name = String(row['공정품명']??'').trim();
   const spec = String(row['공정품규격']??'').trim();
   let brand = null;
-  if (name.includes('스피드랙'))        brand='스피드랙';
-  else if (name.includes('홈던트하우스')) brand='홈던트하우스';
-  else if (name.includes('H하우스'))     brand='홈던트하우스';
+  if      (name.includes('스피드랙'))        brand = '스피드랙';
+  else if (name.includes('홈던트하우스'))     brand = '홈던트하우스';
+  else if (name.includes('H하우스'))          brand = '홈던트하우스';
   if (!brand) return 0;
   const ns = spec.replace(/\*5S$/i,'*5단').replace(/\s+/g,' ').trim();
   const as = spec.replace(/\*5S$/i,' 5단').replace(/\s+/g,' ').trim();
   const ms = [ns, as, spec.replace(/\s+/g,' ').trim()];
-  const match = _t2DiscRef.filter(d=>{
-    const db=String(d['상품명']??'').trim();
-    const ds=String(d['품목명']??'').replace(/\s+/g,' ').trim();
+  const match = discData.filter(d => {
+    const db = String(d['상품명']??'').trim();
+    const ds = String(d['품목명']??'').replace(/\s+/g,' ').trim();
     return db.includes(brand) && ms.includes(ds);
   });
-  if (match.length>0) return Number(String(match[0]['할인가']??'').replace(/,/g,''))||0;
+  if (match.length > 0) {
+    return Number(String(match[0]['할인가']??'').replace(/,/g,'').trim()) || 0;
+  }
   return 0;
 }
-function t2RefCalc() {
-  if (!_t2PkgRef) { alert('생산실적 파일을 먼저 업로드하세요.'); return; }
-  const rows = _t2PkgRef.filter(r=>r['공정품명']&&String(r['생산사업장']??')!==\'TOTAL\''));
-  t2RefData = rows.map(r => {
-    const qty   = parseInt(r['생산수량']??r['포장수량']??r['수량']??0)||0;
-    const price = t2RefFindPrice(r);
+
+// ── 금액 계산 실행 ────────────────────────────────
+function runCalc() {
+  if (!pkgData || !discData) { alert('두 파일을 모두 업로드해주세요!'); return; }
+  const includeZero = document.getElementById('toggleZeroPrice').classList.contains('on');
+  const rows = pkgData.filter(r => r['공정품명'] && String(r['생산사업장']??'') !== 'TOTAL');
+  let result = rows.map(r => {
+    const qty   = parseInt(r['생산수량']??r['포장수량']??r['수량']??r['생산량']??0) || 0;
+    const price = findPrice(r);
     return {
-      작업일:r['작업일']??'', 공정품명:r['공정품명']??'',
-      공정품규격:r['공정품규격']??'',
-      _qty:qty, _price:price, _amount:qty*price
+      _id: Date.now()+Math.random(),
+      작업일: String(r['작업일']??''),
+      공정품명: String(r['공정품명']??''),
+      공정품규격: String(r['공정품규격']??''),
+      _qty: qty, _price: price, _amount: qty*price
     };
   });
-  const wrap = document.getElementById('t2RefTableWrap');
-  const tbody = document.getElementById('t2RefBody');
-  if (!wrap||!tbody) return;
-  tbody.innerHTML = t2RefData.map((r,i)=>`<tr>
-    <td class="td-mono col-gray" style="text-align:center">${i+1}</td>
-    <td style="font-size:11px">${r.작업일}</td>
-    <td style="font-size:12px">${r.공정품명}</td>
-    <td class="td-mono col-blue" style="font-size:11px;text-align:center">${r.공정품규격}</td>
-    <td class="td-mono td-right col-green">${r._qty.toLocaleString()}</td>
-    <td class="td-mono td-right col-yellow">${r._price.toLocaleString()}</td>
-    <td class="td-mono td-right" style="font-weight:700">${r._amount.toLocaleString()}</td>
-    <td style="text-align:center">
-      <button class="t2-btn-copy" onclick="t2CopyToEntry(${i})">↗ 복사</button>
-    </td>
-  </tr>`).join('');
-  wrap.style.display = 'block';
-  document.getElementById('t2RefStatus').textContent =
-    '✅ ' + t2RefData.length + '건 계산 완료. [↗ 복사] 버튼으로 장부에 직접 옮겨 적을 수 있습니다.';
+  if (!includeZero) result = result.filter(r => r._price !== 0);
+  calcResult = result;
+
+  // LocalStorage에 누적 저장
+  const saved  = t2Load();
+  const merged = [...saved, ...result];
+  t2Save(merged);
+
+  // 표 렌더
+  const totalQty = calcResult.reduce((s,r)=>s+r._qty, 0);
+  const totalAmt = calcResult.reduce((s,r)=>s+r._amount, 0);
+  document.getElementById('tableBody2').innerHTML = calcResult.map((r,i) => {
+    const pCls = r._price === 0 ? 'col-red' : 'col-yellow';
+    return `<tr>
+      <td class="td-mono col-gray" style="text-align:center">${i+1}</td>
+      <td style="font-size:12px;text-align:center">${r.작업일??''}</td>
+      <td class="td-name">${r.공정품명??''}</td>
+      <td class="td-mono td-center col-blue">${r.공정품규격??''}</td>
+      <td class="td-mono td-right col-green">${(r._qty).toLocaleString()}</td>
+      <td class="td-mono td-right ${pCls}">${(r._price).toLocaleString()}</td>
+      <td class="td-mono td-right" style="font-weight:800">${(r._amount).toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('tableFoot2').innerHTML = `<tr class="tfoot-row">
+    <td colspan="4" style="font-size:12px;color:var(--text2);padding:8px 10px">합계 ${calcResult.length}건</td>
+    <td class="td-mono td-right col-green">${totalQty.toLocaleString()}</td>
+    <td></td>
+    <td class="td-mono td-right col-yellow" style="font-weight:800;font-size:15px">${totalAmt.toLocaleString()}</td>
+  </tr>`;
+
+  // 제목 업데이트 후 결과 영역 표시
+  const firstDate = calcResult.find(r=>r.작업일)?.작업일 || '';
+  document.getElementById('t2TableTitle').textContent =
+    firstDate ? firstDate.substring(0,7).replace('-','년 ') + '월 계산 결과' : '계산 결과';
+  showFade(document.getElementById('resultsArea2'));
+
+  // 대시보드 갱신
+  t2UpdateDashboard();
 }
-function t2CopyToEntry(idx) {
-  const r = t2RefData[idx]; if(!r) return;
-  const d = document.getElementById('t2eDate');
-  const n = document.getElementById('t2eName');
-  const s = document.getElementById('t2eSpec');
-  const q = document.getElementById('t2eQty');
-  const p = document.getElementById('t2ePrice');
-  if(d && r.작업일) d.value = r.작업일;
-  if(n) n.value = r.공정품명;
-  if(s) s.value = r.공정품규격;
-  if(q) q.value = r._qty;
-  if(p) p.value = r._price;
-  t2ePreview();
-  // 장부 기록 패널로 스크롤
-  document.querySelector('.t2-entry-panel')?.scrollIntoView({behavior:'smooth', block:'center'});
+
+// ── 결과 초기화 ───────────────────────────────────
+function t2Reset() {
+  if (!confirm('현재 계산 결과와 파일 정보를 초기화하시겠습니까?')) return;
+  pkgData = null; discData = null; calcResult = [];
+  document.getElementById('badge2a').style.display = 'none';
+  document.getElementById('badge2b').style.display = 'none';
+  document.getElementById('name2a').textContent = '';
+  document.getElementById('name2b').textContent = '';
+  document.getElementById('file2a').value = '';
+  document.getElementById('file2b').value = '';
+  document.getElementById('resultsArea2').style.display = 'none';
 }
 
 // ── 엑셀 다운로드 ────────────────────────────────
-function t2Download() {
-  const rows = t2SelMonth
-    ? t2Load().filter(r=>String(r.작업일??'').startsWith(t2SelMonth))
-    : t2Load().filter(r=>String(r.작업일??'').startsWith(String(t2Year)));
-  if (!rows.length) { alert('다운로드할 데이터가 없습니다.'); return; }
+function downloadExcel2() {
+  if (!calcResult.length) { alert('다운로드할 데이터가 없습니다.'); return; }
   const wsData = [['작업일','공정품명','공정품규격','생산수량','단가','최종 금액']];
-  rows.forEach(r=>wsData.push([r.작업일??'',r.공정품명??'',r.공정품규격??'',r._qty||0,r._price||0,r._amount||0]));
-  const tq=rows.reduce((s,r)=>s+(r._qty||0),0), ta=rows.reduce((s,r)=>s+(r._amount||0),0);
-  wsData.push(['합계','','',tq,'',ta]);
-  const wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet(wsData);
-  ws['!cols']=[{wch:14},{wch:36},{wch:20},{wch:12},{wch:14},{wch:16}];
-  const label = t2SelMonth
-    ? t2SelMonth.replace('-','년')+'월'
-    : t2Year+'년전체';
-  XLSX.utils.book_append_sheet(wb,ws,'리퍼_'+label);
-  const now=new Date();
-  XLSX.writeFile(wb,`리퍼_${label}_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`);
+  calcResult.forEach(r => wsData.push([r.작업일??'', r.공정품명??'', r.공정품규격??'', r._qty||0, r._price||0, r._amount||0]));
+  const tq = calcResult.reduce((s,r)=>s+(r._qty||0),0);
+  const ta = calcResult.reduce((s,r)=>s+(r._amount||0),0);
+  wsData.push(['합계','','', tq,'', ta]);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols'] = [{wch:14},{wch:36},{wch:20},{wch:12},{wch:12},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, ws, '리퍼금액계산');
+  const now = new Date();
+  XLSX.writeFile(wb, `리퍼_금액계산_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`);
 }
 
-// ── 초기화 ────────────────────────────────────────
-(function t2Init(){
-  // 오늘 날짜를 기본값으로
-  const today = new Date().toISOString().split('T')[0];
-  const dateInp = document.getElementById('t2eDate');
-  if (dateInp) dateInp.value = today;
-  // 현재 월 자동 선택
-  t2SelMonth = today.substring(0,7);
-  t2Render();
+// ── 초기 대시보드 렌더 ────────────────────────────
+(function t2Init() {
+  t2SelMonth = new Date().toISOString().substring(0,7);
+  t2UpdateDashboard();
 })();
 
 // TAB 3: 재도장 실적

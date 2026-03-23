@@ -2899,23 +2899,22 @@ async function certLoadFolder(section, folderId, listEl) {
 }
 
 // 폴더 드래그 시 FileSystemEntry 재귀 탐색 헬퍼
-async function certGetFilesFromItems(items) {
+// entries는 drop 이벤트 내에서 동기적으로 추출된 FileSystemEntry 배열
+async function certGetFilesFromEntries(entries) {
   const fileList = [];
   async function traverseEntry(entry) {
+    if (!entry) return;
+    if (entry._file) { fileList.push(entry._file); return; }
     if (entry.isFile) {
-      await new Promise(res => entry.file(f => { fileList.push(f); res(); }, res));
+      await new Promise(res => entry.file(f => { fileList.push(f); res(); }, () => res()));
     } else if (entry.isDirectory) {
       const reader = entry.createReader();
-      let entries = [];
-      await new Promise(res => { (function read() { reader.readEntries(batch => { if (!batch.length) { res(); return; } entries = entries.concat([...batch]); read(); }); })(); });
-      for (const e of entries) await traverseEntry(e);
+      let batch = [];
+      await new Promise(res => { (function read() { reader.readEntries(b => { if (!b.length) { res(); return; } batch = batch.concat([...b]); read(); }); })(); });
+      for (const e of batch) await traverseEntry(e);
     }
   }
-  for (const item of Array.from(items)) {
-    const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
-    if (entry) await traverseEntry(entry);
-    else if (item.kind === 'file') { const f = item.getAsFile(); if (f) fileList.push(f); }
-  }
+  for (const entry of entries) await traverseEntry(entry);
   return fileList;
 }
 
@@ -3016,7 +3015,14 @@ function certRenderSection(section) {
       e.preventDefault(); zone.style.borderColor=''; zone.style.background='';
       const items = e.dataTransfer.items;
       if (items && items.length) {
-        const files = await certGetFilesFromItems(items);
+        // DataTransferItemList는 이벤트 종료 후 cleared되므로 동기적으로 entries 먼저 추출
+        const entries = [];
+        for (let i = 0; i < items.length; i++) {
+          const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
+          if (entry) entries.push(entry);
+          else if (items[i].kind === 'file') entries.push({ _file: items[i].getAsFile() });
+        }
+        const files = await certGetFilesFromEntries(entries);
         if (files.length) certUploadFiles(section, folder.id, files);
       } else {
         certUploadFiles(section, folder.id, Array.from(e.dataTransfer.files));

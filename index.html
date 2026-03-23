@@ -853,7 +853,7 @@ function downloadExcel1() {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   ws['!cols'] = [{wch:40},{wch:12},{wch:14}];
-  XLSX.utils.book_append_sheet(wb, ws, '재고현황');
+  XLSX.utils.book_append_sheet(wb, ws, '재고현황');h
   const now = new Date();
   XLSX.writeFile(wb, `재고현황_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`);
 }
@@ -868,10 +868,16 @@ function readExcelByHeader(file, cb) {
   reader.onload = e => {
     const wb = XLSX.read(e.target.result, { type: 'array' });
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-    const headers = rows[1] ?? [];
-    const data = rows.slice(2).map(row => {
+    // 헤더 자동 감지: 1행이 헤더인지 2행이 헤더인지 판단
+    const row0 = rows[0] ?? [];
+    const row1 = rows[1] ?? [];
+    const row0StrCount = row0.filter(v => typeof v === 'string' && v.trim() !== '').length;
+    const row1StrCount = row1.filter(v => typeof v === 'string' && v.trim() !== '').length;
+    const headerIdx = (row0StrCount >= row1StrCount) ? 0 : 1;
+    const headers = rows[headerIdx] ?? [];
+    const data = rows.slice(headerIdx + 1).map(row => {
       const obj = {};
-      headers.forEach((h, i) => { if (h != null && h !== '') obj[String(h)] = row[i] ?? ''; });
+      headers.forEach((h, i) => { if (h != null && h !== '') obj[String(h).trim()] = row[i] ?? ''; });
       return obj;
     }).filter(r => Object.values(r).some(v => v !== ''));
     cb(data);
@@ -889,26 +895,35 @@ setupDrop('zone2b', 'file2b', f => {
   readExcelByHeader(f, data => { discData = data; });
 });
 function findPrice(row) {
-  const name = String(row['공정품명'] ?? '');
-  const spec = String(row['공정품규격'] ?? '');
+  const name = String(row['공정품명'] ?? '').trim();
+  const spec = String(row['공정품규격'] ?? '').trim();
   let brand = null;
-  if (name.includes('스피드랙'))   brand = '스피드랙';
-  else if (name.includes('H하우스')) brand = '홈던트하우스';
+  if (name.includes('스피드랙'))        brand = '스피드랙';
+  else if (name.includes('홈던트하우스')) brand = '홈던트하우스';
+  else if (name.includes('H하우스'))     brand = '홈던트하우스';
   if (!brand) return 0;
-  const targetSpec = spec.replace('*5S', '*5단');
-  const altSpec    = spec.replace('*5S', ' 5단');
-  const match = discData.filter(d =>
-    String(d['상품명'] ?? '').includes(brand) &&
-    (d['품목명'] === targetSpec || d['품목명'] === altSpec)
-  );
-  return match.length > 0 ? (Number(match[0]['할인가']) || 0) : 0;
+  // 스펙 정규화: *5S → *5단 변환 및 공백/표기 차이 허용
+  const normSpec  = spec.replace(/\*5S$/i, '*5단').replace(/\s+/g, ' ').trim();
+  const altSpec1  = spec.replace(/\*5S$/i, ' 5단').replace(/\s+/g, ' ').trim();
+  const altSpec2  = spec.replace(/\s+/g, ' ').trim();
+  const matchedSpecs = [normSpec, altSpec1, altSpec2];
+  const match = discData.filter(d => {
+    const dBrand = String(d['상품명'] ?? '').trim();
+    const dSpec  = String(d['품목명'] ?? '').replace(/\s+/g, ' ').trim();
+    return dBrand.includes(brand) && matchedSpecs.includes(dSpec);
+  });
+  if (match.length > 0) {
+    const rawPrice = String(match[0]['할인가'] ?? '').replace(/,/g, '').trim();
+    return Number(rawPrice) || 0;
+  }
+  return 0;
 }
 function runCalc() {
   if (!pkgData || !discData) { alert('두 파일을 모두 업로드해주세요!'); return; }
   const includeZero = document.getElementById('toggleZeroPrice').classList.contains('on');
   const rows = pkgData.filter(r => r['공정품명'] && String(r['생산사업장'] ?? '') !== 'TOTAL');
   let result = rows.map(r => {
-    const qty = parseInt(r['생산수량']) || 0;
+    const qty = parseInt(r['생산수량'] ?? r['포장수량'] ?? r['수량'] ?? r['생산량'] ?? 0) || 0;
     const price = findPrice(r);
     return { ...r, _qty: qty, _price: price, _amount: qty * price };
   });

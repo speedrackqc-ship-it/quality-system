@@ -1150,11 +1150,6 @@ function runCalc() {
   if (!includeZero) result = result.filter(r => r._price !== 0);
   calcResult = result;
 
-  // LocalStorage에 누적 저장
-  const saved  = t2Load();
-  const merged = [...saved, ...result];
-  t2Save(merged);
-
   // 표 렌더
   const totalQty = calcResult.reduce((s,r)=>s+r._qty, 0);
   const totalAmt = calcResult.reduce((s,r)=>s+r._amount, 0);
@@ -1182,9 +1177,6 @@ function runCalc() {
   document.getElementById('t2TableTitle').textContent =
     firstDate ? firstDate.substring(0,7).replace('-','년 ') + '월 계산 결과' : '계산 결과';
   showFade(document.getElementById('resultsArea2'));
-
-  // 대시보드 갱신
-  t2UpdateDashboard();
 }
 
 // ── 결과 초기화 ───────────────────────────────────

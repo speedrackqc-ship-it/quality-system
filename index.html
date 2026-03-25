@@ -2985,23 +2985,48 @@ async function certLoadFolder(section, folderId, listEl) {
     const real = files.filter(f => f.name && f.name !== '.emptyFolderPlaceholder');
     listEl.innerHTML = '';
     if (real.length === 0) { listEl.innerHTML = '<div class="cert-empty">업로드된 파일이 없습니다.</div>'; return; }
-    real.forEach(f => {
+    real.forEach(function(f) {
       const ext = certExt(f.name);
-      // 공개 URL - 파일명만 인코딩
       const url = certPublicUrl(section, folderId, f.name);
       const item = document.createElement('div');
       item.className = 'cert-file-item';
-      item.innerHTML = `<div class="cert-file-info">
-        <span class="cert-file-ext ${ext}">${ext}</span>
-        <span class="cert-file-name" title="${f.name}">${f.name}</span>
-        <span class="cert-file-size">${certFmtSize(f.metadata&&f.metadata.size)}</span>
-        <span class="cert-file-date">${(f.created_at||'').substring(0,10)}</span>
-      </div>
-      <div class="cert-file-actions">
-        <a class="cert-btn cert-btn-view" href="${url}" target="_blank" rel="noopener">👁 보기</a>
-        <a class="cert-btn cert-btn-dl" href="${url}" download="${f.name}">⬇ 다운</a>
-        <button class="cert-btn cert-btn-del" onclick="certDeleteFile('${section}','${folderId}','${f.name.replace(/'/g,\"\\\\'\")}',this)">✕</button>
-      </div>`;
+      // info 영역
+      const info = document.createElement('div');
+      info.className = 'cert-file-info';
+      const extSpan = document.createElement('span');
+      extSpan.className = 'cert-file-ext ' + ext;
+      extSpan.textContent = ext;
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'cert-file-name';
+      nameSpan.title = f.name;
+      nameSpan.textContent = f.name;
+      const sizeSpan = document.createElement('span');
+      sizeSpan.className = 'cert-file-size';
+      sizeSpan.textContent = certFmtSize(f.metadata && f.metadata.size);
+      const dateSpan = document.createElement('span');
+      dateSpan.className = 'cert-file-date';
+      dateSpan.textContent = (f.created_at || '').substring(0, 10);
+      info.appendChild(extSpan); info.appendChild(nameSpan);
+      info.appendChild(sizeSpan); info.appendChild(dateSpan);
+      // actions 영역
+      const actions = document.createElement('div');
+      actions.className = 'cert-file-actions';
+      const viewA = document.createElement('a');
+      viewA.className = 'cert-btn cert-btn-view';
+      viewA.href = url; viewA.target = '_blank'; viewA.rel = 'noopener';
+      viewA.textContent = '👁 보기';
+      const dlA = document.createElement('a');
+      dlA.className = 'cert-btn cert-btn-dl';
+      dlA.href = url; dlA.download = f.name;
+      dlA.textContent = '⬇ 다운';
+      const delBtn = document.createElement('button');
+      delBtn.className = 'cert-btn cert-btn-del';
+      delBtn.textContent = '✕';
+      delBtn.addEventListener('click', function() {
+        certDeleteFile(section, folderId, f.name);
+      });
+      actions.appendChild(viewA); actions.appendChild(dlA); actions.appendChild(delBtn);
+      item.appendChild(info); item.appendChild(actions);
       listEl.appendChild(item);
     });
   } catch(e) { listEl.innerHTML = '<div class="cert-empty">오류: ' + e.message + '</div>'; }

@@ -13,7 +13,7 @@ const KEY3 = 'sb_publishable_8aTbER8PYcFprysUFig85A_CgXDC319';
 const SB4  = 'https://gigfzkyrmudcdksgpeoo.supabase.co';
 const KEY4 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpZ2Z6a3lybXVkY2Rrc2dwZW9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MTQyNDgsImV4cCI6MjA4MDk5MDI0OH0.wd1CXZF0Nwl4PqugWOYBIz1LELyuE_wgIGMEDvo27x8';
 const H4   = { 'apikey': KEY4, 'Authorization': `Bearer ${KEY4}` };
-
+h
 // Supabase에서 표준원가 로드
 async function t3LoadStdCostFromSB() {
   try {
@@ -1512,7 +1512,9 @@ function t3SaveMonth() {
 
   const existIdx = T3.saved.findIndex(s => s.month === month);
   if (existIdx >= 0) {
-    if (!confirm(`${month}월 데이터가 이미 있습니다. 덮어쓰겠습니까?`)) return;
+    if (!confirm(`${month}월에 이미 ${T3.saved[existIdx].rows.length}개 데이터가 있습니다.
+[확인] = 기존 데이터 아래에 추가
+[취소] = 저장 취소`)) return; rows.unshift(...T3.saved[existIdx].rows);
     T3.saved.splice(existIdx, 1);
   }
 

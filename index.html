@@ -456,6 +456,17 @@ tr:hover td { background: rgba(9,105,218,0.03); }
         <button class="cert-add-folder-btn" onclick="certAddFolder('certification')">＋ 폴더 추가</button>
       </div>
     </div>
+
+    <div class="cert-section" id="cert-sec-4">
+      <div class="cert-section-header" onclick="certToggle('4')">
+        <div class="cert-section-title"><span class="cert-icon">⚗️</span> MSDS <span class="cert-count" id="cert-count-4">0건</span></div>
+        <span class="cert-arrow" id="cert-arrow-4">▼</span>
+      </div>
+      <div class="cert-section-body" id="cert-body-4">
+        <div id="cert-folders-4" class="cert-folder-list"></div>
+        <button class="cert-add-folder-btn" onclick="certAddFolder('msds')">＋ 폴더 추가</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2841,8 +2852,8 @@ async function buildPowder4(el, today) {
 
 // ===== TAB5: 공인성적서/인증서 Supabase Storage 연동 (폴더 기능) =====
 const CERT_BUCKET = 'certificates';
-const CERT_SECTION_MAP = { mechanics:'1', chemistry:'2', certification:'3' };
-const CERT_SECTIONS = ['mechanics','chemistry','certification'];
+const CERT_SECTION_MAP = { mechanics:'1', chemistry:'2', certification:'3', msds:'4' };
+const CERT_SECTIONS = ['mechanics','chemistry','certification','msds'];
 
 function certGetFolderKey(section) { return 'cert_folders_' + section; }
 async function certGetFoldersFromSB(section) {

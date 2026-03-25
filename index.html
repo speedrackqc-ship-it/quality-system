@@ -3138,74 +3138,139 @@ async function certUpdateCount(section) {
 }
 
 function certRenderSection(section) {
-  const num = CERT_SECTION_MAP[section];
+  var num = (window.CERT_SECTION_MAP || {})[section];
   if (!num) return;
-  const container = document.getElementById('cert-folders-' + num);
+  var container = document.getElementById('cert-body-' + num);
   if (!container) return;
-  const folders = certGetFolders(section);
   container.innerHTML = '';
-  folders.forEach(folder => {
-    const block = document.createElement('div');
+  var folders = certGetFolders(section);
+  folders.forEach(function(folder) {
+    var block = document.createElement('div');
     block.className = 'cert-folder-block';
     block.id = 'cert-folder-' + folder.id;
-    block.innerHTML = `<div class="cert-folder-header">
-      <span class="cert-folder-icon">📁</span>
-      <input class="cert-folder-name-input" id="cert-fname-${folder.id}" value="${folder.name}"
-        onblur="certRenameFolder('${section}','${folder.id}',this.value)"
-        onkeydown="if(event.key==='Enter')this.blur()"
-        placeholder="폴더 이름 입력" title="클릭하여 이름 수정">
-      <button class="cert-folder-del-btn" onclick="certDeleteFolder('${section}','${folder.id}')">✕ 삭제</button>
-    </div>
-    <div class="cert-folder-body">
-      <div class="cert-upload-zone" id="cert-zone-${folder.id}">
-        <input type="file" id="cert-finput-${folder.id}" multiple
-          accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc,.hwp,.hwpx,.zip,.pptx,.ppt,.txt,.csv"
-          onchange="certUploadFiles('${section}','${folder.id}',Array.from(this.files))"
-          style="display:none">
-        <input type="file" id="cert-finput-dir-${folder.id}" webkitdirectory multiple
-          onchange="certUploadFiles('${section}','${folder.id}',Array.from(this.files))"
-          style="display:none">
-        <div class="cert-upload-icon">📂</div>
-        <div class="cert-upload-text">클릭하거나 파일을 드래그하여 업로드</div>
-        <div class="cert-upload-sub">PDF, JPG, PNG, Excel, Word, HWP, ZIP 등 · 최대 50MB</div>
-        <div style="display:flex;gap:8px;margin-top:8px;justify-content:center">
-          <button class="cert-folder-upload-btn" onclick="event.stopPropagation();document.getElementById('cert-finput-${folder.id}').click()">📄 파일 선택</button>
-          <button class="cert-folder-upload-btn" onclick="event.stopPropagation();document.getElementById('cert-finput-dir-${folder.id}').click()">📁 폴더 선택</button>
-        </div>
-      </div>
-      <div class="cert-file-list" id="cert-flist-${folder.id}">
-        <div class="cert-empty">업로드된 파일이 없습니다.</div>
-      </div>
-    </div>`;
+
+    // 헤더
+    var header = document.createElement('div');
+    header.className = 'cert-folder-header';
+
+    var icon = document.createElement('span');
+    icon.className = 'cert-folder-icon';
+    icon.textContent = '📁';
+    header.appendChild(icon);
+
+    var nameInput = document.createElement('input');
+    nameInput.className = 'cert-folder-name-input';
+    nameInput.id = 'cert-fname-' + folder.id;
+    nameInput.value = folder.name;
+    nameInput.placeholder = '솔더 이름 입력';
+    nameInput.title = '클릭하여 이름 수정';
+    nameInput.setAttribute('onblur', 'certRenameFolder(\'' + section + '\',\'' + folder.id + '\',this.value)');
+    nameInput.setAttribute('onkeydown', "if(event.key==='Enter')this.blur()");
+    header.appendChild(nameInput);
+
+    var delBtn = document.createElement('button');
+    delBtn.className = 'cert-folder-del-btn';
+    delBtn.setAttribute('onclick', 'certDeleteFolder(\'' + section + '\',\'' + folder.id + '\')');
+    delBtn.textContent = '✕ 삭제';
+    header.appendChild(delBtn);
+    block.appendChild(header);
+
+    // 바디
+    var body = document.createElement('div');
+    body.className = 'cert-folder-body';
+
+    // 업로드 존
+    var zone = document.createElement('div');
+    zone.className = 'cert-upload-zone';
+    zone.id = 'cert-zone-' + folder.id;
+
+    var finput = document.createElement('input');
+    finput.type = 'file';
+    finput.id = 'cert-finput-' + folder.id;
+    finput.multiple = true;
+    finput.accept = '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc,.hwp,.hwpx,.zip,.pptx,.ppt,.txt,.csv';
+    finput.style.display = 'none';
+    finput.setAttribute('onchange', 'certUploadFiles(\'' + section + '\',\'' + folder.id + '\',Array.from(this.files))');
+    zone.appendChild(finput);
+
+    var finputDir = document.createElement('input');
+    finputDir.type = 'file';
+    finputDir.id = 'cert-finput-dir-' + folder.id;
+    finputDir.multiple = true;
+    finputDir.setAttribute('webkitdirectory', '');
+    finputDir.style.display = 'none';
+    finputDir.setAttribute('onchange', 'certUploadFiles(\'' + section + '\',\'' + folder.id + '\',Array.from(this.files))');
+    zone.appendChild(finputDir);
+
+    var uploadIcon = document.createElement('div');
+    uploadIcon.className = 'cert-upload-icon';
+    uploadIcon.textContent = '📂';
+    zone.appendChild(uploadIcon);
+
+    var uploadText = document.createElement('div');
+    uploadText.className = 'cert-upload-text';
+    uploadText.textContent = '클릭하거나 파일을 드래그하여 업로드';
+    zone.appendChild(uploadText);
+
+    var uploadSub = document.createElement('div');
+    uploadSub.className = 'cert-upload-sub';
+    uploadSub.textContent = 'PDF, JPG, PNG, Excel, Word, HWP, ZIP 등 · 최대 50MB';
+    zone.appendChild(uploadSub);
+
+    var btnRow = document.createElement('div');
+    btnRow.className = 'cert-upload-btn-row';
+
+    var btnFile = document.createElement('button');
+    btnFile.className = 'cert-folder-upload-btn';
+    btnFile.textContent = '📎 파일 선택';
+    btnFile.setAttribute('onclick', 'event.stopPropagation();document.getElementById(\'cert-finput-' + folder.id + '\').click()');
+    btnRow.appendChild(btnFile);
+
+    var btnDir = document.createElement('button');
+    btnDir.className = 'cert-folder-upload-btn';
+    btnDir.textContent = '📁 폴더 업로드';
+    btnDir.setAttribute('onclick', 'event.stopPropagation();document.getElementById(\'cert-finput-dir-' + folder.id + '\').click()');
+    btnRow.appendChild(btnDir);
+    zone.appendChild(btnRow);
+    body.appendChild(zone);
+
+    var fileList = document.createElement('div');
+    fileList.className = 'cert-file-list';
+    fileList.id = 'cert-flist-' + folder.id;
+    var emptyMsg = document.createElement('div');
+    emptyMsg.className = 'cert-empty';
+    emptyMsg.textContent = '업로드된 파일이 없습니다.';
+    fileList.appendChild(emptyMsg);
+    body.appendChild(fileList);
+    block.appendChild(body);
     container.appendChild(block);
 
     // 파일 목록 로드
-    const listEl = document.getElementById('cert-flist-' + folder.id);
-    certLoadFolder(section, folder.id, listEl).then(() => certUpdateCount(section));
+    certLoadFolder(section, folder.id);
 
     // 드래그앤드롭
-    const zone = block.querySelector('.cert-upload-zone');
+    zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', function() { zone.classList.remove('drag-over'); });
     zone.addEventListener('click', function(e) {
-      if (e.target.tagName === 'BUTTON') return;
-      document.getElementById('cert-finput-' + folder.id).click();
+      if (e.target === zone || e.target.className === 'cert-upload-icon' || e.target.className === 'cert-upload-text' || e.target.className === 'cert-upload-sub') {
+        document.getElementById('cert-finput-' + folder.id).click();
+      }
     });
-    zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor='#4a90d9'; zone.style.background='#f0f6ff'; });
-    zone.addEventListener('dragleave', () => { zone.style.borderColor=''; zone.style.background=''; });
-    zone.addEventListener('drop', async e => {
-      e.preventDefault(); zone.style.borderColor=''; zone.style.background='';
-      const allFiles = [];
-      const entries = [];
-      const items = e.dataTransfer.items;
+    zone.addEventListener('drop', async function(e) {
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      var allFiles = [];
+      var entries = [];
+      var items = e.dataTransfer.items;
       if (items && items.length) {
-        for (let i = 0; i < items.length; i++) {
-          const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
+        for (var k = 0; k < items.length; k++) {
+          var entry = items[k].webkitGetAsEntry && items[k].webkitGetAsEntry();
           if (entry) entries.push(entry);
-          else if (items[i].kind === 'file') { const f = items[i].getAsFile(); if (f) allFiles.push(f); }
         }
+        allFiles = await certGetFilesFromEntries(entries);
       } else if (e.dataTransfer.files && e.dataTransfer.files.length) {
         allFiles.push(...Array.from(e.dataTransfer.files));
       }
-      if (entries.length) { const traversed = await certGetFilesFromEntries(entries); allFiles.push(...traversed); }
       if (allFiles.length) certUploadFiles(section, folder.id, allFiles);
     });
   });

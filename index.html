@@ -1512,9 +1512,7 @@ function t3SaveMonth() {
 
   const existIdx = T3.saved.findIndex(s => s.month === month);
   if (existIdx >= 0) {
-    if (!confirm(`${month}월에 이미 ${T3.saved[existIdx].rows.length}개 데이터가 있습니다.
-[확인] = 기존 데이터 아래에 추가
-[취소] = 저장 취소`)) return; rows.unshift(...T3.saved[existIdx].rows);
+    rows.unshift(...T3.saved[existIdx].rows);
     T3.saved.splice(existIdx, 1);
   }
 

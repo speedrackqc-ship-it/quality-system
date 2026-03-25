@@ -2856,6 +2856,18 @@ const CERT_SECTION_MAP = { mechanics:'1', chemistry:'2', certification:'3', msds
 const CERT_SECTIONS = ['mechanics','chemistry','certification','msds'];
 
 function certGetFolderKey(section) { return 'cert_folders_' + section; }
+
+// Storage path: section/folderId/filename
+// Supabase API에서 경로는 인코딩 없이 그대로 사용 (SDK 내부에서 처리)
+function certStoragePath(section, folderId, fileName) {
+  return section + '/' + folderId + (fileName ? '/' + fileName : '/');
+}
+// 공개 URL 생성 (파일명 인코딩)
+function certPublicUrl(section, folderId, fileName) {
+  return SB3 + '/storage/v1/object/public/' + CERT_BUCKET + '/' +
+    section + '/' + folderId + '/' + encodeURIComponent(fileName);
+}
+
 async function certGetFoldersFromSB(section) {
   try {
     const res = await fetch(SB3 + '/rest/v1/cert_folders?section=eq.' + section + '&order=created_at.asc', {
@@ -2871,9 +2883,12 @@ async function certGetFoldersFromSB(section) {
   } catch(e) { console.warn('cert 폴더 SB 로드 실패:', e); }
   return null;
 }
+
 function certGetFolders(section) {
-  try { return JSON.parse(localStorage.getItem(certGetFolderKey(section)) || '[]'); } catch(e) { return []; }
+  try { return JSON.parse(localStorage.getItem(certGetFolderKey(section)) || '[]'); }
+  catch(e) { return []; }
 }
+
 async function certSaveFolders(section, folders) {
   localStorage.setItem(certGetFolderKey(section), JSON.stringify(folders));
   try {
@@ -2891,8 +2906,6 @@ async function certSaveFolders(section, folders) {
   } catch(e) { console.warn('cert 폴더 SB 저장 실패:', e); }
 }
 
-
-
 function certToggle(num) {
   const body = document.getElementById('cert-body-' + num);
   const arrow = document.getElementById('cert-arrow-' + num);
@@ -2909,6 +2922,7 @@ function certFmtSize(b) {
   if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
   return (b/1048576).toFixed(1) + ' MB';
 }
+
 function certExt(name) { return (name.split('.').pop() || '').toLowerCase(); }
 
 function certAddFolder(section) {
@@ -2952,20 +2966,19 @@ async function certDeleteFolder(section, folderId) {
         body: JSON.stringify({ prefixes: files.map(fi => prefix + '/' + fi.name) })
       });
     }
-  } catch(e) {}
+  } catch(e) { console.warn('폴더 파일 삭제 오류:', e); }
   await certSaveFolders(section, folders.filter(f => f.id !== folderId));
   certRenderSection(section);
 }
-
-
 
 async function certLoadFolder(section, folderId, listEl) {
   const prefix = section + '/' + folderId + '/';
   listEl.innerHTML = '<div class="cert-uploading">⏳ 불러오는 중...</div>';
   try {
     const res = await fetch(SB3 + '/storage/v1/object/list/' + CERT_BUCKET, {
-      method:'POST', headers:{'apikey':KEY3,'Authorization':'Bearer '+KEY3,'Content-Type':'application/json'},
-      body: JSON.stringify({ prefix, limit:200, offset:0, sortBy:{column:'created_at',order:'desc'} })
+      method: 'POST',
+      headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefix, limit: 200, offset: 0, sortBy: { column: 'created_at', order: 'desc' } })
     });
     const files = await res.json();
     if (!Array.isArray(files)) { listEl.innerHTML = '<div class="cert-empty">불러오기 실패</div>'; return; }
@@ -2974,7 +2987,8 @@ async function certLoadFolder(section, folderId, listEl) {
     if (real.length === 0) { listEl.innerHTML = '<div class="cert-empty">업로드된 파일이 없습니다.</div>'; return; }
     real.forEach(f => {
       const ext = certExt(f.name);
-      const url = SB3 + '/storage/v1/object/public/' + CERT_BUCKET + '/' + prefix + f.name;
+      // 공개 URL - 파일명만 인코딩
+      const url = certPublicUrl(section, folderId, f.name);
       const item = document.createElement('div');
       item.className = 'cert-file-item';
       item.innerHTML = `<div class="cert-file-info">
@@ -2984,17 +2998,15 @@ async function certLoadFolder(section, folderId, listEl) {
         <span class="cert-file-date">${(f.created_at||'').substring(0,10)}</span>
       </div>
       <div class="cert-file-actions">
-        <a class="cert-btn cert-btn-view" href="${url}" target="_blank">👁 보기</a>
+        <a class="cert-btn cert-btn-view" href="${url}" target="_blank" rel="noopener">👁 보기</a>
         <a class="cert-btn cert-btn-dl" href="${url}" download="${f.name}">⬇ 다운</a>
-        <button class="cert-btn cert-btn-del" onclick="certDeleteFile('${section}','${folderId}','${f.name}',this)">✕</button>
+        <button class="cert-btn cert-btn-del" onclick="certDeleteFile('${section}','${folderId}','${f.name.replace(/'/g,\"\\\\'\")}',this)">✕</button>
       </div>`;
       listEl.appendChild(item);
     });
   } catch(e) { listEl.innerHTML = '<div class="cert-empty">오류: ' + e.message + '</div>'; }
 }
 
-// 폴더 드래그 시 FileSystemEntry 재귀 탐색 헬퍼
-// entries는 drop 이벤트 내에서 동기적으로 추출된 FileSystemEntry 배열
 async function certGetFilesFromEntries(entries) {
   const fileList = [];
   async function traverseEntry(entry) {
@@ -3016,15 +3028,11 @@ async function certGetFilesFromEntries(entries) {
         }
         read();
       }).then(async function(children) {
-        for (var i = 0; i < children.length; i++) {
-          await traverseEntry(children[i]);
-        }
+        for (var i = 0; i < children.length; i++) await traverseEntry(children[i]);
       });
     }
   }
-  for (var i = 0; i < entries.length; i++) {
-    await traverseEntry(entries[i]);
-  }
+  for (var i = 0; i < entries.length; i++) await traverseEntry(entries[i]);
   return fileList;
 }
 
@@ -3032,47 +3040,69 @@ async function certUploadFiles(section, folderId, files) {
   if (!files || !files.length) return;
   const listEl = document.getElementById('cert-flist-' + folderId);
   if (listEl) listEl.innerHTML = '<div class="cert-uploading">⏳ 업로드 중... (0/' + files.length + ')</div>';
-  let done = 0;
+  let done = 0, failed = 0;
   for (const file of files) {
-    const path = section + '/' + folderId + '/' + file.name;
+    // 경로: section/folderId/filename  (슬래시 인코딩 안함, 파일명만 encodeURIComponent)
+    const uploadUrl = SB3 + '/storage/v1/object/' + CERT_BUCKET + '/' +
+      section + '/' + folderId + '/' + encodeURIComponent(file.name);
     try {
-      await fetch(SB3 + '/storage/v1/object/' + CERT_BUCKET + '/' + encodeURIComponent(path), {
-        method:'POST', headers:{'apikey':KEY3,'Authorization':'Bearer '+KEY3,'Content-Type':file.type||'application/octet-stream','x-upsert':'true'}, body:file
+      const res = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'apikey': KEY3,
+          'Authorization': 'Bearer ' + KEY3,
+          'Content-Type': file.type || 'application/octet-stream',
+          'x-upsert': 'true'
+        },
+        body: file
       });
-    } catch(e) {}
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error('업로드 실패:', file.name, res.status, errText);
+        failed++;
+      }
+    } catch(e) {
+      console.error('업로드 오류:', file.name, e);
+      failed++;
+    }
     done++;
     if (listEl) listEl.innerHTML = '<div class="cert-uploading">⏳ 업로드 중... (' + done + '/' + files.length + ')</div>';
   }
+  // 파일 input 초기화
   const inp = document.getElementById('cert-finput-' + folderId);
   const inpDir = document.getElementById('cert-finput-dir-' + folderId);
   if (inp) inp.value = '';
   if (inpDir) inpDir.value = '';
   if (listEl) await certLoadFolder(section, folderId, listEl);
   certUpdateCount(section);
+  if (failed > 0) alert(failed + '개 파일 업로드 실패. 콘솔을 확인하세요.');
 }
 
 async function certDeleteFile(section, folderId, fileName) {
   if (!confirm('「' + fileName + '」을(를) 삭제하시겠습니까?')) return;
   try {
     await fetch(SB3 + '/storage/v1/object/' + CERT_BUCKET, {
-      method:'DELETE', headers:{'apikey':KEY3,'Authorization':'Bearer '+KEY3,'Content-Type':'application/json'},
+      method: 'DELETE',
+      headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json' },
       body: JSON.stringify({ prefixes: [section + '/' + folderId + '/' + fileName] })
     });
     const listEl = document.getElementById('cert-flist-' + folderId);
     if (listEl) await certLoadFolder(section, folderId, listEl);
     certUpdateCount(section);
-  } catch(e) {}
+  } catch(e) { console.error('파일 삭제 오류:', e); }
 }
 
 async function certUpdateCount(section) {
   const num = CERT_SECTION_MAP[section];
+  if (!num) return;
   const folders = certGetFolders(section);
   let total = 0;
   for (const f of folders) {
     try {
       const res = await fetch(SB3 + '/storage/v1/object/list/' + CERT_BUCKET, {
-        method:'POST', headers:{'apikey':KEY3,'Authorization':'Bearer '+KEY3,'Content-Type':'application/json'},
-        body: JSON.stringify({ prefix: section + '/' + f.id + '/', limit:200 })
+        method: 'POST',
+        headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prefix: section + '/' + f.id + '/', limit: 200 })
       });
       const files = await res.json();
       if (Array.isArray(files)) total += files.filter(fi => fi.name && fi.name !== '.emptyFolderPlaceholder').length;
@@ -3084,6 +3114,7 @@ async function certUpdateCount(section) {
 
 function certRenderSection(section) {
   const num = CERT_SECTION_MAP[section];
+  if (!num) return;
   const container = document.getElementById('cert-folders-' + num);
   if (!container) return;
   const folders = certGetFolders(section);
@@ -3093,37 +3124,44 @@ function certRenderSection(section) {
     block.className = 'cert-folder-block';
     block.id = 'cert-folder-' + folder.id;
     block.innerHTML = `<div class="cert-folder-header">
-        <span class="cert-folder-icon">📁</span>
-        <input class="cert-folder-name-input" id="cert-fname-${folder.id}" value="${folder.name}"
-          onblur="certRenameFolder('${section}','${folder.id}',this.value)"
-          onkeydown="if(event.key==='Enter')this.blur()"
-          placeholder="폴더 이름 입력" title="클릭하여 이름 수정">
-        <button class="cert-folder-del-btn" onclick="certDeleteFolder('${section}','${folder.id}')">✕ 삭제</button>
+      <span class="cert-folder-icon">📁</span>
+      <input class="cert-folder-name-input" id="cert-fname-${folder.id}" value="${folder.name}"
+        onblur="certRenameFolder('${section}','${folder.id}',this.value)"
+        onkeydown="if(event.key==='Enter')this.blur()"
+        placeholder="폴더 이름 입력" title="클릭하여 이름 수정">
+      <button class="cert-folder-del-btn" onclick="certDeleteFolder('${section}','${folder.id}')">✕ 삭제</button>
+    </div>
+    <div class="cert-folder-body">
+      <div class="cert-upload-zone" id="cert-zone-${folder.id}">
+        <input type="file" id="cert-finput-${folder.id}" multiple
+          accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc,.hwp,.hwpx,.zip,.pptx,.ppt,.txt,.csv"
+          onchange="certUploadFiles('${section}','${folder.id}',Array.from(this.files))"
+          style="display:none">
+        <input type="file" id="cert-finput-dir-${folder.id}" webkitdirectory multiple
+          onchange="certUploadFiles('${section}','${folder.id}',Array.from(this.files))"
+          style="display:none">
+        <div class="cert-upload-icon">📂</div>
+        <div class="cert-upload-text">클릭하거나 파일을 드래그하여 업로드</div>
+        <div class="cert-upload-sub">PDF, JPG, PNG, Excel, Word, HWP, ZIP 등 · 최대 50MB</div>
+        <div style="display:flex;gap:8px;margin-top:8px;justify-content:center">
+          <button class="cert-folder-upload-btn" onclick="event.stopPropagation();document.getElementById('cert-finput-${folder.id}').click()">📄 파일 선택</button>
+          <button class="cert-folder-upload-btn" onclick="event.stopPropagation();document.getElementById('cert-finput-dir-${folder.id}').click()">📁 폴더 선택</button>
+        </div>
       </div>
-      <div class="cert-folder-body">
-        <div class="cert-upload-zone" id="cert-zone-${folder.id}">
-          <input type="file" id="cert-finput-${folder.id}" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc"
-            onchange="certUploadFiles('${section}','${folder.id}',Array.from(this.files))" style="display:none">
-          <input type="file" id="cert-finput-dir-${folder.id}" webkitdirectory multiple
-            onchange="certUploadFiles('${section}','${folder.id}',Array.from(this.files))" style="display:none">
-          <div class="cert-upload-icon">📂</div>
-          <div class="cert-upload-text">클릭하여 파일 선택</div>
-          <div class="cert-upload-sub">PDF, JPG, PNG, Excel, Word · 최대 50MB</div>
-          <div style="display:flex;gap:8px;margin-top:8px;justify-content:center">
-            <button class="cert-folder-upload-btn" onclick="event.stopPropagation();document.getElementById('cert-finput-${folder.id}').click()">📄 파일 선택</button>
-            <button class="cert-folder-upload-btn" onclick="event.stopPropagation();document.getElementById('cert-finput-dir-${folder.id}').click()">📁 폴더 선택</button>
-          </div>
-        </div>
-        <div class="cert-file-list" id="cert-flist-${folder.id}">
-          <div class="cert-empty">업로드된 파일이 없습니다.</div>
-        </div>
-      </div>`;
+      <div class="cert-file-list" id="cert-flist-${folder.id}">
+        <div class="cert-empty">업로드된 파일이 없습니다.</div>
+      </div>
+    </div>`;
     container.appendChild(block);
+
+    // 파일 목록 로드
     const listEl = document.getElementById('cert-flist-' + folder.id);
     certLoadFolder(section, folder.id, listEl).then(() => certUpdateCount(section));
+
+    // 드래그앤드롭
     const zone = block.querySelector('.cert-upload-zone');
     zone.addEventListener('click', function(e) {
-      if (e.target.tagName === 'BUTTON') return; // 버튼 클릭은 버튼 자체가 처리
+      if (e.target.tagName === 'BUTTON') return;
       document.getElementById('cert-finput-' + folder.id).click();
     });
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor='#4a90d9'; zone.style.background='#f0f6ff'; });
@@ -3136,22 +3174,14 @@ function certRenderSection(section) {
       if (items && items.length) {
         for (let i = 0; i < items.length; i++) {
           const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
-          if (entry) { entries.push(entry); }
+          if (entry) entries.push(entry);
           else if (items[i].kind === 'file') { const f = items[i].getAsFile(); if (f) allFiles.push(f); }
         }
       } else if (e.dataTransfer.files && e.dataTransfer.files.length) {
         allFiles.push(...Array.from(e.dataTransfer.files));
       }
-      if (entries.length) {
-        const traversed = await certGetFilesFromEntries(entries);
-        allFiles.push(...traversed);
-      }
-      if (allFiles.length) {
-        certUploadFiles(section, folder.id, allFiles);
-      } else {
-        const listEl = document.getElementById('cert-flist-' + folder.id);
-        if (listEl) listEl.innerHTML = '<div class="cert-empty">⚠ 파일을 찾을 수 없습니다. 폴더 선택 버튼을 이용해보세요.</div>';
-      }
+      if (entries.length) { const traversed = await certGetFilesFromEntries(entries); allFiles.push(...traversed); }
+      if (allFiles.length) certUploadFiles(section, folder.id, allFiles);
     });
   });
 }

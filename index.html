@@ -1813,9 +1813,7 @@ async function sb3(path, opt={}) {
 
 // Supabase에 실적 저장
 async function t3SaveSession(month, scrap, rows) {
-  // 기존 세션 삭제
-  await sb3(`repaint_sessions?month=eq.${month}`, { method:'DELETE', prefer:'' });
-  // 새 세션 생성
+  // 새 세션 생성 (기존 세션 유지 - 누적 저장)
   const sess = await sb3('repaint_sessions', {
     method: 'POST',
     body: { month, scrap_price: scrap }
@@ -3544,7 +3542,7 @@ async function t3LoadLog() {
   try {
     var SB3 = 'https://kxlzdnfudvdwzlveqklh.supabase.co';
     var KEY3 = 'sb_publishable_8aTbER8PYcFprysUFig85A_CgXDC319';
-    var res = await fetch(SB3 + '/rest/v1/repaint_sessions?select=id,month,scrap_price,created_at,repaint_items(name,thickness,size,qty,repaint,stdcost)&order=created_at.desc', {
+    var res = await fetch(SB3 + '/rest/v1/repaint_sessions?select=id,month,scrap_price,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.desc', {
       headers: { apikey: KEY3, Authorization: 'Bearer ' + KEY3 }
     });
     var sessions = await res.json();

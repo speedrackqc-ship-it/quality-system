@@ -3019,6 +3019,7 @@ async function certLoadFolder(section, folderId, listEl) {
     var allFiles = await listAll(section + '/' + folderId + '/');
     var nameMap = await certGetNameMap(section, folderId);
     listEl.innerHTML = '';
+    allFiles = allFiles.filter(function(f) { return f.name !== '_name_map.json'; });
     if (allFiles.length === 0) { listEl.innerHTML = '<div class="cert-empty">업로드된 파일이 없습니다.</div>'; return; }
 
     // 폴더 구조 그룹핑

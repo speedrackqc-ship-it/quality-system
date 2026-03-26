@@ -3074,15 +3074,30 @@ async function certGetFilesFromEntries(entries) {
   return fileList;
 }
 
+function certSafeFileName(name) {
+  // 확장자 분리
+  var dotIdx = name.lastIndexOf('.');
+  var ext = dotIdx >= 0 ? name.slice(dotIdx) : '';
+  var base = dotIdx >= 0 ? name.slice(0, dotIdx) : name;
+  // 영문, 숫자, 하이픈, 언더스코어만 유지 (나머지는 _로 치환)
+  var safe = base.replace(/[^a-zA-Z0-9-_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  // 확장자도 안전하게
+  var safeExt = ext.replace(/[^a-zA-Z0-9.]/g, '').toLowerCase();
+  // 너무 길면 자르기 (최대 80자)
+  if (safe.length > 80) safe = safe.slice(0, 80);
+  if (!safe) safe = 'file_' + Date.now();
+  return safe + safeExt;
+}
 async function certUploadFiles(section, folderId, files) {
   if (!files || !files.length) return;
   const listEl = document.getElementById('cert-flist-' + folderId);
   if (listEl) listEl.innerHTML = '<div class="cert-uploading">⏳ 업로드 중... (0/' + files.length + ')</div>';
   let done = 0, failed = 0;
   for (const file of files) {
-    // 경로: section/folderId/filename  (슬래시 인코딩 안함, 파일명만 encodeURIComponent)
+    // 파일명 sanitize: 영문/숫자/점/하이픈/언더스코어만 허용 (Supabase InvalidKey 방지)
+    const safeFileName = certSafeFileName(file.name);
     const uploadUrl = SB3 + '/storage/v1/object/' + CERT_BUCKET + '/' +
-      section + '/' + folderId + '/' + encodeURIComponent(file.name);
+      section + '/' + folderId + '/' + safeFileName;
     try {
       const res = await fetch(uploadUrl, {
         method: 'POST',
@@ -3259,7 +3274,7 @@ function certRenderSection(section) {
     container.appendChild(block);
 
     // 파일 목록 로드
-    certLoadFolder(section, folder.id);
+    certLoadFolder(section, folder.id, fileList);
 
     // 드래그앤드롭
     zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.classList.add('drag-over'); });

@@ -3500,6 +3500,21 @@ function t3LogToggle() {
   if(arrow) arrow.style.transform = _t3LogOpen ? '' : 'rotate(-90deg)';
 }
 
+async function t3DeleteLog(sessionId, cardEl) {
+  if (!confirm('이 이력을 삭제하시겠습니까?')) return;
+  try {
+    cardEl.style.opacity = '0.4';
+    cardEl.style.pointerEvents = 'none';
+    await sb3('repaint_items?session_id=eq.' + sessionId, { method: 'DELETE', prefer: '' });
+    await sb3('repaint_sessions?id=eq.' + sessionId, { method: 'DELETE', prefer: '' });
+    cardEl.remove();
+  } catch(e) {
+    cardEl.style.opacity = '';
+    cardEl.style.pointerEvents = '';
+    alert('삭제 오류: ' + e.message);
+  }
+}
+
 async function t3LoadLog() {
   var el = document.getElementById('t3_log_content');
   if(!el) return;
@@ -3555,6 +3570,14 @@ function t3RenderLog(sessions, el) {
       sep.style.cssText = 'margin-left:auto;font-size:12px;color:#94a3b8;';
       sep.textContent = '수량 ' + totalQty.toLocaleString() + '개 · ' + items.length + '개 항목';
       cardHead.appendChild(sep);
+      var delBtn = document.createElement('button');
+      delBtn.textContent = '✕';
+      delBtn.title = '이 이력 삭제';
+      delBtn.style.cssText = 'margin-left:8px;background:none;border:none;color:#94a3b8;font-size:15px;cursor:pointer;padding:2px 6px;border-radius:4px;line-height:1;transition:color .15s,background .15s;flex-shrink:0;';
+      delBtn.onmouseover = function(){this.style.color='#ef4444';this.style.background='#fee2e2';};
+      delBtn.onmouseout = function(){this.style.color='#94a3b8';this.style.background='none';};
+      delBtn.onclick = function(e){e.stopPropagation();t3DeleteLog(s.id,card);};
+      cardHead.appendChild(delBtn);
       card.appendChild(cardHead);
       if(items.length) {
         var tWrap = document.createElement('div');

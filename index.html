@@ -2939,18 +2939,22 @@ function certFmtSize(b) {
 
 function certExt(name) { return (name.split('.').pop() || '').toLowerCase(); }
 
-function certAddFolder(section) {
-  const folders = certGetFolders(section);
-  const newF = { id: 'f' + Date.now(), name: '새 폴더' };
-  folders.push(newF);
-  certSaveFolders(section, folders);
+async function certAddFolder(section) {
+  var num = (CERT_SECTION_MAP || {})[section];
+  if (!num) return;
+  var newId = 'f' + Date.now();
+  var newName = '새 폴더';
+  try {
+    await fetch(SB3 + '/rest/v1/cert_folders', {
+      method: 'POST',
+      headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ id: newId, section: section, name: newName })
+    });
+  } catch(e) { console.error('폴더 추가 오류:', e); }
+  await certGetFoldersFromSB(section);
   certRenderSection(section);
-  setTimeout(() => {
-    const inp = document.getElementById('cert-fname-' + newF.id);
-    if (inp) { inp.focus(); inp.select(); }
-  }, 50);
+  certUpdateCount(section);
 }
-
 function certRenameFolder(section, folderId, newName) {
   const folders = certGetFolders(section);
   const f = folders.find(f => f.id === folderId);
@@ -3407,6 +3411,12 @@ function certRenderSection(section) {
       if (allFiles.length) certUploadFiles(section, folder.id, allFiles);
     });
   });
+  // 폴더 추가 버튼
+  var addBtn = document.createElement('button');
+  addBtn.className = 'cert-add-folder-btn';
+  addBtn.textContent = '+ 폴더 추가';
+  addBtn.onclick = function() { certAddFolder(section); };
+  container.appendChild(addBtn);
 }
 
 const _origSwitchTabCert = window.switchTab;

@@ -3026,8 +3026,14 @@ async function certLoadFolder(section, folderId, listEl) {
     });
 
     function renderFileItem(f, section, folderId) {
-      var fileName = f.name.split('/').pop();
-      var ext = certExt(fileName);
+      var safeFileName = f.name.split('/').pop();
+      // 원본 파일명 조회 (한글 등 원본명 복원)
+      var fullSafeKey = section + '/' + folderId + '/' + f.name;
+      var origRelPath = certGetOriginalName(fullSafeKey);
+      var displayName = origRelPath.split('/').pop(); // 원본 파일명의 마지막 세그먼트
+      // 폴더도 원본명으로 표시
+      var origFolder = origRelPath.includes('/') ? origRelPath.split('/').slice(0,-1).join('/') : '';
+      var ext = certExt(safeFileName);
       var url = certPublicUrl(section, folderId, f.name);
       var item = document.createElement('div');
       item.className = 'cert-file-item';
@@ -3038,8 +3044,8 @@ async function certLoadFolder(section, folderId, listEl) {
       extSpan.textContent = ext;
       var nameSpan = document.createElement('span');
       nameSpan.className = 'cert-file-name';
-      nameSpan.title = f.name;
-      nameSpan.textContent = fileName;
+      nameSpan.title = displayName;
+      nameSpan.textContent = displayName;
       var sizeSpan = document.createElement('span');
       sizeSpan.className = 'cert-file-size';
       sizeSpan.textContent = certFmtSize(f.meta && f.meta.metadata && f.meta.metadata.size);
@@ -3056,7 +3062,7 @@ async function certLoadFolder(section, folderId, listEl) {
       viewA.textContent = '👁 보기';
       var dlA = document.createElement('a');
       dlA.className = 'cert-btn cert-btn-dl';
-      dlA.href = url; dlA.download = fileName;
+      dlA.href = url; dlA.download = displayName;
       dlA.textContent = '⬇ 다운';
       var delBtn = document.createElement('button');
       delBtn.className = 'cert-btn cert-btn-del';
@@ -3074,10 +3080,20 @@ async function certLoadFolder(section, folderId, listEl) {
 
     folderKeys.forEach(function(folderKey) {
       if (folderKey !== '') {
-        // 하위 폴더 헤더
+        // 하위 폴더 헤더 - 원본 폴더명으로 표시
+        // folderKey는 safe 경로 세그먼트들. 대표 파일의 origRelPath에서 폴더명 추출
+        var origFolderDisplay = folderKey; // fallback
+        if (tree[folderKey] && tree[folderKey].length > 0) {
+          var repFile = tree[folderKey][0];
+          var repKey = section + '/' + folderId + '/' + repFile.name;
+          var repOrig = certGetOriginalName(repKey);
+          if (repOrig !== repFile.name && repOrig.includes('/')) {
+            origFolderDisplay = repOrig.split('/').slice(0,-1).join('/');
+          }
+        }
         var subHeader = document.createElement('div');
         subHeader.style.cssText = 'font-size:12px;font-weight:700;color:#475569;padding:8px 4px 4px;border-bottom:1px solid #e2e8f0;margin-top:8px;display:flex;align-items:center;gap:6px;';
-        subHeader.innerHTML = '📁 ' + folderKey;
+        subHeader.innerHTML = '📁 ' + origFolderDisplay;
         listEl.appendChild(subHeader);
       }
       tree[folderKey].forEach(function(f) {
@@ -3125,6 +3141,18 @@ async function certGetFilesFromEntries(entries) {
   return fileList;
 }
 
+// 파일명 매핑: safe키 → 원본 파일명 (localStorage 저장)
+function certGetNameMap() {
+  try { return JSON.parse(localStorage.getItem('cert_name_map') || '{}'); } catch(e) { return {}; }
+}
+function certSaveNameMap(safeKey, originalName) {
+  var map = certGetNameMap();
+  map[safeKey] = originalName;
+  localStorage.setItem('cert_name_map', JSON.stringify(map));
+}
+function certGetOriginalName(safeKey) {
+  return certGetNameMap()[safeKey] || safeKey;
+}
 function certSafeFileName(name) {
   // 확장자 분리
   var dotIdx = name.lastIndexOf('.');
@@ -3152,6 +3180,8 @@ async function certUploadFiles(section, folderId, files) {
       return seg ? certSafeFileName(seg) : '';
     }).filter(Boolean).join('/');
     if (!safeRelPath) safeRelPath = certSafeFileName(file.name);
+    // 원본 파일명 매핑 저장 (safe키 → 원본명, 표시용)
+    certSaveNameMap(section + '/' + folderId + '/' + safeRelPath, rawRelPath);
     const uploadUrl = SB3 + '/storage/v1/object/' + CERT_BUCKET + '/' +
       section + '/' + folderId + '/' + safeRelPath;
     try {

@@ -3501,7 +3501,7 @@ function t3LogToggle() {
 }
 
 async function t3DeleteLog(sessionId, cardEl) {
-  if (!confirm('이 이력을 삭제하시겠습니까?')) return;
+  // session-level delete (kept for reference)
   try {
     cardEl.style.opacity = '0.4';
     cardEl.style.pointerEvents = 'none';
@@ -3511,6 +3511,29 @@ async function t3DeleteLog(sessionId, cardEl) {
   } catch(e) {
     cardEl.style.opacity = '';
     cardEl.style.pointerEvents = '';
+    alert('삭제 오류: ' + e.message);
+  }
+}
+async function t3DeleteItem(itemId, trEl, cardEl, sepEl) {
+  try {
+    trEl.style.opacity = '0.4';
+    trEl.style.pointerEvents = 'none';
+    await sb3('repaint_items?id=eq.' + itemId, { method: 'DELETE', prefer: '' });
+    trEl.remove();
+    // update header count
+    var tbody = cardEl.querySelector('tbody');
+    if (tbody) {
+      var remaining = tbody.querySelectorAll('tr').length;
+      var totalQty = 0;
+      tbody.querySelectorAll('tr').forEach(function(row) {
+        var cells = row.querySelectorAll('td');
+        if (cells[3]) totalQty += parseInt(cells[3].textContent.replace(/,/g,'')) || 0;
+      });
+      if (sepEl) sepEl.textContent = '수량 ' + totalQty.toLocaleString() + '개 · ' + remaining + '개 항목';
+    }
+  } catch(e) {
+    trEl.style.opacity = '';
+    trEl.style.pointerEvents = '';
     alert('삭제 오류: ' + e.message);
   }
 }
@@ -3570,14 +3593,6 @@ function t3RenderLog(sessions, el) {
       sep.style.cssText = 'margin-left:auto;font-size:12px;color:#94a3b8;';
       sep.textContent = '수량 ' + totalQty.toLocaleString() + '개 · ' + items.length + '개 항목';
       cardHead.appendChild(sep);
-      var delBtn = document.createElement('button');
-      delBtn.textContent = '✕';
-      delBtn.title = '이 이력 삭제';
-      delBtn.style.cssText = 'margin-left:8px;background:none;border:none;color:#94a3b8;font-size:15px;cursor:pointer;padding:2px 6px;border-radius:4px;line-height:1;transition:color .15s,background .15s;flex-shrink:0;';
-      delBtn.onmouseover = function(){this.style.color='#ef4444';this.style.background='#fee2e2';};
-      delBtn.onmouseout = function(){this.style.color='#94a3b8';this.style.background='none';};
-      delBtn.onclick = function(e){e.stopPropagation();t3DeleteLog(s.id,card);};
-      cardHead.appendChild(delBtn);
       card.appendChild(cardHead);
       if(items.length) {
         var tWrap = document.createElement('div');
@@ -3586,7 +3601,7 @@ function t3RenderLog(sessions, el) {
         tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
         var thead = document.createElement('thead');
         var htr = document.createElement('tr');
-        ['품명','두께','규격','수량','재도장비용','표준원가'].forEach(function(h) {
+        ['품명','두께','규격','수량','재도장비용','표준원가',''].forEach(function(h) {
           var th = document.createElement('th');
           th.style.cssText = 'background:#f1f5f9;padding:7px 10px;text-align:center;font-size:12px;color:#475569;border-bottom:1px solid #e2e8f0;white-space:nowrap;';
           th.textContent = h;
@@ -3604,6 +3619,17 @@ function t3RenderLog(sessions, el) {
             td.textContent = val;
             tr.appendChild(td);
           });
+          var delTd = document.createElement('td');
+          delTd.style.cssText = 'padding:4px 8px;text-align:center;white-space:nowrap;';
+          var iBtn = document.createElement('button');
+          iBtn.textContent = '✕';
+          iBtn.title = '이 항목 삭제';
+          iBtn.style.cssText = 'background:none;border:none;color:#cbd5e1;font-size:13px;cursor:pointer;padding:2px 5px;border-radius:4px;line-height:1;transition:color .15s,background .15s;';
+          iBtn.onmouseover = function(){this.style.color='#ef4444';this.style.background='#fee2e2';};
+          iBtn.onmouseout = function(){this.style.color='#cbd5e1';this.style.background='none';};
+          iBtn.onclick = (function(itemId, rowEl, crd, sp){ return function(e){e.stopPropagation();t3DeleteItem(itemId,rowEl,crd,sp);}; })(r.id, tr, card, sep);
+          delTd.appendChild(iBtn);
+          tr.appendChild(delTd);
           tbody.appendChild(tr);
         });
         tbl.appendChild(tbody);

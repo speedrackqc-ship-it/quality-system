@@ -3033,7 +3033,7 @@ async function certLoadFolder(section, folderId, listEl) {
     function renderFileItem(f, section, folderId, nameMap) {
       var safeFileName = f.name.split('/').pop();
       // 원본 파일명 조회 (한글 등 원본명 복원)
-      var fullSafeKey = section + '/' + folderId + '/' + f.name;
+      var fullSafeKey = f.name;
       var origRelPath = certGetOriginalName(nameMap, fullSafeKey);
       var displayName = origRelPath.split('/').pop(); // 원본 파일명의 마지막 세그먼트
       // 폴더도 원본명으로 표시
@@ -3090,7 +3090,7 @@ async function certLoadFolder(section, folderId, listEl) {
         var origFolderDisplay = folderKey; // fallback
         if (tree[folderKey] && tree[folderKey].length > 0) {
           var repFile = tree[folderKey][0];
-          var repKey = section + '/' + folderId + '/' + repFile.name;
+          var repKey = repFile.name;
           var repOrig = certGetOriginalName(nameMap, repKey);
           if (repOrig !== repFile.name && repOrig.includes('/')) {
             origFolderDisplay = repOrig.split('/').slice(0,-1).join('/');

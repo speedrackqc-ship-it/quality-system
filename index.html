@@ -3013,6 +3013,7 @@ async function certLoadFolder(section, folderId, listEl) {
       return result;
     }
     var allFiles = await listAll(section + '/' + folderId + '/');
+    var nameMap = await certGetNameMap(section, folderId);
     listEl.innerHTML = '';
     if (allFiles.length === 0) { listEl.innerHTML = '<div class="cert-empty">업로드된 파일이 없습니다.</div>'; return; }
 
@@ -3025,11 +3026,11 @@ async function certLoadFolder(section, folderId, listEl) {
       tree[folderKey].push(f);
     });
 
-    function renderFileItem(f, section, folderId) {
+    function renderFileItem(f, section, folderId, nameMap) {
       var safeFileName = f.name.split('/').pop();
       // 원본 파일명 조회 (한글 등 원본명 복원)
       var fullSafeKey = section + '/' + folderId + '/' + f.name;
-      var origRelPath = certGetOriginalName(fullSafeKey);
+      var origRelPath = certGetOriginalName(nameMap, fullSafeKey);
       var displayName = origRelPath.split('/').pop(); // 원본 파일명의 마지막 세그먼트
       // 폴더도 원본명으로 표시
       var origFolder = origRelPath.includes('/') ? origRelPath.split('/').slice(0,-1).join('/') : '';
@@ -3086,7 +3087,7 @@ async function certLoadFolder(section, folderId, listEl) {
         if (tree[folderKey] && tree[folderKey].length > 0) {
           var repFile = tree[folderKey][0];
           var repKey = section + '/' + folderId + '/' + repFile.name;
-          var repOrig = certGetOriginalName(repKey);
+          var repOrig = certGetOriginalName(nameMap, repKey);
           if (repOrig !== repFile.name && repOrig.includes('/')) {
             origFolderDisplay = repOrig.split('/').slice(0,-1).join('/');
           }
@@ -3097,7 +3098,7 @@ async function certLoadFolder(section, folderId, listEl) {
         listEl.appendChild(subHeader);
       }
       tree[folderKey].forEach(function(f) {
-        var fileItem = renderFileItem(f, section, folderId);
+        var fileItem = renderFileItem(f, section, folderId, nameMap);
         if (folderKey !== '') fileItem.style.paddingLeft = '16px';
         listEl.appendChild(fileItem);
       });
@@ -3142,16 +3143,27 @@ async function certGetFilesFromEntries(entries) {
 }
 
 // 파일명 매핑: safe키 → 원본 파일명 (localStorage 저장)
-function certGetNameMap() {
-  try { return JSON.parse(localStorage.getItem('cert_name_map') || '{}'); } catch(e) { return {}; }
+// 파일명 매핑 (Storage 기반 - 기기간 공유)
+async function certGetNameMap(section, folderId) {
+  try {
+    var url = SB3 + '/storage/v1/object/public/' + CERT_BUCKET + '/' + section + '/' + folderId + '/_name_map.json';
+    var res = await fetch(url + '?t=' + Date.now());
+    if (!res.ok) return {};
+    return await res.json();
+  } catch(e) { return {}; }
 }
-function certSaveNameMap(safeKey, originalName) {
-  var map = certGetNameMap();
-  map[safeKey] = originalName;
-  localStorage.setItem('cert_name_map', JSON.stringify(map));
+async function certSaveNameMap(section, folderId, map) {
+  try {
+    var blob = new Blob([JSON.stringify(map)], {type: 'application/json'});
+    await fetch(SB3 + '/storage/v1/object/' + CERT_BUCKET + '/' + section + '/' + folderId + '/_name_map.json', {
+      method: 'POST',
+      headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'x-upsert': 'true', 'Content-Type': 'application/json' },
+      body: blob
+    });
+  } catch(e) { console.error('nameMap save error:', e); }
 }
-function certGetOriginalName(safeKey) {
-  return certGetNameMap()[safeKey] || safeKey;
+function certGetOriginalName(nameMap, safeKey) {
+  return (nameMap && nameMap[safeKey]) ? nameMap[safeKey] : safeKey;
 }
 function certSafeFileName(name) {
   // 확장자 분리
@@ -3172,6 +3184,7 @@ async function certUploadFiles(section, folderId, files) {
   const listEl = document.getElementById('cert-flist-' + folderId);
   if (listEl) listEl.innerHTML = '<div class="cert-uploading">⏳ 업로드 중... (0/' + files.length + ')</div>';
   let done = 0, failed = 0;
+  var nameMapBatch = {};
   for (const file of files) {
     // 경로 보존: _certRelPath(드래그) 또는 webkitRelativePath(input) 활용
     var rawRelPath = file._certRelPath || file.webkitRelativePath || file.name;
@@ -3181,7 +3194,7 @@ async function certUploadFiles(section, folderId, files) {
     }).filter(Boolean).join('/');
     if (!safeRelPath) safeRelPath = certSafeFileName(file.name);
     // 원본 파일명 매핑 저장 (safe키 → 원본명, 표시용)
-    certSaveNameMap(section + '/' + folderId + '/' + safeRelPath, rawRelPath);
+    nameMapBatch[safeRelPath] = rawRelPath;
     const uploadUrl = SB3 + '/storage/v1/object/' + CERT_BUCKET + '/' +
       section + '/' + folderId + '/' + safeRelPath;
     try {
@@ -3212,6 +3225,12 @@ async function certUploadFiles(section, folderId, files) {
   const inpDir = document.getElementById('cert-finput-dir-' + folderId);
   if (inp) inp.value = '';
   if (inpDir) inpDir.value = '';
+  // nameMap 배치 저장 (Storage에 저장 → 다른 기기에서도 표시 가능)
+  if (Object.keys(nameMapBatch).length > 0) {
+    var existingMap = await certGetNameMap(section, folderId);
+    var mergedMap = Object.assign({}, existingMap, nameMapBatch);
+    await certSaveNameMap(section, folderId, mergedMap);
+  }
   if (listEl) await certLoadFolder(section, folderId, listEl);
   certUpdateCount(section);
   if (failed > 0) alert(failed + '개 파일 업로드 실패. 콘솔을 확인하세요.');

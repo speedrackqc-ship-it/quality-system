@@ -3690,6 +3690,8 @@ function t3RenderLog(sessions, el) {
     el.innerHTML = '<div style="text-align:center;color:#888;padding:24px 0">저장된 이력이 없습니다.</div>';
     return;
   }
+
+  // created_at 날짜별 그룹핑 (KST = UTC+9)
   var groups = {};
   sessions.forEach(function(s) {
     var d = new Date(s.created_at);
@@ -3698,80 +3700,134 @@ function t3RenderLog(sessions, el) {
     if(!groups[dateKey]) groups[dateKey] = [];
     groups[dateKey].push(s);
   });
+
   el.innerHTML = '';
+
+  // sessions 전체를 시간순 정렬 (diff용)
+  var allSorted = sessions.slice().sort(function(a,b){ return a.id - b.id; });
+
   Object.keys(groups).sort(function(a,b){return b>a?1:-1;}).forEach(function(dateKey) {
-    var dayData = groups[dateKey];
+    var daySessions = groups[dateKey].slice().sort(function(a,b){ return a.id - b.id; });
+
     var dateHeader = document.createElement('div');
     dateHeader.style.cssText = 'font-size:15px;font-weight:700;color:#1e293b;margin:16px 0 8px;padding:8px 14px;background:#f1f5f9;border-radius:8px;border-left:4px solid #3b82f6;';
-    dateHeader.textContent = '📅 ' + dateKey;
+    dateHeader.textContent = '\uD4B3 ' + dateKey;
     el.appendChild(dateHeader);
-    dayData.forEach(function(s) {
-      var items = s.repaint_items || [];
-      var totalQty = items.reduce(function(a,r){return a+(+r.qty||0);},0);
+
+    daySessions.forEach(function(s) {
+      // 직전 session 찾기 (id 기준으로 바로 이전)
+      var prevIdx = allSorted.findIndex(function(x){ return x.id === s.id; }) - 1;
+      var prevSession = prevIdx >= 0 ? allSorted[prevIdx] : null;
+      var prevItems = prevSession ? (prevSession.repaint_items || []) : [];
+
+      // 현재 session items
+      var curItems = s.repaint_items || [];
+
+      // diff: 추가되거나 qty/repaint 변경된 것만
+      var prevMap = {};
+      prevItems.forEach(function(r) {
+        var key = (r.name||'') + '|' + (r.thickness||'') + '|' + (r.size||'');
+        prevMap[key] = r;
+      });
+
+      var diffItems = curItems.filter(function(r) {
+        var key = (r.name||'') + '|' + (r.thickness||'') + '|' + (r.size||'');
+        var prev = prevMap[key];
+        if (!prev) return true; // 새로 추가된 항목
+        // qty 또는 repaint 변경
+        return (+r.qty||0) !== (+prev.qty||0) || (+r.repaint||0) !== (+prev.repaint||0);
+      }).map(function(r) {
+        var key = (r.name||'') + '|' + (r.thickness||'') + '|' + (r.size||'');
+        var prev = prevMap[key];
+        return Object.assign({}, r, { _isNew: !prev, _prevQty: prev ? +prev.qty : null });
+      });
+
+      if (!diffItems.length) return; // 변경사항 없으면 카드 표시 안 함
+
+      var totalQty = diffItems.reduce(function(a,r){return a+(+r.qty||0);},0);
+
       var card = document.createElement('div');
       card.style.cssText = 'border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;overflow:hidden;';
+
       var cardHead = document.createElement('div');
       cardHead.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;';
+
       var monthBadge = document.createElement('span');
       monthBadge.style.cssText = 'background:#3b82f6;color:#fff;border-radius:6px;padding:2px 10px;font-size:13px;font-weight:700;';
-      monthBadge.textContent = s.month + '월';
+      monthBadge.textContent = s.month + '\uc6d4';
       cardHead.appendChild(monthBadge);
+
       var scrapInfo = document.createElement('span');
       scrapInfo.style.cssText = 'font-size:13px;color:#64748b;';
-      scrapInfo.textContent = '막고철단가 ' + (s.scrap_price||0).toLocaleString() + '원/kg';
+      scrapInfo.textContent = '\ub9c9\uace0\ucca0\ub2e8\uac00 ' + (s.scrap_price||0).toLocaleString() + '\uc6d0/kg';
       cardHead.appendChild(scrapInfo);
+
       var sep = document.createElement('span');
       sep.style.cssText = 'margin-left:auto;font-size:12px;color:#94a3b8;';
-      sep.textContent = '수량 ' + totalQty.toLocaleString() + '개 · ' + items.length + '개 항목';
+      sep.textContent = '\uc218\ub7c9 ' + totalQty.toLocaleString() + '\uac1c \b7 ' + diffItems.length + '\uac1c \ud56d\ubaa9';
       cardHead.appendChild(sep);
+
       card.appendChild(cardHead);
-      if(items.length) {
-        var tWrap = document.createElement('div');
-        tWrap.style.cssText = 'overflow-x:auto;';
-        var tbl = document.createElement('table');
-        tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
-        var thead = document.createElement('thead');
-        var htr = document.createElement('tr');
-        ['품명','두께','규격','수량','재도장비용','표준원가',''].forEach(function(h) {
-          var th = document.createElement('th');
-          th.style.cssText = 'background:#f1f5f9;padding:7px 10px;text-align:center;font-size:12px;color:#475569;border-bottom:1px solid #e2e8f0;white-space:nowrap;';
-          th.textContent = h;
-          htr.appendChild(th);
+
+      var tWrap = document.createElement('div');
+      tWrap.style.cssText = 'overflow-x:auto;';
+      var tbl = document.createElement('table');
+      tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
+      var thead = document.createElement('thead');
+      var htr = document.createElement('tr');
+      ['\ud488\uba85','\ub450\uaed8','\uaddc\uaca9','\uc218\ub7c9','\uc7ac\ub3c4\uc7a5\ube44\uc6a9','\ud45c\uc900\uc6d0\uac00','\uad6c\ubd84',''].forEach(function(h) {
+        var th = document.createElement('th');
+        th.style.cssText = 'background:#f1f5f9;padding:7px 10px;text-align:center;font-size:12px;color:#475569;border-bottom:1px solid #e2e8f0;';
+        th.textContent = h;
+        htr.appendChild(th);
+      });
+      thead.appendChild(htr);
+      tbl.appendChild(thead);
+
+      var tbody = document.createElement('tbody');
+      diffItems.forEach(function(r, ri) {
+        var tr = document.createElement('tr');
+        tr.style.cssText = 'border-bottom:1px solid #f1f5f9;' + (ri%2===0?'background:#fff':'background:#f8fafc');
+
+        var badge = r._isNew
+          ? '<span style="background:#22c55e;color:#fff;border-radius:4px;padding:1px 6px;font-size:11px;">\uc2e0\uaddc</span>'
+          : '<span style="background:#f59e0b;color:#fff;border-radius:4px;padding:1px 6px;font-size:11px;">\uc218\uc815</span>';
+
+        var qtyText = r._isNew
+          ? (+r.qty||0).toLocaleString()
+          : (r._prevQty !== null ? r._prevQty.toLocaleString() + ' \u2192 ' + (+r.qty||0).toLocaleString() : (+r.qty||0).toLocaleString());
+
+        [r.name||'--',(r.thickness||'--')+'t',(+r.size||0).toLocaleString(),qtyText,(+r.repaint||0).toLocaleString(),(+r.stdcost||0).toLocaleString()].forEach(function(val, ci) {
+          var td = document.createElement('td');
+          td.style.cssText = 'padding:7px 10px;text-align:'+(ci===0?'left':'right')+';white-space:nowrap;';
+          td.textContent = val;
+          tr.appendChild(td);
         });
-        thead.appendChild(htr);
-        tbl.appendChild(thead);
-        var tbody = document.createElement('tbody');
-        items.forEach(function(r, ri) {
-          var tr = document.createElement('tr');
-          tr.style.cssText = 'border-bottom:1px solid #f1f5f9;' + (ri%2===0?'background:#fff':'background:#f8fafc');
-          [r.name||'--',(r.thickness||'--')+'t',(+r.size||0).toLocaleString(),(+r.qty||0).toLocaleString(),(+r.repaint||0).toLocaleString(),(+r.stdcost||0).toLocaleString()].forEach(function(val, ci) {
-            var td = document.createElement('td');
-            td.style.cssText = 'padding:7px 10px;text-align:'+(ci===0?'left':'right')+';white-space:nowrap;';
-            td.textContent = val;
-            tr.appendChild(td);
-          });
-          var delTd = document.createElement('td');
-          delTd.style.cssText = 'padding:4px 8px;text-align:center;white-space:nowrap;';
-          var iBtn = document.createElement('button');
-          iBtn.textContent = '✕';
-          iBtn.title = '이 항목 삭제';
-          iBtn.style.cssText = 'background:none;border:none;color:#cbd5e1;font-size:13px;cursor:pointer;padding:2px 5px;border-radius:4px;line-height:1;transition:color .15s,background .15s;';
-          iBtn.onmouseover = function(){this.style.color='#ef4444';this.style.background='#fee2e2';};
-          iBtn.onmouseout = function(){this.style.color='#cbd5e1';this.style.background='none';};
-          iBtn.onclick = (function(itemId, rowEl, crd, sp){ return function(e){e.stopPropagation();t3DeleteItem(itemId,rowEl,crd,sp);}; })(r.id, tr, card, sep);
-          delTd.appendChild(iBtn);
-          tr.appendChild(delTd);
-          tbody.appendChild(tr);
-        });
-        tbl.appendChild(tbody);
-        tWrap.appendChild(tbl);
-        card.appendChild(tWrap);
-      } else {
-        var noItem = document.createElement('div');
-        noItem.style.cssText = 'text-align:center;color:#94a3b8;padding:12px;';
-        noItem.textContent = '항목 없음';
-        card.appendChild(noItem);
-      }
+
+        // 구분 배지
+        var badgeTd = document.createElement('td');
+        badgeTd.style.cssText = 'padding:7px 10px;text-align:center;';
+        badgeTd.innerHTML = badge;
+        tr.appendChild(badgeTd);
+
+        // 삭제 버튼
+        var delTd = document.createElement('td');
+        delTd.style.cssText = 'padding:4px 8px;text-align:center;white-space:nowrap;';
+        var iBtn = document.createElement('button');
+        iBtn.textContent = '\u2715';
+        iBtn.title = '\uc774 \ud56d\ubaa9 \uc0ad\uc81c';
+        iBtn.style.cssText = 'background:none;border:none;color:#cbd5e1;font-size:13px;cursor:pointer;padding:2px 5px;border-radius:4px;';
+        iBtn.onmouseover = function(){this.style.color='#ef4444';this.style.background='#fee2e2';};
+        iBtn.onmouseout = function(){this.style.color='#cbd5e1';this.style.background='none';};
+        iBtn.onclick = (function(itemId, rowEl, crd, sp){ return function(e){e.stopPropagation();t3DeleteItem(itemId,rowEl,card,sep);}; })(r.id, tr, card, sep);
+        delTd.appendChild(iBtn);
+        tr.appendChild(delTd);
+
+        tbody.appendChild(tr);
+      });
+      tbl.appendChild(tbody);
+      tWrap.appendChild(tbl);
+      card.appendChild(tWrap);
       el.appendChild(card);
     });
   });

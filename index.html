@@ -13,7 +13,7 @@ const KEY3 = 'sb_publishable_8aTbER8PYcFprysUFig85A_CgXDC319';
 const SB4  = 'https://gigfzkyrmudcdksgpeoo.supabase.co';
 const KEY4 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpZ2Z6a3lybXVkY2Rrc2dwZW9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MTQyNDgsImV4cCI6MjA4MDk5MDI0OH0.wd1CXZF0Nwl4PqugWOYBIz1LELyuE_wgIGMEDvo27x8';
 const H4   = { 'apikey': KEY4, 'Authorization': `Bearer ${KEY4}` };
-h
+hh
 // Supabase에서 표준원가 로드
 async function t3LoadStdCostFromSB() {
   try {
@@ -1303,7 +1303,7 @@ function initTab3() {
       console.warn('Supabase 로드 실패, localStorage 백업 사용:', e);
       try {
         const saved = localStorage.getItem('t3_saved');
-        const stdCosts = localStorage.getItem('t3_monthStdCost');
+        const stdCosts = localStorage.getItem('t3_monthStdCost');h
         if (saved) T3.saved = JSON.parse(saved);
         if (stdCosts) T3.monthStdCost = JSON.parse(stdCosts);
       } catch(e2) {}
@@ -1315,7 +1315,7 @@ function initTab3() {
     } else {
       document.getElementById('t3_std_status').textContent = `⚠ ${m}월 표준원가 없음`;
     }
-    t3RenderResults();
+    t3RenderResults();h
     t3LoadLog();
     t3UpdateStdSavedList();
   })();
@@ -3677,6 +3677,8 @@ async function t3LoadLog() {
       headers: { apikey: KEY3, Authorization: 'Bearer ' + KEY3 }
     });
     var sessions = await res.json();
+    var _curMonth = +((document.getElementById('t3_sel_month')||{}).value) || (new Date().getMonth()+1);
+    sessions = Array.isArray(sessions) ? sessions.filter(function(s){ return s.month == _curMonth; }) : [];
     t3RenderLog(sessions, el);
   } catch(e) {
     if(el) el.innerHTML = '<div style="color:#e53935;padding:16px">' + e.message + '</div>';

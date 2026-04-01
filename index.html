@@ -1532,6 +1532,7 @@ function t3SaveMonth() {
     try {
       await t3SaveSession(month, scrap, rows);
       t3SaveToStorage(); // localStorage 백업
+      t3LoadLog();
     } catch(e) { alert('저장 오류: ' + e.message); }
   })();
 
@@ -1542,7 +1543,6 @@ function t3SaveMonth() {
   t3ChangeMonth();
   t3RenderInput();
   t3RenderResults();
-  t3LoadLog();
 }
 
 // ── 저장된 결과 렌더 ──

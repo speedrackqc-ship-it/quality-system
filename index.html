@@ -3677,8 +3677,7 @@ async function t3LoadLog() {
       headers: { apikey: KEY3, Authorization: 'Bearer ' + KEY3 }
     });
     var sessions = await res.json();
-    var _curMonth = +((document.getElementById('t3_sel_month')||{}).value) || (new Date().getMonth()+1);
-    sessions = Array.isArray(sessions) ? sessions.filter(function(s){ return s.month == _curMonth; }) : [];
+
     t3RenderLog(sessions, el);
   } catch(e) {
     if(el) el.innerHTML = '<div style="color:#e53935;padding:16px">' + e.message + '</div>';

@@ -1512,7 +1512,18 @@ function t3SaveMonth() {
 
   const existIdx = T3.saved.findIndex(s => s.month === month);
   if (existIdx >= 0) {
-    rows.unshift(...T3.saved[existIdx].rows);
+    // ── 중복 합산 방지: 기존 rows를 기준으로 새 입력 qty를 합산 ──
+    const existRows = T3.saved[existIdx].rows;
+    existRows.forEach(er => {
+      const dupeIdx = rows.findIndex(r =>
+        r.name === er.name && r.size === er.size && r.thickness === er.thickness
+      );
+      if (dupeIdx >= 0) {
+        rows[dupeIdx] = Object.assign({}, er, { qty: (+er.qty||0) + (+rows[dupeIdx].qty||0) });
+      } else {
+        rows.push(er);
+      }
+    });
     T3.saved.splice(existIdx, 1);
   }
 
@@ -1550,7 +1561,17 @@ function t3RenderResults() {
   const wrap = document.getElementById('t3_results_wrap');
   if (!T3.saved.length) { wrap.innerHTML=''; return; }
 
-  wrap.innerHTML = T3.saved.map(s => {
+  // ── UI 중복 방지: 동일 month가 복수 존재하면 마지막 것만 사용 ──
+  const deduped = T3.saved.reduce((acc, s) => {
+    const i = acc.findIndex(x => x.month === s.month);
+    if (i >= 0) acc[i] = s; else acc.push(s);
+    return acc;
+  }, []);
+  // ── TOTAL 검증: totQty를 rows의 qty 합계로 재계산 ──
+  deduped.forEach(s => {
+    s.totQty = s.rows.reduce((sum, r) => sum + (+r.qty||0), 0);
+  });
+  wrap.innerHTML = deduped.map(s => {
     const scrap = s.scrap;
     const _mMonth = s.month;
     const stdCostMap = (T3.monthStdCost[_mMonth] && T3.monthStdCost[_mMonth].data) || s.stdCost || {};

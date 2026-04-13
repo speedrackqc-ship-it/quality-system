@@ -3647,11 +3647,12 @@ window.switchTab = function(tabId, btn) {
 var _t3LogOpen = true;
 
 function t3LogToggle() {
-  _t3LogOpen = !_t3LogOpen;
+  window._t3LogOpen = !window._t3LogOpen;
   var body = document.getElementById('t3_log_body');
   var arrow = document.getElementById('t3_log_arrow');
-  if(body) body.style.display = _t3LogOpen ? '' : 'none';
-  if(arrow) arrow.style.transform = _t3LogOpen ? '' : 'rotate(-90deg)';
+  if(body) body.style.display = window._t3LogOpen ? '' : 'none';
+  if(arrow) arrow.style.transform = window._t3LogOpen ? '' : 'rotate(-90deg)';
+  if(window._t3LogOpen && typeof t3LoadLog === 'function') t3LoadLog();
 }
 
 async function t3DeleteLog(sessionId, cardEl) {

@@ -27,19 +27,39 @@ async function t3LoadStdCostFromSB() {
 // Supabase에서 전체 실적 로드
 async function t3LoadSessions() {
   try {
-    const sessions = await sb3('repaint_sessions?select=*,repaint_items(*)&order=month');
-    T3.saved = sessions.map(s => ({
+    const sessions = await sb3('repaint_sessions?select=id,month,scrap_price,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.asc');
+    T3.sessions = sessions.map(s => ({
+      id: s.id,
       month: s.month,
       scrap: s.scrap_price,
-      rows: (s.repaint_items||[]).map(r => ({
+      created_at: s.created_at,
+      items: (s.repaint_items||[]).map(r => ({
+        id: r.id,
         name: r.name, thickness: r.thickness,
         size: r.size, qty: r.qty,
         repaint: r.repaint, stdcost: r.stdcost
-      })),
-      totQty: (s.repaint_items||[]).reduce((a,r) => a + (+r.qty||0), 0),
-      totPL: 0
+      }))
     }));
+    t3BuildSaved();
   } catch(e) { console.error('실적 로드 오류:', e); }
+}
+function t3BuildSaved() {
+  const monthMap = {};
+  (T3.sessions||[]).forEach(s => {
+    if (!monthMap[s.month]) monthMap[s.month] = { month: s.month, scrap: s.scrap, rows: {}, totQty: 0, totPL: 0 };
+    const m = monthMap[s.month];
+    m.scrap = s.scrap;
+    s.items.forEach(r => {
+      const key = (r.name||'') + '|' + (r.size||'') + '|' + (r.thickness||'');
+      if (!m.rows[key]) m.rows[key] = { name: r.name, thickness: r.thickness, size: r.size, qty: 0, repaint: r.repaint, stdcost: r.stdcost };
+      m.rows[key].qty += (+r.qty||0);
+    });
+  });
+  T3.saved = Object.values(monthMap).map(m => {
+    const rows = Object.values(m.rows);
+    const totQty = rows.reduce((a,r) => a + (+r.qty||0), 0);
+    return { month: m.month, scrap: m.scrap, rows, totQty, totPL: 0 };
+  }).sort((a,b) => a.month - b.month);
 }
 
 </script>
@@ -1510,47 +1530,37 @@ function t3SaveMonth() {
   const rows  = T3.inputRows.filter(r => r.name && r.name.trim());
   if (!rows.length) { alert('입력된 데이터가 없습니다.'); return; }
 
-  const existIdx = T3.saved.findIndex(s => s.month === month);
-  if (existIdx >= 0) {
-    // ── 중복 합산 방지: 기존 rows를 기준으로 새 입력 qty를 합산 ──
-    const existRows = T3.saved[existIdx].rows;
-    existRows.forEach(er => {
-      const dupeIdx = rows.findIndex(r =>
-        r.name === er.name && r.size === er.size && r.thickness === er.thickness
-      );
-      if (dupeIdx >= 0) {
-        rows[dupeIdx] = Object.assign({}, er, { qty: (+er.qty||0) + (+rows[dupeIdx].qty||0) });
-      } else {
-        rows.push(er);
-      }
-    });
-    T3.saved.splice(existIdx, 1);
-  }
+  // ── 새 session 독립 추가 (기존 건드리지 않음) ──
+  const newSession = {
+    id: null,
+    month,
+    scrap,
+    created_at: new Date().toISOString(),
+    items: rows.map(r => ({
+      id: null,
+      name: r.name, thickness: r.thickness,
+      size: +r.size||0, qty: +r.qty||0,
+      repaint: +r.repaint||0, stdcost: +r.stdcost||0
+    }))
+  };
+  if (!T3.sessions) T3.sessions = [];
+  T3.sessions.push(newSession);
 
-  // 집계
-  let totQty=0, totPL=0;
-  rows.forEach(r => {
-    totQty += +r.qty||0;
-    const stdMap = T3.monthStdCost[month] ? T3.monthStdCost[month].data : T3.stdCost;
-    totPL += t3CalcRow(r, scrap, stdMap).totPL;
-  });
-
-  T3.saved.push({ month, scrap, rows: JSON.parse(JSON.stringify(rows)), totQty, totPL });
-  T3.saved.sort((a,b) => a.month - b.month);
+  // 현황 재계산
+  t3BuildSaved();
 
   // Supabase에 저장 (비동기)
   (async () => {
     try {
-      await t3SaveSession(month, scrap, rows);
-      t3SaveToStorage(); // localStorage 백업
+      const sessId = await t3SaveSession(month, scrap, rows);
+      newSession.id = sessId;
+      t3SaveToStorage();
       t3LoadLog();
     } catch(e) { alert('저장 오류: ' + e.message); }
   })();
 
   // 입력 초기화 & 다음 월 이동
   T3.inputRows = [t3EmptyRow(), t3EmptyRow(), t3EmptyRow()];
-  const sel = document.getElementById('t3_sel_month');
-  if (month < 12) sel.value = String(month + 1);
   t3ChangeMonth();
   t3RenderInput();
   t3RenderResults();
@@ -1559,28 +1569,23 @@ function t3SaveMonth() {
 // ── 저장된 결과 렌더 ──
 function t3RenderResults() {
   const wrap = document.getElementById('t3_results_wrap');
-  if (!T3.saved.length) { wrap.innerHTML=''; return; }
+  if (!T3.saved.length) { wrap.innerHTML = '<p style="color:var(--text2);padding:20px">저장된 데이터가 없습니다.</p>'; t3RenderStats(); return; }
 
-  // ── UI 중복 방지: 동일 month가 복수 존재하면 마지막 것만 사용 ──
-  const deduped = T3.saved.reduce((acc, s) => {
-    const i = acc.findIndex(x => x.month === s.month);
-    if (i >= 0) acc[i] = s; else acc.push(s);
-    return acc;
-  }, []);
-  // ── TOTAL 검증: totQty를 rows의 qty 합계로 재계산 ──
-  deduped.forEach(s => {
+  // T3.saved는 t3BuildSaved()에서 이미 월별 품목 합산 완료
+  // TOTAL 재검증
+  T3.saved.forEach(s => {
     s.totQty = s.rows.reduce((sum, r) => sum + (+r.qty||0), 0);
   });
-  wrap.innerHTML = deduped.map(s => {
-    const scrap = s.scrap;
-    const _mMonth = s.month;
-    const stdCostMap = (T3.monthStdCost[_mMonth] && T3.monthStdCost[_mMonth].data) || s.stdCost || {};
+
+  wrap.innerHTML = T3.saved.map(s => {
+    const scrap = s.scrap || 250;
+    const stdCostMap = (T3.monthStdCost[s.month] ? T3.monthStdCost[s.month].data : T3.stdCost) || {};
     let _realTotPL = 0;
     s.rows.forEach(r => { _realTotPL += t3CalcRow(r, scrap, stdCostMap).totPL; });
     const plSign = _realTotPL >= 0 ? 'col-green' : 'col-red';
     const rows = s.rows.map(r => {
       const { weight, sAmt, std, perPL, totPL } = t3CalcRow(r, scrap, stdCostMap);
-      const plCls = perPL >= 0 ? 'col-green' : 'col-red';
+      const plCls = (totPL||0) >= 0 ? 'col-green' : 'col-red';
       return `<tr>
         <td class="td-name">${r.name}</td>
         <td class="td-mono td-right col-blue">${r.size||'-'}</td>
@@ -1597,26 +1602,26 @@ function t3RenderResults() {
 
     return `
     <div class="panel" style="margin-bottom:20px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <div style="display:flex;align-items:center;gap:12px">
-          <span style="font-size:16px;font-weight:900;color:var(--accent)">${s.month}월</span>
-          <span style="font-size:12px;color:var(--text2)">막고철단가 <strong>${s.scrap.toLocaleString()}원</strong>/kg</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+        <div>
+          <span style="font-size:18px;font-weight:700;color:var(--accent)">${s.month}월</span>
+          <span style="font-size:13px;color:var(--text2);margin-left:8px">막고철단가 <strong>${(s.scrap||250).toLocaleString()}</strong>원/kg</span>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span class="td-mono" style="font-size:13px">
             수량 <strong>${s.totQty.toLocaleString()}</strong>개 &nbsp;
             총손익 <strong class="${plSign}">${Math.round(_realTotPL).toLocaleString()}원</strong>
           </span>
           <button onclick="t3EditMonth(${s.month})"
-            style="padding:5px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;background:var(--surface);font-family:inherit">
+            style="padding:5px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;background:var(--surface)">
             ✏ 수정
           </button>
           <button onclick="t3DeleteMonth(${s.month})"
-            style="padding:5px 12px;border:1.5px solid rgba(207,34,46,0.3);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;background:rgba(207,34,46,0.05);color:var(--accent3);font-family:inherit">
+            style="padding:5px 12px;border:1.5px solid var(--accent3);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;background:var(--surface);color:var(--accent3)">
             🗑 삭제
           </button>
           <button onclick="t3DownloadMonth(${s.month})"
-            style="padding:5px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;background:var(--surface);font-family:inherit">
+            style="padding:5px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;background:var(--surface);font-size:12px">
             ⬇ 엑셀
           </button>
         </div>
@@ -1834,13 +1839,11 @@ async function sb3(path, opt={}) {
 
 // Supabase에 실적 저장
 async function t3SaveSession(month, scrap, rows) {
-  // 새 세션 생성 (기존 세션 유지 - 누적 저장)
   const sess = await sb3('repaint_sessions', {
     method: 'POST',
     body: { month, scrap_price: scrap }
   });
   const sessId = Array.isArray(sess) ? sess[0].id : sess.id;
-  // 아이템 저장
   const items = rows.filter(r => r.name).map(r => ({
     session_id: sessId,
     name: r.name, thickness: r.thickness,
@@ -1848,6 +1851,7 @@ async function t3SaveSession(month, scrap, rows) {
     repaint: +r.repaint||0, stdcost: +r.stdcost||0
   }));
   if (items.length) await sb3('repaint_items', { method:'POST', body: items });
+  return sessId; // ← 반환 추가
 }
 
 // Supabase에서 전체 실적 로드
@@ -3707,143 +3711,108 @@ async function t3LoadLog() {
 
 function t3RenderLog(sessions, el) {
   if(!sessions || !sessions.length) {
-    el.innerHTML = '<div style="text-align:center;color:#888;padding:24px 0">저장된 이력이 없습니다.</div>';
+    el.innerHTML = '<p style="color:var(--text2);padding:20px 0">저장 이력이 없습니다.</p>';
     return;
   }
 
-  // created_at 날짜별 그룹핑 (KST = UTC+9)
+  // KST 날짜별 그룹핑
   var groups = {};
   sessions.forEach(function(s) {
-    var d = new Date(s.created_at);
+    var d = new Date(s.created_at||s.createdAt||Date.now());
     d.setHours(d.getHours() + 9);
     var dateKey = d.getUTCFullYear() + '/' + String(d.getUTCMonth()+1).padStart(2,'0') + '/' + String(d.getUTCDate()).padStart(2,'0');
-    if(!groups[dateKey]) groups[dateKey] = [];
+    if (!groups[dateKey]) groups[dateKey] = [];
     groups[dateKey].push(s);
   });
 
   el.innerHTML = '';
 
-  // sessions 전체를 시간순 정렬 (diff용)
-  var allSorted = sessions.slice().sort(function(a,b){ return a.id - b.id; });
+  // 날짜 최신순
+  Object.keys(groups).sort(function(a,b){ return b > a ? 1 : -1; }).forEach(function(dateKey) {
+    var daySessions = groups[dateKey];
 
-  Object.keys(groups).sort(function(a,b){return b>a?1:-1;}).forEach(function(dateKey) {
-    var daySessions = groups[dateKey].slice().sort(function(a,b){ return a.id - b.id; });
-
+    // 날짜 헤더
     var dateHeader = document.createElement('div');
-    dateHeader.style.cssText = 'font-size:15px;font-weight:700;color:#1e293b;margin:16px 0 8px;padding:8px 14px;background:#f1f5f9;border-radius:8px;border-left:4px solid #3b82f6;';
-    dateHeader.textContent = dateKey;
+    dateHeader.style.cssText = 'font-weight:700;font-size:13px;color:var(--text2);padding:8px 0 4px;border-bottom:1px solid var(--border);margin-bottom:8px;margin-top:12px';
+    dateHeader.textContent = dateKey + ' 입력 이력';
     el.appendChild(dateHeader);
 
-    daySessions.forEach(function(s) {
-      // 직전 session 찾기 (id 기준으로 바로 이전)
-      var sameMthSorted = allSorted.filter(function(x){ return x.month === s.month; });
-      var prevIdx = sameMthSorted.findIndex(function(x){ return x.id === s.id; }) - 1;
-      var prevSession = prevIdx >= 0 ? sameMthSorted[prevIdx] : null;
-      var prevItems = prevSession ? (prevSession.repaint_items || []) : [];
+    // 세션 최신순
+    daySessions.slice().reverse().forEach(function(s) {
+      if (!s.items || !s.items.length) return;
 
-      // 현재 session items
-      var curItems = s.repaint_items || [];
-
-      // diff: 추가되거나 qty/repaint 변경된 것만
-      var prevMap = {};
-      prevItems.forEach(function(r) {
-        var key = (r.name||'') + '|' + (r.thickness||'') + '|' + (r.size||'');
-        prevMap[key] = r;
-      });
-
-      var diffItems = curItems.filter(function(r) {
-        var key = (r.name||'') + '|' + (r.thickness||'') + '|' + (r.size||'');
-        var prev = prevMap[key];
-        if (!prev) return true; // 새로 추가된 항목
-        // qty 또는 repaint 변경
-        return (+r.qty||0) !== (+prev.qty||0) || (+r.repaint||0) !== (+prev.repaint||0);
-      }).map(function(r) {
-        var key = (r.name||'') + '|' + (r.thickness||'') + '|' + (r.size||'');
-        var prev = prevMap[key];
-        return Object.assign({}, r, { _isNew: !prev, _prevQty: prev ? +prev.qty : null });
-      });
-
-      if (!diffItems.length) return; // 변경사항 없으면 카드 표시 안 함
-
-      var totalQty = diffItems.reduce(function(a,r){return a+(+r.qty||0);},0);
-
+      // 카드
       var card = document.createElement('div');
-      card.style.cssText = 'border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;overflow:hidden;';
+      card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px';
 
+      // 카드 헤더
       var cardHead = document.createElement('div');
-      cardHead.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;';
+      cardHead.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px';
 
       var monthBadge = document.createElement('span');
-      monthBadge.style.cssText = 'background:#3b82f6;color:#fff;border-radius:6px;padding:2px 10px;font-size:13px;font-weight:700;';
-      monthBadge.textContent = s.month + '\uc6d4';
+      monthBadge.style.cssText = 'background:var(--accent);color:#fff;border-radius:5px;padding:2px 8px;font-size:12px;font-weight:700';
+      monthBadge.textContent = s.month + '월';
       cardHead.appendChild(monthBadge);
 
       var scrapInfo = document.createElement('span');
-      scrapInfo.style.cssText = 'font-size:13px;color:#64748b;';
-      scrapInfo.textContent = '\ub9c9\uace0\ucca0\ub2e8\uac00 ' + (s.scrap_price||0).toLocaleString() + '\uc6d0/kg';
+      scrapInfo.style.cssText = 'font-size:12px;color:var(--text2)';
+      scrapInfo.textContent = '막고철단가 ' + (s.scrap_price||s.scrap||0).toLocaleString() + '원/kg';
       cardHead.appendChild(scrapInfo);
 
+      var totalQty = s.items.reduce(function(a,r){ return a + (+r.qty||0); }, 0);
       var sep = document.createElement('span');
-      sep.style.cssText = 'margin-left:auto;font-size:12px;color:#94a3b8;';
-      sep.textContent = '\uc218\ub7c9 ' + totalQty.toLocaleString() + '\uac1c \b7 ' + diffItems.length + '\uac1c \ud56d\ubaa9';
+      sep.style.cssText = 'font-size:12px;font-weight:600;color:var(--accent5);margin-left:auto';
+      sep.textContent = '입력 수량 ' + totalQty.toLocaleString() + '개 · ' + s.items.length + '개 품목';
       cardHead.appendChild(sep);
+
+      // 삭제 버튼
+      if (s.id) {
+        var delBtn = document.createElement('button');
+        delBtn.textContent = '🗑';
+        delBtn.title = '이 이력 삭제';
+        delBtn.style.cssText = 'margin-left:4px;border:1px solid var(--accent3);border-radius:5px;padding:2px 7px;cursor:pointer;font-size:12px;color:var(--accent3);background:var(--surface)';
+        (function(sid, cardEl){ delBtn.onclick = function(){ t3DeleteLog(sid, cardEl); }; })(s.id, card);
+        cardHead.appendChild(delBtn);
+      }
 
       card.appendChild(cardHead);
 
+      // 아이템 테이블
       var tWrap = document.createElement('div');
-      tWrap.style.cssText = 'overflow-x:auto;';
+      tWrap.style.cssText = 'overflow-x:auto';
       var tbl = document.createElement('table');
-      tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
+      tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px';
+
       var thead = document.createElement('thead');
       var htr = document.createElement('tr');
-      ['\ud488\uba85','\ub450\uaed8','\uaddc\uaca9','\uc218\ub7c9','\uc7ac\ub3c4\uc7a5\ube44\uc6a9','\ud45c\uc900\uc6d0\uac00','\uad6c\ubd84',''].forEach(function(h) {
+      ['품명','두께','규격','수량','재도장비용'].forEach(function(h) {
         var th = document.createElement('th');
-        th.style.cssText = 'background:#f1f5f9;padding:7px 10px;text-align:center;font-size:12px;color:#475569;border-bottom:1px solid #e2e8f0;';
         th.textContent = h;
+        th.style.cssText = 'text-align:right;padding:3px 6px;border-bottom:1px solid var(--border);color:var(--text2);font-weight:600';
+        if (h==='품명') th.style.textAlign = 'left';
         htr.appendChild(th);
       });
       thead.appendChild(htr);
       tbl.appendChild(thead);
 
       var tbody = document.createElement('tbody');
-      diffItems.forEach(function(r, ri) {
+      s.items.forEach(function(r) {
         var tr = document.createElement('tr');
-        tr.style.cssText = 'border-bottom:1px solid #f1f5f9;' + (ri%2===0?'background:#fff':'background:#f8fafc');
-
-        var badge = r._isNew
-          ? '<span style="background:#22c55e;color:#fff;border-radius:4px;padding:1px 6px;font-size:11px;">\uc2e0\uaddc</span>'
-          : '<span style="background:#f59e0b;color:#fff;border-radius:4px;padding:1px 6px;font-size:11px;">\uc218\uc815</span>';
-
-        var qtyText = r._isNew
-          ? (+r.qty||0).toLocaleString()
-          : (r._prevQty !== null ? r._prevQty.toLocaleString() + ' \u2192 ' + (+r.qty||0).toLocaleString() : (+r.qty||0).toLocaleString());
-
-        [r.name||'--',(r.thickness||'--')+'t',(+r.size||0).toLocaleString(),qtyText,(+r.repaint||0).toLocaleString(),(+r.stdcost||0).toLocaleString()].forEach(function(val, ci) {
+        [
+          { v: r.name||'-', left: true },
+          { v: r.thickness||'-' },
+          { v: r.size||'-' },
+          { v: (+r.qty||0).toLocaleString(), bold: true, color:'var(--accent)' },
+          { v: r.repaint ? Number(r.repaint).toLocaleString()+'원' : '-' }
+        ].forEach(function(cell) {
           var td = document.createElement('td');
-          td.style.cssText = 'padding:7px 10px;text-align:'+(ci===0?'left':'right')+';white-space:nowrap;';
-          td.textContent = val;
+          td.textContent = cell.v;
+          td.style.cssText = 'padding:3px 6px;border-bottom:1px solid var(--border2,#eee);text-align:right';
+          if (cell.left) td.style.textAlign = 'left';
+          if (cell.bold) td.style.fontWeight = '700';
+          if (cell.color) td.style.color = cell.color;
           tr.appendChild(td);
         });
-
-        // 구분 배지
-        var badgeTd = document.createElement('td');
-        badgeTd.style.cssText = 'padding:7px 10px;text-align:center;';
-        badgeTd.innerHTML = badge;
-        tr.appendChild(badgeTd);
-
-        // 삭제 버튼
-        var delTd = document.createElement('td');
-        delTd.style.cssText = 'padding:4px 8px;text-align:center;white-space:nowrap;';
-        var iBtn = document.createElement('button');
-        iBtn.textContent = '\u2715';
-        iBtn.title = '\uc774 \ud56d\ubaa9 \uc0ad\uc81c';
-        iBtn.style.cssText = 'background:none;border:none;color:#cbd5e1;font-size:13px;cursor:pointer;padding:2px 5px;border-radius:4px;';
-        iBtn.onmouseover = function(){this.style.color='#ef4444';this.style.background='#fee2e2';};
-        iBtn.onmouseout = function(){this.style.color='#cbd5e1';this.style.background='none';};
-        iBtn.onclick = (function(itemId, rowEl, crd, sp){ return function(e){e.stopPropagation();t3DeleteItem(itemId,rowEl,card,sep);}; })(r.id, tr, card, sep);
-        delTd.appendChild(iBtn);
-        tr.appendChild(delTd);
-
         tbody.appendChild(tr);
       });
       tbl.appendChild(tbody);

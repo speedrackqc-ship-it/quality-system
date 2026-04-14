@@ -3711,116 +3711,265 @@ async function t3LoadLog() {
 }
 
 function t3RenderLog(sessions, el) {
-  if(!sessions || !sessions.length) {
-    el.innerHTML = '<p style="color:var(--text2);padding:20px 0">저장 이력이 없습니다.</p>';
+  if (!sessions || !sessions.length) {
+    el.innerHTML = '<p style="color:var(--text2);padding:20px 0;text-align:center;">저장 이력이 없습니다.</p>';
     return;
   }
 
-  // KST 날짜별 그룹핑
+  // KST 오늘 날짜
+  var nowMs = Date.now() + 9 * 60 * 60 * 1000;
+  var nowKST = new Date(nowMs);
+  var todayKey = nowKST.getUTCFullYear() + '/' +
+    String(nowKST.getUTCMonth() + 1).padStart(2, '0') + '/' +
+    String(nowKST.getUTCDate()).padStart(2, '0');
+
+  // KST 날짜별 그룹핑 (repaint_items 또는 items 둘 다 지원)
   var groups = {};
   sessions.forEach(function(s) {
-    var d = new Date(s.created_at||s.createdAt||Date.now());
-    d.setHours(d.getHours() + 9);
-    var dateKey = d.getUTCFullYear() + '/' + String(d.getUTCMonth()+1).padStart(2,'0') + '/' + String(d.getUTCDate()).padStart(2,'0');
+    var dMs = new Date(s.created_at || s.createdAt || Date.now()).getTime() + 9 * 60 * 60 * 1000;
+    var dKST = new Date(dMs);
+    var dateKey = dKST.getUTCFullYear() + '/' +
+      String(dKST.getUTCMonth() + 1).padStart(2, '0') + '/' +
+      String(dKST.getUTCDate()).padStart(2, '0');
     if (!groups[dateKey]) groups[dateKey] = [];
+    s._items = s.repaint_items || s.items || [];
     groups[dateKey].push(s);
   });
 
   el.innerHTML = '';
 
-  // 날짜 최신순
-  Object.keys(groups).sort(function(a,b){ return b > a ? 1 : -1; }).forEach(function(dateKey) {
+  var sortedDates = Object.keys(groups).sort(function(a, b) { return b > a ? 1 : -1; });
+
+  sortedDates.forEach(function(dateKey, dateIdx) {
     var daySessions = groups[dateKey];
+    var isToday = (dateKey === todayKey);
+
+    var totalQtyInDay = 0;
+    daySessions.forEach(function(s) {
+      s._items.forEach(function(r) { totalQtyInDay += (+r.qty || 0); });
+    });
+
+    // 날짜 블록
+    var dateBlock = document.createElement('div');
+    dateBlock.style.cssText = 'border:2px solid ' + (isToday ? 'var(--accent)' : 'var(--border)') +
+      ';border-radius:10px;margin-bottom:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06)';
 
     // 날짜 헤더
     var dateHeader = document.createElement('div');
-    dateHeader.style.cssText = 'font-weight:700;font-size:13px;color:var(--text2);padding:8px 0 4px;border-bottom:1px solid var(--border);margin-bottom:8px;margin-top:12px';
-    dateHeader.textContent = dateKey + ' 입력 이력';
-    el.appendChild(dateHeader);
+    dateHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:' +
+      (isToday ? 'var(--accent)' : 'var(--surface2,#f0f0f0)') + ';cursor:pointer;user-select:none';
 
-    // 세션 최신순
-    daySessions.slice().reverse().forEach(function(s) {
-      if (!s.items || !s.items.length) return;
+    var dateLabel = document.createElement('div');
+    dateLabel.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap';
 
-      // 카드
-      var card = document.createElement('div');
-      card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px';
+    if (isToday) {
+      var todayBadge = document.createElement('span');
+      todayBadge.textContent = 'TODAY';
+      todayBadge.style.cssText = 'background:rgba(255,255,255,0.25);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:800;color:#fff;letter-spacing:0.5px';
+      dateLabel.appendChild(todayBadge);
+    }
 
-      // 카드 헤더
-      var cardHead = document.createElement('div');
-      cardHead.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px';
+    var mm = dateKey.slice(5, 7).replace(/^0/, '');
+    var dd = dateKey.slice(8, 10).replace(/^0/, '');
+    var headerColor = isToday ? '#fff' : 'var(--text1)';
 
-      var monthBadge = document.createElement('span');
-      monthBadge.style.cssText = 'background:var(--accent);color:#fff;border-radius:5px;padding:2px 8px;font-size:12px;font-weight:700';
-      monthBadge.textContent = s.month + '월';
-      cardHead.appendChild(monthBadge);
+    var dateTitleSpan = document.createElement('span');
+    dateTitleSpan.textContent = mm + '월 ' + dd + '일  (' + dateKey + ')';
+    dateTitleSpan.style.cssText = 'font-weight:700;font-size:14px;color:' + headerColor;
+    dateLabel.appendChild(dateTitleSpan);
 
-      var scrapInfo = document.createElement('span');
-      scrapInfo.style.cssText = 'font-size:12px;color:var(--text2)';
-      scrapInfo.textContent = '막고철단가 ' + (s.scrap_price||s.scrap||0).toLocaleString() + '원/kg';
-      cardHead.appendChild(scrapInfo);
+    var summarySpan = document.createElement('span');
+    summarySpan.style.cssText = 'font-size:12px;color:' + (isToday ? 'rgba(255,255,255,0.85)' : 'var(--text2)');
+    summarySpan.textContent = daySessions.length + '건 · ' + totalQtyInDay.toLocaleString() + '개';
+    dateLabel.appendChild(summarySpan);
 
-      var totalQty = s.items.reduce(function(a,r){ return a + (+r.qty||0); }, 0);
-      var sep = document.createElement('span');
-      sep.style.cssText = 'font-size:12px;font-weight:600;color:var(--accent5);margin-left:auto';
-      sep.textContent = '입력 수량 ' + totalQty.toLocaleString() + '개 · ' + s.items.length + '개 품목';
-      cardHead.appendChild(sep);
+    var arrowSpan = document.createElement('span');
+    arrowSpan.style.cssText = 'font-size:12px;color:' + (isToday ? 'rgba(255,255,255,0.8)' : 'var(--text2)') + ';transition:transform 0.2s';
 
-      // 삭제 버튼
-      if (s.id) {
-        var delBtn = document.createElement('button');
-        delBtn.textContent = '🗑';
-        delBtn.title = '이 이력 삭제';
-        delBtn.style.cssText = 'margin-left:4px;border:1px solid var(--accent3);border-radius:5px;padding:2px 7px;cursor:pointer;font-size:12px;color:var(--accent3);background:var(--surface)';
-        (function(sid, cardEl){ delBtn.onclick = function(){ t3DeleteLog(sid, cardEl); }; })(s.id, card);
-        cardHead.appendChild(delBtn);
+    dateHeader.appendChild(dateLabel);
+    dateHeader.appendChild(arrowSpan);
+    dateBlock.appendChild(dateHeader);
+
+    // 날짜 내용 영역
+    var dateBody = document.createElement('div');
+    dateBody.style.cssText = 'background:var(--bg,#fff)';
+
+    // 각 세션 렌더링
+    daySessions.slice().reverse().forEach(function(s, sIdx) {
+      var items = s._items;
+
+      if (sIdx > 0) {
+        var divider = document.createElement('div');
+        divider.style.cssText = 'height:2px;background:var(--border);margin:0';
+        dateBody.appendChild(divider);
       }
 
-      card.appendChild(cardHead);
+      var sessionWrap = document.createElement('div');
+      sessionWrap.style.cssText = 'padding:12px 14px';
+
+      // 세션 메타
+      var sessionMeta = document.createElement('div');
+      sessionMeta.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px';
+
+      var monthBadge = document.createElement('span');
+      monthBadge.style.cssText = 'background:var(--accent);color:#fff;border-radius:5px;padding:2px 10px;font-size:12px;font-weight:700';
+      monthBadge.textContent = s.month + '월';
+      sessionMeta.appendChild(monthBadge);
+
+      var scrapSpan = document.createElement('span');
+      scrapSpan.style.cssText = 'font-size:12px;color:var(--text2);padding:2px 8px;background:var(--surface2,#f5f5f5);border-radius:4px';
+      scrapSpan.textContent = '막고철 ' + (s.scrap_price || s.scrap || 0).toLocaleString() + '원/kg';
+      sessionMeta.appendChild(scrapSpan);
+
+      var dMs2 = new Date(s.created_at || Date.now()).getTime() + 9 * 60 * 60 * 1000;
+      var dKST2 = new Date(dMs2);
+      var timeStr = String(dKST2.getUTCHours()).padStart(2, '0') + ':' +
+        String(dKST2.getUTCMinutes()).padStart(2, '0') + ':' +
+        String(dKST2.getUTCSeconds()).padStart(2, '0');
+      var timeSpan = document.createElement('span');
+      timeSpan.style.cssText = 'font-size:11px;color:var(--text3,#999)';
+      timeSpan.textContent = '⏰ ' + timeStr + ' 저장';
+      sessionMeta.appendChild(timeSpan);
+
+      var sessionQty = items.reduce(function(a, r) { return a + (+r.qty || 0); }, 0);
+      var qtySpan = document.createElement('span');
+      qtySpan.style.cssText = 'margin-left:auto;font-size:12px;font-weight:700;color:var(--accent5);background:var(--surface2,#f5f5f5);padding:2px 10px;border-radius:4px';
+      qtySpan.textContent = items.length + '개 품목 · ' + sessionQty.toLocaleString() + '개';
+      sessionMeta.appendChild(qtySpan);
+
+      if (s.id) {
+        var sessionDelBtn = document.createElement('button');
+        sessionDelBtn.textContent = '🗑 이력 삭제';
+        sessionDelBtn.title = '이 저장 이력 전체 삭제';
+        sessionDelBtn.style.cssText = 'border:1px solid var(--accent3);border-radius:5px;padding:2px 9px;cursor:pointer;font-size:11px;color:var(--accent3);background:var(--surface);transition:all 0.15s';
+        sessionDelBtn.onmouseover = function() { this.style.background='var(--accent3)'; this.style.color='#fff'; };
+        sessionDelBtn.onmouseout = function() { this.style.background='var(--surface)'; this.style.color='var(--accent3)'; };
+        (function(sid, cardEl) {
+          sessionDelBtn.onclick = function() { t3DeleteLog(sid, cardEl); };
+        })(s.id, sessionWrap);
+        sessionMeta.appendChild(sessionDelBtn);
+      }
+
+      sessionWrap.appendChild(sessionMeta);
+
+      if (!items.length) {
+        var emptyMsg = document.createElement('p');
+        emptyMsg.style.cssText = 'color:var(--text2);font-size:12px;padding:8px 0;text-align:center';
+        emptyMsg.textContent = '입력된 품목이 없습니다.';
+        sessionWrap.appendChild(emptyMsg);
+        dateBody.appendChild(sessionWrap);
+        return;
+      }
 
       // 아이템 테이블
       var tWrap = document.createElement('div');
-      tWrap.style.cssText = 'overflow-x:auto';
+      tWrap.style.cssText = 'overflow-x:auto;border-radius:6px;border:1px solid var(--border)';
+
       var tbl = document.createElement('table');
       tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px';
 
       var thead = document.createElement('thead');
       var htr = document.createElement('tr');
-      ['품명','두께','규격','수량','재도장비용'].forEach(function(h) {
+      htr.style.cssText = 'background:var(--surface2,#f8f8f8)';
+      [
+        { label: '#', align: 'center', w: '28px' },
+        { label: '품명', align: 'left' },
+        { label: '규격', align: 'right' },
+        { label: '두께', align: 'right' },
+        { label: '수량(개)', align: 'right' },
+        { label: '재도장비용', align: 'right' },
+        { label: '삭제', align: 'center', w: '46px' }
+      ].forEach(function(h) {
         var th = document.createElement('th');
-        th.textContent = h;
-        th.style.cssText = 'text-align:right;padding:3px 6px;border-bottom:1px solid var(--border);color:var(--text2);font-weight:600';
-        if (h==='품명') th.style.textAlign = 'left';
+        th.textContent = h.label;
+        var css = 'padding:6px 8px;color:var(--text2);font-weight:700;font-size:11px;white-space:nowrap;border-bottom:2px solid var(--border);text-align:' + h.align;
+        if (h.w) css += ';width:' + h.w;
+        th.style.cssText = css;
         htr.appendChild(th);
       });
       thead.appendChild(htr);
       tbl.appendChild(thead);
 
       var tbody = document.createElement('tbody');
-      s.items.forEach(function(r) {
+      items.forEach(function(r, rIdx) {
         var tr = document.createElement('tr');
+        var baseBg = rIdx % 2 === 1 ? 'var(--surface2,#fafafa)' : '';
+        tr.style.cssText = baseBg ? 'background:' + baseBg : '';
+        tr.onmouseover = function() { this.style.background='var(--accent-light,rgba(59,130,246,0.08))'; };
+        tr.onmouseout = function() { this.style.background=baseBg; };
+
         [
-          { v: r.name||'-', left: true },
-          { v: r.thickness||'-' },
-          { v: r.size||'-' },
-          { v: (+r.qty||0).toLocaleString(), bold: true, color:'var(--accent)' },
-          { v: r.repaint ? Number(r.repaint).toLocaleString()+'원' : '-' }
+          { v: String(rIdx + 1), align: 'center', color: 'var(--text3,#aaa)', size: '11px' },
+          { v: r.name || '-', align: 'left', bold: true },
+          { v: r.size ? String(Number(r.size)) : '-', align: 'right', color: 'var(--accent)', bold: true },
+          { v: r.thickness ? String(r.thickness) : '-', align: 'right', color: 'var(--text2)' },
+          { v: (+r.qty || 0).toLocaleString(), align: 'right', bold: true, color: 'var(--accent5)', size: '13px' },
+          { v: r.repaint && Number(r.repaint) > 0 ? Number(r.repaint).toLocaleString() + '원' : '-', align: 'right', color: 'var(--text2)' }
         ].forEach(function(cell) {
           var td = document.createElement('td');
           td.textContent = cell.v;
-          td.style.cssText = 'padding:3px 6px;border-bottom:1px solid var(--border2,#eee);text-align:right';
-          if (cell.left) td.style.textAlign = 'left';
-          if (cell.bold) td.style.fontWeight = '700';
-          if (cell.color) td.style.color = cell.color;
+          var css = 'padding:6px 8px;border-bottom:1px solid var(--border2,#eee);text-align:' + cell.align;
+          if (cell.bold) css += ';font-weight:700';
+          if (cell.color) css += ';color:' + cell.color;
+          if (cell.size) css += ';font-size:' + cell.size;
+          td.style.cssText = css;
           tr.appendChild(td);
         });
+
+        var tdDel = document.createElement('td');
+        tdDel.style.cssText = 'padding:4px 6px;text-align:center;border-bottom:1px solid var(--border2,#eee)';
+        if (r.id) {
+          var itemDelBtn = document.createElement('button');
+          itemDelBtn.textContent = '✕';
+          itemDelBtn.title = '이 항목 삭제';
+          itemDelBtn.style.cssText = 'border:1px solid #e57373;border-radius:4px;padding:1px 6px;cursor:pointer;font-size:11px;color:#e57373;background:transparent;transition:all 0.15s';
+          itemDelBtn.onmouseover = function() { this.style.background='#e57373'; this.style.color='#fff'; };
+          itemDelBtn.onmouseout = function() { this.style.background='transparent'; this.style.color='#e57373'; };
+          (function(iid, trEl, cardEl, sepEl) {
+            itemDelBtn.onclick = function(e) {
+              e.stopPropagation();
+              t3DeleteItem(iid, trEl, cardEl, sepEl);
+            };
+          })(r.id, tr, sessionWrap, qtySpan);
+          tdDel.appendChild(itemDelBtn);
+        }
+        tr.appendChild(tdDel);
         tbody.appendChild(tr);
       });
+
+      var totalQtyS = items.reduce(function(a, r) { return a + (+r.qty || 0); }, 0);
+      var tfoot = document.createElement('tfoot');
+      var tftr = document.createElement('tr');
+      tftr.style.cssText = 'background:var(--surface2,#f0f0f0);font-weight:700';
+      ['합계', '', '', '', totalQtyS.toLocaleString() + '개', '', ''].forEach(function(v, ci) {
+        var td = document.createElement('td');
+        td.textContent = v;
+        var css = 'padding:6px 8px;text-align:' + (ci === 0 ? 'left' : 'right') + ';font-size:12px;color:var(--text1);border-top:2px solid var(--border)';
+        if (ci === 4) css += ';color:var(--accent5)';
+        td.style.cssText = css;
+        tftr.appendChild(td);
+      });
+      tfoot.appendChild(tftr);
       tbl.appendChild(tbody);
+      tbl.appendChild(tfoot);
       tWrap.appendChild(tbl);
-      card.appendChild(tWrap);
-      el.appendChild(card);
+      sessionWrap.appendChild(tWrap);
+      dateBody.appendChild(sessionWrap);
     });
+
+    dateBlock.appendChild(dateBody);
+
+    var isOpen = (dateIdx === 0);
+    arrowSpan.textContent = isOpen ? '▲' : '▼';
+    if (!isOpen) dateBody.style.display = 'none';
+
+    dateHeader.addEventListener('click', function() {
+      isOpen = !isOpen;
+      dateBody.style.display = isOpen ? '' : 'none';
+      arrowSpan.textContent = isOpen ? '▲' : '▼';
+    });
+
+    el.appendChild(dateBlock);
   });
 }
 </script>

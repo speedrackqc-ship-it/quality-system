@@ -11,7 +11,7 @@ hh<!DOCTYPE html>
 const SB3  = 'https://kxlzdnfudvdwzlveqklh.supabase.co';
 const KEY3 = 'sb_publishable_8aTbER8PYcFprysUFig85A_CgXDC319';
 const SB4  = 'https://gigfzkyrmudcdksgpeoo.supabase.co';
-const KEY4 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpZ2Z6a3lybXVkY2Rrc2hdwZW9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MTQyNDgsImV4cCI6MjA4MDk5MDI0OH0.wd1CXZF0Nwl4PqugWOYBIz1LELyuE_wgIGMEDvo27x8';
+const KEY4 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpZ2Z6a3lybXVkY2Rrc2hhhdwZW9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MTQyNDgsImV4cCI6MjA4MDk5MDI0OH0.wd1CXZF0Nwl4PqugWOYBIz1LELyuE_wgIGMEDvo27x8';
 const H4   = { 'apikey': KEY4, 'Authorization': `Bearer ${KEY4}` };
 h
 // Supabase에서 표준원가 로드
@@ -2135,6 +2135,7 @@ async function sb4(table, baseParams = '') {
   const Hc = { ...H4, 'Prefer': 'count=exact' };
   const r0  = await fetch(`${SB4}/rest/v1/${table}?${baseParams}&limit=1`, { headers: Hc });
   const cr  = r0.headers.get('Content-Range');
+    if (r0.status === 401) throw new Error('API 인증 오류 (401): 관리현황 DB 연결 키를 확인해 주세요.');
   const total = cr ? parseInt(cr.split('/')[1]) : 0;
   if (!total) return [];
   let all = [];
@@ -2603,7 +2604,7 @@ async function selectView4(id) {
   document.getElementById('v4tab_' + id)?.classList.add('v4active');
   document.querySelectorAll('.view4pane').forEach(v => v.style.display = 'none');
   document.getElementById('view4_' + id).style.display = 'block';
-  if (!st4.loaded[id]) await loadView4(id);
+  st4.selDate[id] = '';  if (!st4.loaded[id]) await loadView4(id);
 }
 
 async function loadView4(id) {

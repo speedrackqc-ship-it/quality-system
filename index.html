@@ -2060,8 +2060,8 @@ const COL_DEFS4 = {
   rack: [
     {k:'session_date',label:'날짜',type:'date',always:true},
     {k:'category',label:'카테고리',type:'text'},
+    {k:'item_type',label:'품목유형',type:'text'},
     {k:'size',label:'규격',type:'text'},
-    {k:'color',label:'색상',type:'text'},
     {k:'received_quantity',label:'입고량',type:'num'},
     {k:'recycle_quantity',label:'재활용',type:'num'},
     {k:'dispose_quantity',label:'폐기',type:'num'},
@@ -2079,7 +2079,7 @@ const COL_DEFS4 = {
   defect: [
     {k:'session_date',label:'날짜',type:'date',always:true},
     {k:'category',label:'카테고리',type:'text'},
-    {k:'defect_type',label:'불량유형',type:'text'},
+    {k:'size',label:'규격',type:'text'},
     {k:'received_quantity',label:'수량',type:'num'},
     {k:'recycle_quantity',label:'재작업',type:'num'},
     {k:'dispose_quantity',label:'폐기',type:'num'},
@@ -2129,6 +2129,26 @@ function updateKPI4(rows){
   if(re){re.textContent=rate.toFixed(2)+'%';re.className='v4-kpi-value'+(rate>=5?' danger':'');}
 }
 
+// 한 테이블에서 전체 데이터를 페이지네이션으로 가져오기
+function fetchAllRows4(table, extraSelect) {
+  var select = extraSelect||'*';
+  var all = [];
+  function fetchPage(offset){
+    return fetch(SB4_URL+'/rest/v1/'+table+'?select='+select+'&order=id.asc&offset='+offset+'&limit=1000',
+      {headers:sb4Headers()})
+      .then(function(r){
+        if(!r.ok) throw new Error(table+' HTTP '+r.status);
+        return r.json();
+      })
+      .then(function(rows){
+        all = all.concat(rows);
+        if(rows.length === 1000) return fetchPage(offset+1000);
+        return all;
+      });
+  }
+  return fetchPage(0);
+}
+
 function loadAll4(){
   var el=document.getElementById('v4-body-frame');
   if(!el||st4._allLoaded) return Promise.resolve();
@@ -2136,41 +2156,89 @@ function loadAll4(){
   var dot=document.getElementById('dbDot4'),lbl=document.getElementById('dbLabel4');
   if(dot) dot.style.background='#f97316';
   if(lbl) lbl.textContent='로딩 중...';
-  var url=SB4_URL+'/rest/v1/frame_return_items?select=*,frame_return_sessions(inspection_date,thickness,color)&order=id.desc&limit=15000';
-  return fetch(url,{headers:sb4Headers()})
-    .then(function(r){
-      if(!r.ok){if(r.status===401)throw new Error('API 인증 실패(401)');throw new Error('HTTP '+r.status);}
-      return r.json();
-    })
-    .then(function(raw){
-      var rows=raw.map(function(row){
-        var sess=row.frame_return_sessions||{};
-        return Object.assign({},row,{
-          session_date:sess.inspection_date||row.session_date||'',
-          color:sess.color||row.color||'',
-          thickness:sess.thickness||row.thickness||'',
-          received_quantity:row.received_quantity||0,
-          recycle_quantity:row.recycle_quantity||0,
-          dispose_quantity:row.dispose_quantity||0,
-          disposal_rate:calcDisposalRate(row)
-        });
+
+  // frame_return_sessions 전체 로드
+  var frameSessMap = {};
+  var rackSessMap = {};
+
+  return Promise.all([
+    // frame_return_sessions
+    fetchAllRows4('frame_return_sessions','id,inspection_date,color,thickness')
+      .then(function(rows){
+        rows.forEach(function(s){ frameSessMap[s.id] = s; });
+      }),
+    // rack_return_sessions
+    fetchAllRows4('rack_return_sessions','id,inspection_date')
+      .then(function(rows){
+        rows.forEach(function(s){ rackSessMap[s.id] = s; });
+      })
+  ])
+  .then(function(){
+    // 데이터 병렬 로드
+    return Promise.all([
+      fetchAllRows4('frame_return_items'),
+      fetchAllRows4('rack_return_items')
+    ]);
+  })
+  .then(function(results){
+    var frameRows = results[0];
+    var rackRows  = results[1];
+
+    // frame 데이터 정규화
+    var normalizedFrame = frameRows.map(function(row){
+      var sess = frameSessMap[row.session_id]||{};
+      return Object.assign({},row,{
+        _table: 'frame',
+        session_date: sess.inspection_date||row.session_date||'',
+        color: sess.color||row.color||'-',
+        thickness: sess.thickness||row.thickness||'-',
+        disposal_rate: calcDisposalRate(row)
       });
-      VIEWS4.forEach(function(v){st4.data[v]=rows;st4.loaded[v]=true;});
-      st4._allLoaded=true;
-      updateKPI4(rows);
-      applyFilters4(st4.view);
-      if(dot) dot.style.background='#22c55e';
-      if(lbl) lbl.textContent='연결됨';
-      var lr=document.getElementById('lastRefresh4');
-      if(lr){var n=new Date();lr.textContent='최종 갱신: '+n.toLocaleTimeString('ko-KR');}
-    })
-    .catch(function(e){
-      console.error('loadAll4:',e);
-      var b=document.getElementById('v4-body-frame');
-      if(b) b.innerHTML='<div class="v4-loading"><span style="color:red">&#9888; 데이터 로드 실패: '+e.message+'</span></div>';
-      if(dot) dot.style.background='#ef4444';
-      if(lbl) lbl.textContent='오류';
     });
+
+    // rack 데이터 정규화
+    var normalizedRack = rackRows.map(function(row){
+      var sess = rackSessMap[row.session_id]||{};
+      return Object.assign({},row,{
+        _table: 'rack',
+        session_date: sess.inspection_date||row.session_date||'',
+        // rack은 category(경량랙/중량랙) + product_type(선반/기둥 등) 구조
+        item_type: row.product_type||'-',
+        size: row.specifications||row.size||'-',
+        disposal_rate: calcDisposalRate(row)
+      });
+    });
+
+    // 탭별 데이터 분배
+    // frame 탭: frame_return_items 전체
+    st4.data['frame'] = normalizedFrame;
+    // rack 탭: rack_return_items 전체 (경량랙 + 중량랙 + 기타)
+    st4.data['rack']  = normalizedRack;
+    // plywood/defect/powder: 현재는 frame 전체 사용 (추후 별도 테이블 추가 가능)
+    st4.data['plywood'] = normalizedFrame;
+    st4.data['defect']  = normalizedFrame;
+    st4.data['powder']  = normalizedFrame;
+
+    VIEWS4.forEach(function(v){st4.loaded[v]=true;});
+    st4._allLoaded=true;
+
+    // KPI는 frame + rack 합산
+    updateKPI4(normalizedFrame.concat(normalizedRack));
+
+    applyFilters4(st4.view);
+
+    if(dot) dot.style.background='#22c55e';
+    if(lbl) lbl.textContent='연결됨 ('+(normalizedFrame.length+normalizedRack.length).toLocaleString()+'건)';
+    var lr=document.getElementById('lastRefresh4');
+    if(lr){var n=new Date();lr.textContent='최종 갱신: '+n.toLocaleTimeString('ko-KR');}
+  })
+  .catch(function(e){
+    console.error('loadAll4:',e);
+    var b=document.getElementById('v4-body-frame');
+    if(b) b.innerHTML='<div class="v4-loading"><span style="color:red">&#9888; 데이터 로드 실패: '+e.message+'</span></div>';
+    if(dot) dot.style.background='#ef4444';
+    if(lbl) lbl.textContent='오류';
+  });
 }
 
 function refreshAll4(){
@@ -2180,7 +2248,6 @@ function refreshAll4(){
   if(icon) icon.style.animation='v4spin 0.7s linear infinite';
   loadAll4().then(function(){if(icon) icon.style.animation='';}).catch(function(){if(icon) icon.style.animation='';});
 }
-
 function applyFilters4(view){
   var rows=st4.data[view]||[],search=(st4.search[view]||'').toLowerCase(),adv=st4.advFilter[view]||{};
   var result=rows.filter(function(row){

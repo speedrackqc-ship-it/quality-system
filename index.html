@@ -2052,9 +2052,9 @@ const COL_DEFS4 = {
     {k:'category',label:'카테고리',type:'text'},
     {k:'size',label:'규격',type:'text'},
     {k:'color',label:'색상',type:'text'},
-    {k:'quantity_in',label:'입고량',type:'num'},
-    {k:'qty_recycle',label:'재활용',type:'num'},
-    {k:'qty_disposal',label:'폐기',type:'num'},
+    {k:'received_quantity',label:'입고량',type:'num'},
+    {k:'recycle_quantity',label:'재활용',type:'num'},
+    {k:'dispose_quantity',label:'폐기',type:'num'},
     {k:'disposal_rate',label:'폐기율',type:'bar'},
   ],
   rack: [
@@ -2062,27 +2062,27 @@ const COL_DEFS4 = {
     {k:'category',label:'카테고리',type:'text'},
     {k:'size',label:'규격',type:'text'},
     {k:'color',label:'색상',type:'text'},
-    {k:'quantity_in',label:'입고량',type:'num'},
-    {k:'qty_recycle',label:'재활용',type:'num'},
-    {k:'qty_disposal',label:'폐기',type:'num'},
+    {k:'received_quantity',label:'입고량',type:'num'},
+    {k:'recycle_quantity',label:'재활용',type:'num'},
+    {k:'dispose_quantity',label:'폐기',type:'num'},
     {k:'disposal_rate',label:'폐기율',type:'bar'},
   ],
   plywood: [
     {k:'session_date',label:'날짜',type:'date',always:true},
     {k:'category',label:'카테고리',type:'text'},
     {k:'size',label:'규격',type:'text'},
-    {k:'quantity_in',label:'입고량',type:'num'},
-    {k:'qty_recycle',label:'재활용',type:'num'},
-    {k:'qty_disposal',label:'폐기',type:'num'},
+    {k:'received_quantity',label:'입고량',type:'num'},
+    {k:'recycle_quantity',label:'재활용',type:'num'},
+    {k:'dispose_quantity',label:'폐기',type:'num'},
     {k:'disposal_rate',label:'폐기율',type:'bar'},
   ],
   defect: [
     {k:'session_date',label:'날짜',type:'date',always:true},
     {k:'category',label:'카테고리',type:'text'},
     {k:'defect_type',label:'불량유형',type:'text'},
-    {k:'quantity_in',label:'수량',type:'num'},
-    {k:'qty_recycle',label:'재작업',type:'num'},
-    {k:'qty_disposal',label:'폐기',type:'num'},
+    {k:'received_quantity',label:'수량',type:'num'},
+    {k:'recycle_quantity',label:'재작업',type:'num'},
+    {k:'dispose_quantity',label:'폐기',type:'num'},
     {k:'disposal_rate',label:'폐기율',type:'bar'},
   ],
   powder: [
@@ -2090,16 +2090,16 @@ const COL_DEFS4 = {
     {k:'category',label:'카테고리',type:'text'},
     {k:'color',label:'색상',type:'text'},
     {k:'item_type',label:'타입',type:'text'},
-    {k:'quantity_in',label:'입고량',type:'num'},
-    {k:'qty_recycle',label:'재활용',type:'num'},
-    {k:'qty_disposal',label:'폐기',type:'num'},
+    {k:'received_quantity',label:'입고량',type:'num'},
+    {k:'recycle_quantity',label:'재활용',type:'num'},
+    {k:'dispose_quantity',label:'폐기',type:'num'},
     {k:'disposal_rate',label:'폐기율',type:'bar'},
   ],
 };
 
 function sb4Headers(){ return {'apikey':SB4_ANON,'Authorization':'Bearer '+SB4_ANON,'Content-Type':'application/json'}; }
 function getColVis4(v){ if(!st4.colVis[v]) st4.colVis[v]=new Set(COL_DEFS4[v].map(function(c){return c.k;})); return st4.colVis[v]; }
-function calcDisposalRate(row){ var i=row.quantity_in||0; return i===0?0:((row.qty_disposal||0)/i*100); }
+function calcDisposalRate(row){ var i=row.received_quantity||0; return i===0?0:((row.dispose_quantity||0)/i*100); }
 function riskClass(r){ return r>=5?'hi':r>=2?'md':'lo'; }
 
 function showSkeleton4(view){
@@ -2115,9 +2115,9 @@ function showSkeleton4(view){
 }
 
 function updateKPI4(rows){
-  var totalIn=rows.reduce(function(s,r){return s+(r.quantity_in||0);},0);
-  var totalRec=rows.reduce(function(s,r){return s+(r.qty_recycle||0);},0);
-  var totalDis=rows.reduce(function(s,r){return s+(r.qty_disposal||0);},0);
+  var totalIn=rows.reduce(function(s,r){return s+(r.received_quantity||0);},0);
+  var totalRec=rows.reduce(function(s,r){return s+(r.recycle_quantity||0);},0);
+  var totalDis=rows.reduce(function(s,r){return s+(r.dispose_quantity||0);},0);
   var totalSess=new Set(rows.map(function(r){return r.session_id;})).size;
   var rate=totalIn>0?(totalDis/totalIn*100):0;
   function s(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
@@ -2136,7 +2136,7 @@ function loadAll4(){
   var dot=document.getElementById('dbDot4'),lbl=document.getElementById('dbLabel4');
   if(dot) dot.style.background='#f97316';
   if(lbl) lbl.textContent='로딩 중...';
-  var url=SB4_URL+'/rest/v1/frame_return_items?select=*,frame_return_sessions!inner(session_date,session_type)&order=id.desc&limit=15000';
+  var url=SB4_URL+'/rest/v1/frame_return_items?select=*,frame_return_sessions(inspection_date,thickness,color)&order=id.desc&limit=15000';
   return fetch(url,{headers:sb4Headers()})
     .then(function(r){
       if(!r.ok){if(r.status===401)throw new Error('API 인증 실패(401)');throw new Error('HTTP '+r.status);}
@@ -2146,8 +2146,12 @@ function loadAll4(){
       var rows=raw.map(function(row){
         var sess=row.frame_return_sessions||{};
         return Object.assign({},row,{
-          session_date:sess.session_date||row.session_date||'',
-          session_type_label:sess.session_type||'',
+          session_date:sess.inspection_date||row.session_date||'',
+          color:sess.color||row.color||'',
+          thickness:sess.thickness||row.thickness||'',
+          received_quantity:row.received_quantity||0,
+          recycle_quantity:row.recycle_quantity||0,
+          dispose_quantity:row.dispose_quantity||0,
           disposal_rate:calcDisposalRate(row)
         });
       });
@@ -2205,7 +2209,7 @@ function getCatSummary4(rows){
   rows.forEach(function(row){
     var k=row.category||'(미분류)';
     if(!map[k]) map[k]={category:k,qty_in:0,qty_recycle:0,qty_disposal:0};
-    map[k].qty_in+=row.quantity_in||0; map[k].qty_recycle+=row.qty_recycle||0; map[k].qty_disposal+=row.qty_disposal||0;
+    map[k].qty_in+=row.received_quantity||0; map[k].qty_recycle+=row.recycle_quantity||0; map[k].qty_disposal+=row.dispose_quantity||0;
   });
   var arr=Object.values(map);
   arr.forEach(function(c){c.disposal_rate=c.qty_in>0?(c.qty_disposal/c.qty_in*100):0;});

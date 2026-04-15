@@ -2430,7 +2430,7 @@ function selectView4(view){
     var pane=document.getElementById('v4-pane-'+v);if(pane)pane.style.display=v===view?'block':'none';
   });
   if(!st4._allLoaded)loadAll4();
-  else if(st4.loaded[view]){renderTable4(view);renderCatSummary4(view);}
+  else if(st4.loaded[view]){applyFilters4(view);}
 }
 
 function buildViewPane4(view){

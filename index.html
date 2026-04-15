@@ -2280,9 +2280,9 @@ function getCatSummary4(rows){
   rows.forEach(function(row){
     var k=row.category||'기타';
     if(!map[k]) map[k]={category:k,qty_in:0,qty_recycle:0,qty_disposal:0,disposal_rate:0};
-    map[k].qty_in      += Number(row.qty_in)       || 0;
-    map[k].qty_recycle += Number(row.qty_recycle)  || 0;
-    map[k].qty_disposal+= Number(row.qty_disposal) || 0;
+    map[k].qty_in      += Number(row.received_quantity||row.qty_in)      || 0;
+    map[k].qty_recycle += Number(row.recycle_quantity||row.qty_recycle)  || 0;
+    map[k].qty_disposal+= Number(row.dispose_quantity||row.qty_disposal) || 0;
   });
   var arr=Object.values(map);
   arr.forEach(function(c){c.disposal_rate=c.qty_in>0?(c.qty_disposal/c.qty_in*100):0;});

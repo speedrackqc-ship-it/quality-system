@@ -422,6 +422,61 @@ tr:hover td { background: rgba(9,105,218,0.03); }
   .cert-add-folder-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:2px dashed #b0bec5;background:#f8f9fb;color:#555;transition:all .15s;margin-top:2px}
   .cert-add-folder-btn:hover{border-color:#4a90d9;color:#4a90d9;background:#f0f6ff}
 
+
+  /* ===== TAB2: 리퍼 실적 ===== */
+  .t2-main { max-width:1100px; margin:0 auto; padding:28px 20px; display:flex; flex-direction:column; gap:22px; }
+  .t2-annual-banner { background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%); border-radius:18px; padding:28px 36px; display:flex; align-items:center; justify-content:space-between; gap:20px; box-shadow:0 8px 32px rgba(0,0,0,.18); }
+  .t2-annual-left { flex:1; }
+  .t2-annual-label { font-size:15px; font-weight:700; color:#a0aec0; letter-spacing:.08em; margin-bottom:16px; }
+  .t2-annual-nums { display:flex; align-items:center; gap:0; }
+  .t2-annual-block { display:flex; flex-direction:column; gap:4px; padding:0 28px; }
+  .t2-annual-block:first-child { padding-left:0; }
+  .t2-annual-divider { width:1px; height:56px; background:rgba(255,255,255,.15); }
+  .t2-annual-unit { font-size:12px; color:#718096; font-weight:500; }
+  .t2-annual-val { font-size:34px; font-weight:800; color:#fff; letter-spacing:-1px; }
+  .t2-annual-money { color:#f6c90e; }
+  .t2-annual-unit2 { font-size:13px; color:#a0aec0; font-weight:500; }
+  .t2-year-nav { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.07); border-radius:12px; padding:10px 18px; }
+  .t2-yr-btn { background:rgba(255,255,255,.12); border:none; color:#fff; font-size:16px; cursor:pointer; border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; transition:background .15s; }
+  .t2-yr-btn:hover { background:rgba(255,255,255,.25); }
+  .t2-yr-label { font-size:20px; font-weight:700; color:#fff; min-width:48px; text-align:center; }
+  .t2-month-tabs { display:flex; gap:6px; flex-wrap:wrap; background:#f8f9fb; border-radius:12px; padding:10px 12px; border:1px solid #e8edf2; }
+  .t2-mtab { display:flex; flex-direction:column; align-items:center; gap:3px; padding:8px 12px; border:none; background:transparent; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; color:#718096; transition:all .15s; min-width:56px; }
+  .t2-mtab:hover { background:#e9f0ff; color:#3182ce; }
+  .t2-mtab.on { background:linear-gradient(135deg,#4a90d9,#2c5f8a); color:#fff; box-shadow:0 3px 10px rgba(74,144,217,.35); }
+  .t2-mtab-dot { width:6px; height:6px; border-radius:50%; background:#48bb78; display:none; }
+  .t2-mtab.has-data .t2-mtab-dot { display:block; }
+  .t2-mtab.on .t2-mtab-dot { background:#fff; display:block; }
+  .t2-month-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .t2-mcard { background:#fff; border-radius:14px; padding:20px 24px; border:1.5px solid #e8edf2; box-shadow:0 2px 10px rgba(0,0,0,.05); display:flex; flex-direction:column; gap:8px; }
+  .t2-mcard-green { border-color:#9ae6b4; background:linear-gradient(135deg,#f0fff4,#e6ffed); }
+  .t2-mcard-blue { border-color:#90cdf4; background:linear-gradient(135deg,#ebf8ff,#e3f2fd); }
+  .t2-mcard-yellow { border-color:#fbd38d; background:linear-gradient(135deg,#fffff0,#fefce8); }
+  .t2-mcard-label { font-size:13px; color:#718096; font-weight:600; }
+  .t2-mcard-val { font-size:32px; font-weight:800; color:#2d3748; }
+  .t2-mcard-val em { font-size:14px; font-weight:500; color:#a0aec0; font-style:normal; margin-left:4px; }
+  .t2-mcard-money { color:#d69e2e; }
+  .t2-input-panel { background:#fff; border-radius:16px; border:1.5px solid #e2e8f0; padding:24px 28px; box-shadow:0 2px 12px rgba(0,0,0,.06); }
+  .t2-input-panel-header { display:flex; align-items:baseline; gap:12px; margin-bottom:20px; padding-bottom:14px; border-bottom:1px solid #f0f4f8; }
+  .t2-input-panel-header > span:first-child { font-size:17px; font-weight:700; color:#2d3748; }
+  .t2-input-panel-hint { font-size:12px; color:#a0aec0; }
+  .t2-input-row-wrap { display:grid; grid-template-columns:repeat(3,1fr) auto; gap:14px; align-items:end; }
+  .t2-input-field { display:flex; flex-direction:column; gap:6px; }
+  .t2-input-field label { font-size:12px; font-weight:600; color:#718096; }
+  .t2-input-field input { padding:10px 14px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:15px; font-weight:600; color:#2d3748; outline:none; transition:border .15s; }
+  .t2-input-field input:focus { border-color:#4a90d9; box-shadow:0 0 0 3px rgba(74,144,217,.12); }
+  .t2-save-btn { padding:10px 24px; background:linear-gradient(135deg,#d4a017,#b8860b); color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; height:42px; white-space:nowrap; box-shadow:0 3px 10px rgba(180,130,0,.25); transition:all .15s; }
+  .t2-save-btn:hover { background:linear-gradient(135deg,#e8b020,#c99a10); transform:translateY(-1px); }
+  .t2-calc-summary { display:flex; align-items:center; gap:0; background:#f8f9fb; border-radius:12px; padding:16px 24px; border:1px solid #e8edf2; }
+  .t2-sum-item { display:flex; flex-direction:column; gap:4px; padding:0 24px; }
+  .t2-sum-item:first-child { padding-left:0; }
+  .t2-sum-item .label { font-size:12px; color:#718096; font-weight:500; }
+  .t2-sum-item .num { font-size:22px; font-weight:800; color:#2d3748; }
+  .t2-sum-divider { width:1px; height:44px; background:#e2e8f0; }
+  .t2-table-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .t2-table-title { font-size:16px; font-weight:700; color:#2d3748; }
+  .t2-table-actions { display:flex; gap:8px; }
+  
   </style>
 </head>
 <body>

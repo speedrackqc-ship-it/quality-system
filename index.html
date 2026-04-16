@@ -1496,43 +1496,43 @@ function t3DelRow(i) {
 function t3SaveMonth() {
   const month = +document.getElementById('t3_sel_month').value;
   const scrap = +document.getElementById('t3_scrap_price').value || 250;
-  const rows  = T3.inputRows.filter(r => r.name && r.name.trim());
-  if (!rows.length) { alert('입력된 데이터가 없습니다.'); return; }
-
-  // ── 새 session 독립 추가 (기존 건드리지 않음) ──
-  const newSession = {
-    id: null,
-    month,
-    scrap,
-    created_at: new Date().toISOString(),
-    items: rows.map(r => ({
-      id: null,
-      name: r.name, thickness: r.thickness,
-      size: +r.size||0, qty: +r.qty||0,
-      repaint: +r.repaint||0, stdcost: +r.stdcost||0
-    }))
-  };
-  if (!T3.sessions) T3.sessions = [];
-  T3.sessions.push(newSession);
-
-  // 현황 재계산
-  t3BuildSaved();
-
-  // Supabase에 저장 (비동기)
+  const rows = T3.inputRows.filter(r => r.name ? r.name.trim() : false);
+  if (!rows.length) { alert('입력된 품목이 없습니다.'); return; }
   (async () => {
     try {
-      const sessId = await t3SaveSession(month, scrap, rows);
-      newSession.id = sessId;
-      t3SaveToStorage();
-      t3LoadLog();
+      const editId = T3._editSessionId || null;
+      let sessId;
+      if (editId) {
+        await sb3('repaint_sessions?id=eq.' + editId, {
+          method: 'PATCH', body: { month: month, scrap_price: scrap }
+        });
+        await sb3('repaint_items?session_id=eq.' + editId, { method: 'DELETE', prefer: '' });
+        const items = rows.map(r => ({
+          session_id: editId, name: r.name, thickness: r.thickness,
+          size: +r.size||0, qty: +r.qty||0, repaint: +r.repaint||0, stdcost: +r.stdcost||0
+        }));
+        if (items.length) await sb3('repaint_items', { method: 'POST', body: items });
+        sessId = editId;
+        T3._editSessionId = null;
+        const sv = document.querySelector('#t3_save_btn');
+        if (sv) sv.textContent = '💾 저장';
+        alert(month + '월 데이터가 수정되었습니다.');
+      } else {
+        sessId = await t3SaveSession(month, scrap, rows);
+        alert(month + '월 데이터가 저장되었습니다.');
+      }
+      const r2 = await sb3('repaint_sessions?select=id,month,scrap_price,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.desc');
+      const fresh = await r2.json();
+      T3.sessions = fresh.map(s => ({
+        id: s.id, month: s.month, scrap: s.scrap_price, created_at: s.created_at,
+        items: (s.repaint_items||[]).map(r => ({
+          id: r.id, name: r.name, thickness: r.thickness,
+          size: r.size, qty: r.qty, repaint: r.repaint, stdcost: r.stdcost
+        }))
+      }));
+      t3BuildSaved(); t3RenderInput(); t3RenderResults(); t3LoadLog(); t3SaveToStorage();
     } catch(e) { alert('저장 오류: ' + e.message); }
   })();
-
-  // 입력 초기화 & 다음 월 이동
-  T3.inputRows = [t3EmptyRow(), t3EmptyRow(), t3EmptyRow()];
-  t3ChangeMonth();
-  t3RenderInput();
-  t3RenderResults();
 }
 
 // ── 저장된 결과 렌더 ──
@@ -1626,28 +1626,37 @@ function t3RenderResults() {
   t3RenderStats();
 }
 
-function t3EditMonth(month) {
-  const s = T3.saved.find(x => x.month === month);
-  if (!s) return;
-  document.getElementById('t3_sel_month').value = String(month);
-  document.getElementById('t3_scrap_price').value = s.scrap;
-  T3.inputRows = JSON.parse(JSON.stringify(s.rows));
-  T3.saved = T3.saved.filter(x => x.month !== month);
+function t3EditMonth(sessionId) {
+  const s = T3.sessions.find(x => x.id === sessionId);
+  if (!s) { alert('해당 세션을 찾을 수 없습니다.'); return; }
+  T3._editSessionId = sessionId;
+  document.getElementById('t3_sel_month').value = String(s.month);
+  document.getElementById('t3_scrap_price').value = s.scrap || 250;
+  T3.inputRows = JSON.parse(JSON.stringify(s.items || []));
   t3RenderInput();
   t3RenderResults();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  const sv = document.querySelector('#t3_save_btn');
+  if (sv) sv.textContent = '💾 ' + s.month + '월 수정 저장';
 }
 
-function t3DeleteMonth(month) {
-  if (!confirm(`${month}월 데이터를 삭제할까요?`)) return;
-  T3.saved = T3.saved.filter(s => s.month !== month);
-  // Supabase에서도 삭제
+function t3DeleteMonth(sessionId) {
+  const s = T3.sessions.find(x => x.id === sessionId);
+  if (!s) { alert('해당 세션을 찾을 수 없습니다.'); return; }
+  const dateStr = s.created_at
+    ? new Date(s.created_at).toLocaleString('ko-KR', {year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})
+    : s.month + '월';
+  const items = s.items || [];
+  const firstItem = items[0];
+  const itemDesc = firstItem ? ' [' + firstItem.name + (items.length > 1 ? ' 외 ' + (items.length-1) + '건' : '') + ']' : '';
+  if (!confirm(dateStr + itemDesc + '\n\n이 세션 데이터를 삭제하시겠습니까?\n(삭제 후 복구 불가)')) return;
   (async () => {
     try {
-      await sb3(`repaint_sessions?month=eq.${month}`, { method:'DELETE', prefer:'' });
-    } catch(e) { console.error('삭제 오류:', e); }
-    t3SaveToStorage();
-    t3RenderResults();
+      await sb3('repaint_items?session_id=eq.' + sessionId, { method: 'DELETE', prefer: '' });
+      await sb3('repaint_sessions?id=eq.' + sessionId, { method: 'DELETE', prefer: '' });
+      T3.sessions = T3.sessions.filter(x => x.id !== sessionId);
+      t3BuildSaved(); t3RenderResults(); t3LoadLog(); t3SaveToStorage();
+    } catch(e) { alert('삭제 오류: ' + e.message); }
   })();
 }
 
@@ -2056,15 +2065,16 @@ async function t3LoadLog() {
     sorted.forEach(s => {
       const items = s.items || s.repaint_items || [];
       const dateStr = s.created_at ? new Date(s.created_at).toLocaleString('ko-KR', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-';
-      const totalQty = items.reduce((acc, r) => acc + (Number(r.qty) || 0), 0);
-      const totalRepaint = items.reduce((acc, r) => acc + (Number(r.repaint) || 0), 0);
+      const totalQty = items.reduce((acc, r) => acc + (Number(r.qty)||0), 0);
+      const totalRepaint = items.reduce((acc, r) => acc + (Number(r.repaint)||0), 0);
+      const sid = s.id;
       html += '<div style="border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;overflow:hidden;">'
         + '<div style="background:#f8f9fb;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e8edf2;">'
         + '<span style="font-weight:700;color:#2d3748;font-size:14px;">&#x1F4C5; ' + s.month + '월 &nbsp;<span style="font-size:12px;color:#718096;font-weight:400;">' + dateStr + '</span></span>'
         + '<div style="display:flex;gap:6px;">'
-        + '<button onclick="t3EditMonth(' + s.month + ')" style="padding:4px 10px;background:#4a90d9;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;">수정</button>'
-        + '<button onclick="t3DownloadMonth(' + s.month + ')" style="padding:4px 10px;background:#48bb78;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;">다운로드</button>'
-        + '<button onclick="t3DeleteMonth(' + s.month + ')" style="padding:4px 10px;background:#e53e3e;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;">삭제</button>'
+        + '<button onclick="t3EditMonth(' + sid + ')" style="padding:4px 10px;background:#4a90d9;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;">수정</button>'
+        + '<button onclick="t3DownloadMonth(' + sid + ')" style="padding:4px 10px;background:#48bb78;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;">다운로드</button>'
+        + '<button onclick="t3DeleteMonth(' + sid + ')" style="padding:4px 10px;background:#e53e3e;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;">삭제</button>'
         + '</div></div>'
         + '<div style="padding:10px 16px;">'
         + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
@@ -2140,18 +2150,17 @@ function t3UpdateStdSavedList() {
   ).join('');
 }
 
-function t3DownloadMonth(month) {
-  const s = T3.saved.find(x => x.month === month);
-  if (!s) return;
-  const headers = ['품명','규격','수량','두께','높이','무게(kg)','막고철단가','막고철(원)','재도장비용','표준원가','개당손익','총손익'];
-  const data = s.rows.map(r => {
-    const { weight, sAmt, std, perPL, totPL } = t3CalcRow(r, s.scrap);
-    return [r.name, r.size, r.qty, r.thick, r.height,
-      weight.toFixed(4), s.scrap, Math.round(sAmt), r.repaint, std, Math.round(perPL), Math.round(totPL)];
-  });
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers,...data]), month+'월');
-  XLSX.writeFile(wb, '재도장실적_'+month+'월_'+new Date().toISOString().slice(0,10)+'.xlsx');
+function t3DownloadMonth(sessionId) {
+  const s = T3.sessions.find(x => x.id === sessionId);
+  if (!s) { alert('해당 세션을 찾을 수 없습니다.'); return; }
+  const headers = ['품명','규격','두께','생산수량','재도장수량','표준원가'];
+  const items = s.items || [];
+  const data = items.map(r => [r.name||'', r.size||'', r.thickness||'', r.qty||0, r.repaint||0, r.stdcost||0]);
+  const dateStr = s.created_at ? new Date(s.created_at).toLocaleDateString('ko-KR') : s.month + '월';
+  const wb = { SheetNames: ['재도장실적'], Sheets: {} };
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+  wb.Sheets['재도장실적'] = ws;
+  XLSX.writeFile(wb, s.month + '월_재도장실적_' + dateStr + '.xlsx');
 }
 
 // ===================================================

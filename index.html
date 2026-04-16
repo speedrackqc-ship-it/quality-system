@@ -1518,12 +1518,16 @@ function t3SaveMonth() {
         if (sv) sv.textContent = '💾 저장';
         alert(month + '월 데이터가 수정되었습니다.');
       } else {
+        const existing = await sb3('repaint_sessions?month=eq.' + month + '&select=id');
+        for (const ex of (existing || [])) {
+          await sb3('repaint_items?session_id=eq.' + ex.id, { method: 'DELETE', prefer: '' });
+          await sb3('repaint_sessions?id=eq.' + ex.id, { method: 'DELETE', prefer: '' });
+        }
         sessId = await t3SaveSession(month, scrap, rows);
         alert(month + '월 데이터가 저장되었습니다.');
       }
       const r2 = await sb3('repaint_sessions?select=id,month,scrap_price,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.desc');
-      const fresh = r2;
-      T3.sessions = fresh.map(s => ({
+      T3.sessions = r2.map(s => ({
         id: s.id, month: s.month, scrap: s.scrap_price, created_at: s.created_at,
         items: (s.repaint_items||[]).map(r => ({
           id: r.id, name: r.name, thickness: r.thickness,

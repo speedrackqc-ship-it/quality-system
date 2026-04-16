@@ -1522,7 +1522,7 @@ function t3SaveMonth() {
         alert(month + '월 데이터가 저장되었습니다.');
       }
       const r2 = await sb3('repaint_sessions?select=id,month,scrap_price,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.desc');
-      const fresh = await r2.json();
+      const fresh = r2;
       T3.sessions = fresh.map(s => ({
         id: s.id, month: s.month, scrap: s.scrap_price, created_at: s.created_at,
         items: (s.repaint_items||[]).map(r => ({

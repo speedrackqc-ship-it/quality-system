@@ -43,6 +43,54 @@ async function t3LoadSessions() {
     t3BuildSaved();
   } catch(e) { console.error('실적 로드 오류:', e); }
 }
+// ── Toast 알림 ──
+function t3ShowToast(msg, type) {
+  type = type || 'success';
+  const old = document.getElementById('t3_toast');
+  if (old) old.remove();
+  const t = document.createElement('div');
+  t.id = 't3_toast';
+  const bg = type === 'error' ? '#e53e3e' : type === 'warn' ? '#d97706' : '#1a7f37';
+  t.style.cssText = [
+    'position:fixed',
+    'top:24px',
+    'left:50%',
+    'transform:translateX(-50%)',
+    'background:' + bg,
+    'color:#fff',
+    'padding:14px 28px',
+    'border-radius:10px',
+    'font-size:15px',
+    'font-weight:700',
+    'box-shadow:0 4px 20px rgba(0,0,0,0.22)',
+    'z-index:99999',
+    'pointer-events:none',
+    'opacity:1',
+    'transition:opacity 0.4s'
+  ].join(';');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 2800);
+}
+
+// ── 입력창 초기화 ──
+function t3ResetForm() {
+  T3.inputRows = [
+    { name:'', thickness:'', size:'', qty:'', repaint:'', stdcost:'' },
+    { name:'', thickness:'', size:'', qty:'', repaint:'', stdcost:'' },
+    { name:'', thickness:'', size:'', qty:'', repaint:'', stdcost:'' }
+  ];
+  T3._editSessionId = null;
+  const sv = document.querySelector('#t3_save_btn');
+  if (sv) sv.textContent = '💾 저장';
+  const monthEl = document.getElementById('t3_sel_month');
+  if (monthEl) monthEl.value = String(new Date().getMonth() + 1);
+  const scrapEl = document.getElementById('t3_scrap_price');
+  if (scrapEl) scrapEl.value = '250';
+  t3RenderInput();
+  t3RenderResults();
+}
+
 function t3BuildSaved() {
   const monthMap = {};
   (T3.sessions||[]).forEach(s => {
@@ -1497,7 +1545,7 @@ function t3SaveMonth() {
   const month = +document.getElementById('t3_sel_month').value;
   const scrap = +document.getElementById('t3_scrap_price').value || 250;
   const rows = T3.inputRows.filter(r => r.name ? r.name.trim() : false);
-  if (!rows.length) { alert('입력된 품목이 없습니다.'); return; }
+  if (!rows.length) { t3ShowToast('⚠️ 입력된 품목이 없습니다.', 'warn'); return; }
   (async () => {
     try {
       const editId = T3._editSessionId || null;
@@ -1513,10 +1561,6 @@ function t3SaveMonth() {
         }));
         if (items.length) await sb3('repaint_items', { method: 'POST', body: items });
         sessId = editId;
-        T3._editSessionId = null;
-        const sv = document.querySelector('#t3_save_btn');
-        if (sv) sv.textContent = '💾 저장';
-        alert(month + '월 데이터가 수정되었습니다.');
       } else {
         const existing = await sb3('repaint_sessions?month=eq.' + month + '&select=id');
         for (const ex of (existing || [])) {
@@ -1524,7 +1568,6 @@ function t3SaveMonth() {
           await sb3('repaint_sessions?id=eq.' + ex.id, { method: 'DELETE', prefer: '' });
         }
         sessId = await t3SaveSession(month, scrap, rows);
-        alert(month + '월 데이터가 저장되었습니다.');
       }
       const r2 = await sb3('repaint_sessions?select=id,month,scrap_price,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.desc');
       T3.sessions = r2.map(s => ({
@@ -1534,8 +1577,16 @@ function t3SaveMonth() {
           size: r.size, qty: r.qty, repaint: r.repaint, stdcost: r.stdcost
         }))
       }));
-      t3BuildSaved(); t3RenderInput(); t3RenderResults(); t3LoadLog(); t3SaveToStorage();
-    } catch(e) { alert('저장 오류: ' + e.message); }
+      // 1) Toast 알림
+      const toastMsg = editId
+        ? '✅ ' + month + '월 데이터가 수정되었습니다!'
+        : '✅ ' + month + '월 데이터가 저장되었습니다!';
+      t3ShowToast(toastMsg);
+      // 2) 입력창 초기화 + 수정모드 해제
+      t3ResetForm();
+      // 3) 화면 즉시 반영
+      t3BuildSaved(); t3RenderResults(); t3LoadLog(); t3SaveToStorage();
+    } catch(e) { t3ShowToast('❌ 저장 오류: ' + e.message, 'error'); }
   })();
 }
 

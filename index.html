@@ -2031,6 +2031,76 @@ function t3RenderStats() {
   });
   document.getElementById("t3_stat_panel_month").innerHTML = mAllHTML;
 }
+async function t3LoadLog() {
+  const el = document.getElementById('t3_log_content');
+  if (!el) return;
+  const guard = setTimeout(() => {
+    if (el.textContent.trim() === '로딩 중...') {
+      el.innerHTML = '<div style="text-align:center;color:#e53e3e;padding:16px;">데이터를 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.</div>';
+    }
+  }, 5000);
+  try {
+    let sessions = (T3 && T3.sessions && T3.sessions.length > 0) ? T3.sessions : null;
+    if (!sessions) {
+      const r = await sb3('repaint_sessions?select=id,month,scrap,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.desc');
+      sessions = await r.json();
+      if (T3) T3.sessions = sessions;
+    }
+    clearTimeout(guard);
+    if (!sessions || sessions.length === 0) {
+      el.innerHTML = '<div style="text-align:center;color:#888;padding:24px;">입력 이력이 없습니다.</div>';
+      return;
+    }
+    const sorted = [...sessions].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    let html = '';
+    sorted.forEach(s => {
+      const items = s.items || s.repaint_items || [];
+      const dateStr = s.created_at ? new Date(s.created_at).toLocaleString('ko-KR', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-';
+      const totalQty = items.reduce((acc, r) => acc + (Number(r.qty) || 0), 0);
+      const totalRepaint = items.reduce((acc, r) => acc + (Number(r.repaint) || 0), 0);
+      html += '<div style="border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;overflow:hidden;">'
+        + '<div style="background:#f8f9fb;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e8edf2;">'
+        + '<span style="font-weight:700;color:#2d3748;font-size:14px;">&#x1F4C5; ' + s.month + '월 &nbsp;<span style="font-size:12px;color:#718096;font-weight:400;">' + dateStr + '</span></span>'
+        + '<div style="display:flex;gap:6px;">'
+        + '<button onclick="t3EditMonth(' + s.month + ')" style="padding:4px 10px;background:#4a90d9;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;">수정</button>'
+        + '<button onclick="t3DownloadMonth(' + s.month + ')" style="padding:4px 10px;background:#48bb78;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;">다운로드</button>'
+        + '<button onclick="t3DeleteMonth(' + s.month + ')" style="padding:4px 10px;background:#e53e3e;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;">삭제</button>'
+        + '</div></div>'
+        + '<div style="padding:10px 16px;">'
+        + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+        + '<thead><tr style="color:#718096;">'
+        + '<th style="text-align:left;padding:4px 8px;">품명</th>'
+        + '<th style="text-align:center;padding:4px 8px;">두께</th>'
+        + '<th style="text-align:center;padding:4px 8px;">규격</th>'
+        + '<th style="text-align:right;padding:4px 8px;">생산수량</th>'
+        + '<th style="text-align:right;padding:4px 8px;">재도장</th>'
+        + '<th style="text-align:right;padding:4px 8px;">표준원가</th>'
+        + '</tr></thead><tbody>'
+        + items.map(function(r) {
+            return '<tr style="border-top:1px solid #f0f4f8;">'
+              + '<td style="padding:4px 8px;">' + (r.name||'-') + '</td>'
+              + '<td style="text-align:center;padding:4px 8px;">' + (r.thickness||'-') + '</td>'
+              + '<td style="text-align:center;padding:4px 8px;">' + (r.size||'-') + '</td>'
+              + '<td style="text-align:right;padding:4px 8px;">' + (r.qty||0).toLocaleString() + '</td>'
+              + '<td style="text-align:right;padding:4px 8px;color:#e67e22;">' + (r.repaint||0).toLocaleString() + '</td>'
+              + '<td style="text-align:right;padding:4px 8px;color:#2b6cb0;">' + (r.stdcost||0).toLocaleString() + '원</td>'
+              + '</tr>';
+          }).join('')
+        + '<tr style="border-top:2px solid #e2e8f0;font-weight:700;background:#f8f9fb;">'
+        + '<td colspan="3" style="padding:5px 8px;color:#718096;">합계</td>'
+        + '<td style="text-align:right;padding:5px 8px;">' + totalQty.toLocaleString() + '</td>'
+        + '<td style="text-align:right;padding:5px 8px;color:#e67e22;">' + totalRepaint.toLocaleString() + '</td>'
+        + '<td style="text-align:right;padding:5px 8px;"></td>'
+        + '</tr></tbody></table></div></div>';
+    });
+    el.innerHTML = html;
+  } catch(e) {
+    clearTimeout(guard);
+    console.error('t3LoadLog error:', e);
+    el.innerHTML = '<div style="text-align:center;color:#e53e3e;padding:16px;">이력 로드 오류: ' + e.message + '</div>';
+  }
+}
+
 function t3UpdateStdSavedList() {
   const el = document.getElementById('t3_std_saved_list');
   if (!el) return;

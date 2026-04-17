@@ -2436,7 +2436,8 @@ async function certUpload(folderId, category, fileList) {
     if (file.size > MAX) { alert(`"${file.name}"은(는) 50MB를 초과하여 업로드할 수 없습니다.`); failCount++; continue; }
     try {
       const ts = Date.now();
-      const safe = file.name.replace(/[\/\\?%*:|"<>]/g, '_');
+      // 파일 이름에서 빈칸은 '_'로 바꾸고, 특수문자는 싹 제거하는 안전 장치입니다.
+      const safe = file.name.replace(/\s+/g, '_').replace(/[^\uAC00-\uD7A30-9a-zA-Z.]/g, '');
       const storagePath = `${category}/${folderId}/${ts}_${safe}`;
       const ext = (file.name.split('.').pop() || '').toLowerCase();
       await certStorageUpload(storagePath, file);

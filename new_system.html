@@ -1,1 +1,324 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>품질보증 V2 | 통합관리 시스템</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #2563eb; --bg: #f1f5f9; --surface: #ffffff;
+            --text-main: #1e293b; --text-sub: #64748b; --border: #e2e8f0;
+            --danger: #ef4444; --success: #10b981;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+        body { font-family: 'Pretendard', sans-serif; background: var(--bg); color: var(--text-main); }
+        
+        /* 네비게이션 */
+        .nav { background: var(--surface); padding: 1rem 2rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; }
+        .nav-logo { font-weight: 800; font-size: 1.2rem; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+        .nav-tabs { display: flex; gap: 1.5rem; }
+        .nav-tab { cursor: pointer; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; color: var(--text-sub); transition: 0.2s; }
+        .nav-tab.active { background: var(--primary); color: white; }
 
+        /* 컨테이너 */
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+        .card { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .card-title { font-size: 1.1rem; font-weight: 800; margin-bottom: 1.2rem; display: flex; align-items: center; gap: 8px; }
+
+        /* 테이블 공통 */
+        .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th { background: #f8fafc; padding: 12px; font-weight: 700; text-align: left; border-bottom: 2px solid var(--border); }
+        td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        
+        /* 입력 폼 */
+        input, select { border: 1.5px solid var(--border); padding: 8px 12px; border-radius: 6px; outline: none; width: 100%; font-family: inherit; }
+        input:focus { border-color: var(--primary); }
+        .btn { padding: 8px 16px; border-radius: 6px; font-weight: 700; cursor: pointer; border: none; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-outline { background: transparent; border: 1.5px solid var(--primary); color: var(--primary); }
+        .btn-danger { background: #fee2e2; color: var(--danger); }
+        
+        /* 알림창 스타일 */
+        #toast { position: fixed; bottom: 2rem; right: 2rem; padding: 1rem 2rem; background: #1e293b; color: white; border-radius: 8px; display: none; z-index: 2000; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div id="toast"></div>
+    <nav class="nav">
+        <div class="nav-logo">🏢 SPEEDRACK QA V2</div>
+        <div class="nav-tabs">
+            <div class="nav-tab" onclick="switchTab('dashboard')">대시보드</div>
+            <div class="nav-tab active" onclick="switchTab('repaint')">재도장 실적</div>
+            <div class="nav-tab" onclick="switchTab('ripper')">리퍼 실적</div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div id="tab-repaint" class="tab-content">
+            <div class="card">
+                <div class="card-title">📝 실적 데이터 입력 <span id="edit-indicator" style="display:none; color:var(--danger); font-size:0.8rem;">(수정 모드 활성)</span></div>
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                    <div>
+                        <label style="font-size:0.8rem; font-weight:700;">📅 대상 월</label>
+                        <select id="inp-month">
+                            <option value="1">1월</option><option value="2">2월</option><option value="3" selected>3월</option>
+                            <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.8rem; font-weight:700;">🔩 막고철 단가</label>
+                        <input type="number" id="inp-scrap" value="250">
+                    </div>
+                </div>
+<div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">삭제</th>
+                            <th>품명</th>
+                            <th style="width: 100px;">두께</th>
+                            <th style="width: 120px;">규격</th>
+                            <th style="width: 100px;">수량</th>
+                            <th>기능</th>
+                        </tr>
+                    </thead>
+                    <tbody id="repaint-input-body">
+                        </tbody>
+                </table>
+            </div>
+            <div style="margin-top: 1rem; display: flex; justify-content: space-between;">
+                <button class="btn btn-outline" onclick="addRepaintRow()">➕ 행 추가</button>
+                <button class="btn btn-primary" onclick="saveRepaintData()">💾 데이터 저장하기</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">📜 최근 입력 이력</div>
+            <div id="repaint-history-list">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        // --- [설정 및 전역 변수] ---
+        const SB_URL = 'https://kxlzdnfudvdwzlveqklh.supabase.co';
+        const SB_KEY = 'sb_publishable_8aTbER8PYcFprysUFig85A_CgXDC319'; // 사용자님의 키 유지
+        const HEADERS = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
+
+        let currentEditId = null;     // 수정 중인 세션 ID
+        let currentOriginalDate = null; // [핵심] 수정 시 보존할 최초 생성일
+
+        // --- [탭 전환] ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-' + tabId).style.display = 'block';
+            event.target.classList.add('active');
+        }
+
+        // --- [알림창] ---
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.style.display = 'block';
+            setTimeout(() => { t.style.display = 'none'; }, 3000);
+        }
+
+        // --- [재도장 실적 로직] ---
+        function addRepaintRow(data = {}) {
+            const tbody = document.getElementById('repaint-input-body');
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><button class="btn-danger" onclick="this.closest('tr').remove()" style="padding:2px 8px; border-radius:4px; border:none; cursor:pointer;">×</button></td>
+                <td><input type="text" class="p-name" value="${data.name || ''}" placeholder="품명 입력"></td>
+                <td><input type="number" step="0.1" class="p-thick" value="${data.thickness || ''}"></td>
+                <td><input type="text" class="p-size" value="${data.size || ''}"></td>
+                <td><input type="number" class="p-qty" value="${data.qty || ''}"></td>
+                <td style="color:var(--text-sub); font-size:11px;">자동 계산됨</td>
+            `;
+            tbody.appendChild(tr);
+        }
+
+        // 초기 행 하나 추가
+        addRepaintRow();
+
+        // [데이터 저장/수정 핵심 로직]
+        async function saveRepaintData() {
+            const month = document.getElementById('inp-month').value;
+            const scrap = document.getElementById('inp-scrap').value;
+            const rows = document.querySelectorAll('#repaint-input-body tr');
+
+            if (rows.length === 0) { showToast('데이터를 입력해주세요.'); return; }
+
+            const isEdit = currentEditId !== null;
+            
+            // 1. 세션 데이터 준비
+            const sessionPayload = {
+                month: month,
+                scrap_price: scrap
+            };
+
+            // [버그 해결] 수정 모드일 때는 보존된 날짜를 사용, 신규일 때만 현재 날짜 생성
+            if (isEdit && currentOriginalDate) {
+                sessionPayload.created_at = currentOriginalDate;
+            } else {
+                sessionPayload.created_at = new Date().toISOString();
+            }
+
+            try {
+                let sessionId = currentEditId;
+                const url = isEdit ? `${SB_URL}/rest/v1/repaint_sessions?id=eq.${currentEditId}` : `${SB_URL}/rest/v1/repaint_sessions`;
+                const method = isEdit ? 'PATCH' : 'POST';
+
+                // 세션 업서트
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { ...HEADERS, 'Prefer': 'return=representation' },
+                    body: JSON.stringify(sessionPayload)
+                });
+
+                if (!isEdit) {
+                    const savedSession = await res.json();
+                    sessionId = savedSession[0].id;
+                }
+
+                // 2. 아이템 처리 (수정 시 기존 아이템 삭제 후 재등록 - 중복 방지 최선책)
+                if (isEdit) {
+                    await fetch(`${SB_URL}/rest/v1/repaint_items?session_id=eq.${sessionId}`, {
+                        method: 'DELETE', headers: HEADERS
+                    });
+                }
+
+                const items = [];
+                rows.forEach(r => {
+                    const name = r.querySelector('.p-name').value;
+                    if (!name) return;
+                    items.push({
+                        session_id: sessionId,
+                        name: name,
+                        thickness: r.querySelector('.p-thick').value,
+                        size: r.querySelector('.p-size').value,
+                        qty: r.querySelector('.p-qty').value
+                    });
+                });
+
+                await fetch(`${SB_URL}/rest/v1/repaint_items`, {
+                    method: 'POST',
+                    headers: HEADERS,
+                    body: JSON.stringify(items)
+                });
+
+                showToast(isEdit ? '✅ 데이터가 수정되었습니다.' : '✅ 성공적으로 저장되었습니다.');
+                resetForm();
+                loadHistory();
+
+            } catch (e) {
+                console.error(e);
+                showToast('❌ 오류 발생: ' + e.message);
+            }
+        }
+      // [데이터 초기화 - 저장 후 실행]
+        function resetForm() {
+            currentEditId = null;
+            currentOriginalDate = null;
+            document.getElementById('edit-indicator').style.display = 'none';
+            document.getElementById('repaint-input-body').innerHTML = '';
+            document.getElementById('inp-month').value = '3';
+            addRepaintRow(); // 빈 행 하나 추가
+        }
+
+        // [이력 로드 - DB에서 가져오기]
+        async function loadHistory() {
+            try {
+                // 세션과 아이템을 함께 가져옴
+                const res = await fetch(`${SB_URL}/rest/v1/repaint_sessions?select=*,repaint_items(*)&order=created_at.desc`, {
+                    headers: HEADERS
+                });
+                const data = await res.json();
+                
+                const listDiv = document.getElementById('repaint-history-list');
+                listDiv.innerHTML = '';
+
+                data.forEach(session => {
+                    const date = new Date(session.created_at).toLocaleString('ko-KR');
+                    const itemNames = session.repaint_items.map(i => i.name).join(', ');
+                    
+                    const item = document.createElement('div');
+                    item.style = "padding: 1rem; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;";
+                    item.innerHTML = `
+                        <div>
+                            <div style="font-weight: 800; color: var(--primary); font-size: 0.9rem;">${session.month}월 실적 (입력일: ${date})</div>
+                            <div style="font-size: 0.85rem; color: var(--text-sub); margin-top: 4px;">품목: ${itemNames || '없음'}</div>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-outline" style="padding: 4px 12px; font-size: 12px;" onclick="editSession('${session.id}')">수정</button>
+                            <button class="btn btn-danger" style="padding: 4px 12px; font-size: 12px; background:#fff; border:1px solid var(--danger);" onclick="deleteSession('${session.id}')">삭제</button>
+                        </div>
+                    `;
+                    listDiv.appendChild(item);
+                });
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // [수정 모드 진입 - 날짜 보존의 핵심]
+        async function editSession(id) {
+            try {
+                const res = await fetch(`${SB_URL}/rest/v1/repaint_sessions?id=eq.${id}&select=*,repaint_items(*)`, {
+                    headers: HEADERS
+                });
+                const data = await res.json();
+                const session = data[0];
+
+                if (!session) return;
+
+                // 전역 변수에 현재 수정 중인 정보 박제
+                currentEditId = session.id;
+                currentOriginalDate = session.created_at; // [가장 중요] 원래 날짜를 변수에 보관
+
+                document.getElementById('edit-indicator').style.display = 'inline';
+                document.getElementById('inp-month').value = session.month;
+                document.getElementById('inp-scrap').value = session.scrap_price;
+
+                const tbody = document.getElementById('repaint-input-body');
+                tbody.innerHTML = '';
+                
+                if (session.repaint_items.length > 0) {
+                    session.repaint_items.forEach(item => addRepaintRow(item));
+                } else {
+                    addRepaintRow();
+                }
+
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                showToast('✏️ 수정 모드가 활성화되었습니다.');
+
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // [데이터 삭제]
+        async function deleteSession(id) {
+            if (!confirm('정말로 이 이력을 삭제하시겠습니까? 관련 상세 품목도 모두 삭제됩니다.')) return;
+            try {
+                await fetch(`${SB_URL}/rest/v1/repaint_sessions?id=eq.${id}`, {
+                    method: 'DELETE', headers: HEADERS
+                });
+                showToast('🗑 삭제되었습니다.');
+                loadHistory();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // 초기 실행
+        loadHistory();
+        switchTab('repaint'); // 기본 탭 설정
+    </script>
+</body>
+</html>

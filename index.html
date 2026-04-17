@@ -2248,7 +2248,7 @@ async function sb5(path, opt) {
 }
 
 async function certStorageUpload(path, file) {
-  // 주소에 빈칸이나 한글이 있어도 컴퓨터가 읽을 수 있게 암호로 바꿔주는 코드입니다.
+  // 주소를 한 번 더 안전하게 포장하는 번역 과정입니다.
   const encodedPath = path.split('/').map(segment => encodeURIComponent(segment)).join('/');
   
   const res = await fetch(`${SB5}/storage/v1/object/${CERT_BUCKET}/${encodedPath}`, {
@@ -2264,7 +2264,6 @@ async function certStorageUpload(path, file) {
   if (!res.ok) throw new Error('Storage 업로드 실패: ' + await res.text());
   return res.json();
 }
-
 async function certStorageDelete(path) {
   const res = await fetch(`${SB5}/storage/v1/object/${CERT_BUCKET}/${encodeURI(path)}`, {
     method: 'DELETE',
@@ -2434,23 +2433,28 @@ async function certUpload(folderId, category, fileList) {
   const files = Array.from(fileList);
   const MAX = 50 * 1024 * 1024;
   let okCount = 0, failCount = 0;
+  
   if (typeof t3ShowToast === 'function') t3ShowToast(`⏳ ${files.length}개 파일 업로드 중...`, 'warn');
+  
   for (const file of files) {
-    if (file.size > MAX) { alert(`"${file.name}"은(는) 50MB를 초과하여 업로드할 수 없습니다.`); failCount++; continue; }
+    if (file.size > MAX) { alert(`"${file.name}"은(는) 50MB를 초과합니다.`); failCount++; continue; }
     try {
       const ts = Date.now();
-      // 파일 이름에서 빈칸은 '_'로 바꾸고, 특수문자는 싹 제거하는 안전 장치입니다.
-      const safe = file.name.replace(/\s+/g, '_').replace(/[^\uAC00-\uD7A30-9a-zA-Z.]/g, '');
-      const storagePath = `${category}/${folderId}/${ts}_${safe}`;
       const ext = (file.name.split('.').pop() || '').toLowerCase();
+      
+      // [필살기] 서버에는 '시간.확장자'로 저장해서 한글 에러를 아예 안 만듭니다.
+      const storagePath = `${category}/${folderId}/${ts}.${ext}`;
+      
       await certStorageUpload(storagePath, file);
+      
+      // DB에는 원래 파일 이름을 저장해서 화면에는 한글로 잘 나오게 합니다.
       await sb5('cert_files', {
         method: 'POST',
         body: { folder_id: folderId, file_name: file.name, file_size: file.size, file_ext: ext, storage_path: storagePath }
       });
       okCount++;
     } catch (e) {
-      console.error(e); alert(`"${file.name}" 업로드 실패: ${e.message}`); failCount++;
+      console.error(e); failCount++;
     }
   }
   await certLoadCategory(category);

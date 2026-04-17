@@ -2248,7 +2248,10 @@ async function sb5(path, opt) {
 }
 
 async function certStorageUpload(path, file) {
-  const res = await fetch(`${SB5}/storage/v1/object/${CERT_BUCKET}/${encodeURI(path)}`, {
+  // 주소에 빈칸이나 한글이 있어도 컴퓨터가 읽을 수 있게 암호로 바꿔주는 코드입니다.
+  const encodedPath = path.split('/').map(segment => encodeURIComponent(segment)).join('/');
+  
+  const res = await fetch(`${SB5}/storage/v1/object/${CERT_BUCKET}/${encodedPath}`, {
     method: 'POST',
     headers: {
       'apikey': KEY5,

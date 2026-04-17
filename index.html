@@ -12,7 +12,10 @@ const SB3  = 'https://kxlzdnfudvdwzlveqklh.supabase.co';
 const KEY3 = 'sb_publishable_8aTbER8PYcFprysUFig85A_CgXDC319';
 const SB4  = 'https://gigfzkyrmudcdksgpeoo.supabase.co';
 const KEY4 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpZ2Z6a3lybXVkY2Rrc2dwZW9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MTQyNDgsImV4cCI6MjA4MDk5MDI0OH0.wd1CXZF0Nwl4PqugWOYBIz1LELyuE_wgIGMEDvo27x8';
-const H4   = { 'apikey': KEY4, 'Authorization': `Bearer ${KEY4}` };
+const SB5  = 'https://gifzxwzzqkuxvjkewshi.supabase.co';
+const KEY5 = 'sb_publishable_hdoh8W4OruihkO5n-ULF8g_34tA5Hu3';
+  
+  const H4   = { 'apikey': KEY4, 'Authorization': `Bearer ${KEY4}` };
 
 // Supabase에서 표준원가 로드
 async function t3LoadStdCostFromSB() {
@@ -451,7 +454,8 @@ tr:hover td { background: rgba(9,105,218,0.03); }
   .cert-folder-del-btn:hover{opacity:1}
   .cert-folder-body{padding:14px}
   .cert-upload-zone{border:2px dashed #c0c8d8;border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;margin-bottom:12px;background:#fff;position:relative}
-  ..cert-upload-zone:hover{border-color:#4a90d9;background:#f0f6ff}.cert-upload-zone.drag-over{border-color:#2563eb;background:#dbeafe;transform:scale(1.01)}{border-color:#4a90d9;background:#f0f6ff}
+  .cert-upload-zone:hover{border-color:#4a90d9;background:#f0f6ff}
+  .cert-upload-zone.drag-over{border-color:#2563eb;background:#dbeafe;transform:scale(1.01)}
   .cert-upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
   .cert-upload-icon{font-size:24px;margin-bottom:5px}.cert-upload-text{font-size:13px;color:#666;font-weight:500}.cert-upload-sub{font-size:11px;color:#aaa;margin-top:2px}
   .cert-folder-upload-btn{margin-top:8px;padding:5px 14px;border-radius:6px;border:1.5px solid #4a90d9;background:#f0f6ff;color:#2563eb;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s}
@@ -780,7 +784,7 @@ tr:hover td { background: rgba(9,105,218,0.03); }
         </div>
         <input type="file" id="t3_std_file" accept=".xlsx,.xls" style="display:none" onchange="t3LoadStdCost(this)">
         <div id="t3_std_saved_list" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px"></div>
-        <div id="t3_std_saved_list" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        
         <button onclick="if(confirm('표준원가 저장 데이터를 전부 초기화할까요?\n(저장된 실적은 유지됩니다)')){localStorage.removeItem('t3_monthStdCost');T3.monthStdCost={};T3.stdCost={};t3UpdateStdSavedList();t3RenderInput();document.getElementById('t3_std_status').textContent='✅ 초기화 완료';}" style="margin-top:6px;padding:3px 10px;font-size:11px;background:#ffe0e0;border:1px solid #f99;border-radius:6px;cursor:pointer">🗑 표준원가 초기화</button>
       </div>
     </div>
@@ -984,6 +988,7 @@ function switchTab(id, btn) {
   btn.classList.add('active');
   if (id === 'tab4' && !window._dbInited) { window._dbInited = true; initDb(); }
   if (id === 'tab3' && !window._t3Inited) { window._t3Inited = true; initTab3(); }
+  if (id === 'tab5' && !window._t5Inited) { window._t5Inited = true; initTab5(); }
 }
 function showFade(el) {
   el.style.display = 'block';
@@ -2107,10 +2112,18 @@ async function t3LoadLog() {
   try {
     let sessions = (T3 && T3.sessions && T3.sessions.length > 0) ? T3.sessions : null;
     if (!sessions) {
-      const r = await sb3('repaint_sessions?select=id,month,scrap,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.desc');
-      sessions = await r.json();
-      if (T3) T3.sessions = sessions;
-    }
+    const raw = await sb3('repaint_sessions?select=id,month,scrap_price,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.desc');
+      sessions = (raw || []).map(s => ({
+        id: s.id,
+        month: s.month,
+        scrap: s.scrap_price,
+        created_at: s.created_at,
+        items: (s.repaint_items || []).map(r => ({
+          id: r.id, name: r.name, thickness: r.thickness,
+          size: r.size, qty: r.qty, repaint: r.repaint, stdcost: r.stdcost
+        }))
+      }));
+      if (T3) T3.sessions = sessions;}
     clearTimeout(guard);
     if (!sessions || sessions.length === 0) {
       el.innerHTML = '<div style="text-align:center;color:#888;padding:24px;">입력 이력이 없습니다.</div>';
@@ -2193,18 +2206,7 @@ function t3DelStdCost(month) {
   }
 }
 
-function t3UpdateStdSavedList() {
-  const months = Object.keys(T3.monthStdCost).sort((a,b)=>+a-+b);
-  const el = document.getElementById('t3_std_saved_list');
-  if (!el) return;
-  if (!months.length) { el.innerHTML = ''; return; }
-  el.innerHTML = months.map(m =>
-    `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(110,64,201,0.1);
-      border:1px solid rgba(110,64,201,0.25);border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;color:var(--accent5)">
-      ${m}월 ✅
-    </span>`
-  ).join('');
-}
+
 
 function t3DownloadMonth(sessionId) {
   const s = T3.sessions.find(x => x.id === sessionId);
@@ -2220,6 +2222,258 @@ function t3DownloadMonth(sessionId) {
 }
 
 // ===================================================
+// TAB 5: 공인성적서/인증서/MSDS (SB5 전용)
+// ===================================================
+const CERT_BUCKET = 'certificates';
+const CERT_CAT_OF_IDX = { '1': 'mechanics', '2': 'chemistry', '3': 'certification', '4': 'msds' };
+const CERT_IDX_OF_CAT = { 'mechanics': '1', 'chemistry': '2', 'certification': '3', 'msds': '4' };
+
+const certData = { mechanics: [], chemistry: [], certification: [], msds: [] };
+
+async function sb5(path, opt) {
+  opt = opt || {};
+  const res = await fetch(SB5 + '/rest/v1/' + path, {
+    headers: {
+      'apikey': KEY5,
+      'Authorization': 'Bearer ' + KEY5,
+      'Content-Type': 'application/json',
+      'Prefer': opt.prefer || 'return=representation'
+    },
+    method: opt.method || 'GET',
+    body: opt.body ? JSON.stringify(opt.body) : undefined
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const txt = await res.text();
+  return txt ? JSON.parse(txt) : null;
+}
+
+async function certStorageUpload(path, file) {
+  const res = await fetch(`${SB5}/storage/v1/object/${CERT_BUCKET}/${encodeURI(path)}`, {
+    method: 'POST',
+    headers: {
+      'apikey': KEY5,
+      'Authorization': 'Bearer ' + KEY5,
+      'Content-Type': file.type || 'application/octet-stream',
+      'x-upsert': 'true'
+    },
+    body: file
+  });
+  if (!res.ok) throw new Error('Storage 업로드 실패: ' + await res.text());
+  return res.json();
+}
+
+async function certStorageDelete(path) {
+  const res = await fetch(`${SB5}/storage/v1/object/${CERT_BUCKET}/${encodeURI(path)}`, {
+    method: 'DELETE',
+    headers: { 'apikey': KEY5, 'Authorization': 'Bearer ' + KEY5 }
+  });
+  if (!res.ok && res.status !== 404) throw new Error('Storage 삭제 실패: ' + await res.text());
+}
+
+function certStorageGetPublicUrl(path) {
+  return `${SB5}/storage/v1/object/public/${CERT_BUCKET}/${encodeURI(path)}`;
+}
+
+function certEscape(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function certEscapeAttr(s) {
+  return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function certToggle(idx) {
+  const body = document.getElementById('cert-body-' + idx);
+  const arrow = document.getElementById('cert-arrow-' + idx);
+  const header = document.querySelector('#cert-sec-' + idx + ' .cert-section-header');
+  if (!body) return;
+  body.classList.toggle('open');
+  if (arrow) arrow.classList.toggle('open');
+  if (header) header.classList.toggle('open');
+}
+
+async function certLoadCategory(category) {
+  try {
+    const folders = await sb5(`cert_folders?category=eq.${category}&select=id,name,created_at,cert_files(id,file_name,file_size,file_ext,storage_path,created_at)&order=created_at.asc`);
+    certData[category] = (folders || []).map(f => ({
+      id: f.id,
+      name: f.name,
+      created_at: f.created_at,
+      files: (f.cert_files || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    }));
+    certRenderCategory(category);
+  } catch (e) {
+    console.error('cert load error:', e);
+    const idx = CERT_IDX_OF_CAT[category];
+    const el = document.getElementById('cert-folders-' + idx);
+    if (el) el.innerHTML = '<div class="cert-empty" style="color:#e53e3e">⚠ 데이터 로드 실패: ' + certEscape(e.message) + '</div>';
+  }
+}
+
+function certLoadAll() {
+  return Promise.all(['mechanics', 'chemistry', 'certification', 'msds'].map(certLoadCategory));
+}
+
+function certUpdateCounts() {
+  ['mechanics', 'chemistry', 'certification', 'msds'].forEach(cat => {
+    const idx = CERT_IDX_OF_CAT[cat];
+    const cnt = (certData[cat] || []).reduce((sum, f) => sum + ((f.files && f.files.length) || 0), 0);
+    const el = document.getElementById('cert-count-' + idx);
+    if (el) el.textContent = cnt + '건';
+  });
+}
+
+function certRenderCategory(category) {
+  const idx = CERT_IDX_OF_CAT[category];
+  const container = document.getElementById('cert-folders-' + idx);
+  if (!container) return;
+  const folders = certData[category] || [];
+  container.innerHTML = folders.length
+    ? folders.map(folder => certFolderHtml(folder, category)).join('')
+    : '<div class="cert-empty">폴더가 없습니다. 아래 [＋ 폴더 추가] 버튼을 눌러 시작하세요.</div>';
+  certUpdateCounts();
+}
+
+function certFolderHtml(folder, category) {
+  const files = folder.files || [];
+  const filesHtml = files.length
+    ? files.map(f => certFileHtml(f, category)).join('')
+    : '<div class="cert-empty">📭 업로드된 파일이 없습니다</div>';
+  return `
+    <div class="cert-folder-block">
+      <div class="cert-folder-header">
+        📁
+        <input type="text" class="cert-folder-name-input"
+          value="${certEscape(folder.name)}"
+          onblur="certRenameFolder(${folder.id}, '${category}', this.value)"
+          onkeydown="if(event.key==='Enter'){this.blur();event.preventDefault();}">
+        <span style="font-size:11px;color:#888">${files.length}개</span>
+        <button class="cert-folder-del-btn" onclick="certDeleteFolder(${folder.id}, '${category}')">🗑 폴더 삭제</button>
+      </div>
+      <div class="cert-folder-body">
+        <div class="cert-upload-zone"
+          ondragover="event.preventDefault(); this.classList.add('drag-over')"
+          ondragleave="this.classList.remove('drag-over')"
+          ondrop="event.preventDefault(); this.classList.remove('drag-over'); certUpload(${folder.id}, '${category}', event.dataTransfer.files)">
+          <input type="file" multiple onchange="certUpload(${folder.id}, '${category}', this.files); this.value='';">
+          <div class="cert-upload-icon">☁️</div>
+          <div class="cert-upload-text">파일을 끌어다 놓거나 클릭하여 업로드</div>
+          <div class="cert-upload-sub">PDF · 이미지 · 엑셀 · 워드 등 모든 파일</div>
+        </div>
+        <div class="cert-file-list">${filesHtml}</div>
+      </div>
+    </div>`;
+}
+
+function certFileHtml(f, category) {
+  const ext = (f.file_ext || '').toLowerCase();
+  const kb = (f.file_size || 0) / 1024;
+  const sizeStr = kb > 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb.toFixed(0) + ' KB';
+  const dateStr = f.created_at ? new Date(f.created_at).toLocaleDateString('ko-KR') : '';
+  const url = certStorageGetPublicUrl(f.storage_path);
+  return `
+    <div class="cert-file-item">
+      <div class="cert-file-info">
+        <span class="cert-file-ext ${ext}">${certEscape(ext || 'FILE')}</span>
+        <span class="cert-file-name" title="${certEscape(f.file_name)}">${certEscape(f.file_name)}</span>
+        <span class="cert-file-size">${sizeStr}</span>
+        <span class="cert-file-date">${dateStr}</span>
+      </div>
+      <div class="cert-file-actions">
+        <button class="cert-btn cert-btn-view" onclick="window.open('${certEscapeAttr(url)}', '_blank')">👁 보기</button>
+        <a class="cert-btn cert-btn-dl" href="${certEscapeAttr(url)}" download="${certEscape(f.file_name)}" style="text-decoration:none;display:inline-block">⬇ 다운로드</a>
+        <button class="cert-btn cert-btn-del" onclick="certDeleteFile(${f.id}, '${certEscapeAttr(f.storage_path)}', '${certEscapeAttr(f.file_name)}', '${category}')">🗑</button>
+      </div>
+    </div>`;
+}
+
+async function certAddFolder(category) {
+  const name = prompt('새 폴더 이름을 입력하세요:', '');
+  if (!name || !name.trim()) return;
+  try {
+    await sb5('cert_folders', { method: 'POST', body: { category: category, name: name.trim() } });
+    await certLoadCategory(category);
+    if (typeof t3ShowToast === 'function') t3ShowToast('✅ 폴더가 추가되었습니다');
+  } catch (e) { alert('폴더 추가 실패: ' + e.message); }
+}
+
+async function certRenameFolder(folderId, category, newName) {
+  newName = (newName || '').trim();
+  if (!newName) { await certLoadCategory(category); return; }
+  const folder = (certData[category] || []).find(f => f.id === folderId);
+  if (folder && folder.name === newName) return;
+  try {
+    await sb5(`cert_folders?id=eq.${folderId}`, { method: 'PATCH', body: { name: newName } });
+    if (folder) folder.name = newName;
+    if (typeof t3ShowToast === 'function') t3ShowToast('✏️ 이름이 변경되었습니다');
+  } catch (e) { alert('이름 변경 실패: ' + e.message); await certLoadCategory(category); }
+}
+
+async function certDeleteFolder(folderId, category) {
+  const folder = (certData[category] || []).find(f => f.id === folderId);
+  if (!folder) return;
+  const fileCount = (folder.files && folder.files.length) || 0;
+  if (!confirm(`"${folder.name}" 폴더를 삭제하시겠습니까?\n(안의 파일 ${fileCount}개도 함께 삭제됩니다)`)) return;
+  try {
+    for (const f of (folder.files || [])) {
+      try { await certStorageDelete(f.storage_path); } catch (e) { console.warn('storage 삭제 건너뜀:', e.message); }
+    }
+    await sb5(`cert_files?folder_id=eq.${folderId}`, { method: 'DELETE', prefer: '' });
+    await sb5(`cert_folders?id=eq.${folderId}`, { method: 'DELETE', prefer: '' });
+    await certLoadCategory(category);
+    if (typeof t3ShowToast === 'function') t3ShowToast('🗑 폴더가 삭제되었습니다');
+  } catch (e) { alert('삭제 실패: ' + e.message); }
+}
+
+async function certUpload(folderId, category, fileList) {
+  if (!fileList || !fileList.length) return;
+  const files = Array.from(fileList);
+  const MAX = 50 * 1024 * 1024;
+  let okCount = 0, failCount = 0;
+  if (typeof t3ShowToast === 'function') t3ShowToast(`⏳ ${files.length}개 파일 업로드 중...`, 'warn');
+  for (const file of files) {
+    if (file.size > MAX) { alert(`"${file.name}"은(는) 50MB를 초과하여 업로드할 수 없습니다.`); failCount++; continue; }
+    try {
+      const ts = Date.now();
+      const safe = file.name.replace(/[\/\\?%*:|"<>]/g, '_');
+      const storagePath = `${category}/${folderId}/${ts}_${safe}`;
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      await certStorageUpload(storagePath, file);
+      await sb5('cert_files', {
+        method: 'POST',
+        body: { folder_id: folderId, file_name: file.name, file_size: file.size, file_ext: ext, storage_path: storagePath }
+      });
+      okCount++;
+    } catch (e) {
+      console.error(e); alert(`"${file.name}" 업로드 실패: ${e.message}`); failCount++;
+    }
+  }
+  await certLoadCategory(category);
+  if (typeof t3ShowToast === 'function') {
+    if (failCount === 0) t3ShowToast(`✅ ${okCount}개 업로드 완료`);
+    else t3ShowToast(`⚠ 성공 ${okCount} / 실패 ${failCount}`, 'error');
+  }
+}
+
+async function certDeleteFile(fileId, storagePath, fileName, category) {
+  if (!confirm(`"${fileName}" 파일을 삭제하시겠습니까?`)) return;
+  try {
+    try { await certStorageDelete(storagePath); } catch (e) { console.warn('storage 삭제 건너뜀:', e.message); }
+    await sb5(`cert_files?id=eq.${fileId}`, { method: 'DELETE', prefer: '' });
+    await certLoadCategory(category);
+    if (typeof t3ShowToast === 'function') t3ShowToast('🗑 파일이 삭제되었습니다');
+  } catch (e) { alert('삭제 실패: ' + e.message); }
+}
+
+function initTab5() {
+  ['mechanics', 'chemistry', 'certification', 'msds'].forEach(cat => {
+    const idx = CERT_IDX_OF_CAT[cat];
+    const el = document.getElementById('cert-folders-' + idx);
+    if (el) el.innerHTML = '<div class="cert-empty">⏳ 불러오는 중...</div>';
+  });
+  certLoadAll().catch(e => console.error('TAB5 init error:', e));
+}// ===================================================
 // TAB 4: 관리현황
 // ===================================================
 

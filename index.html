@@ -986,7 +986,7 @@ function switchTab(id, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   btn.classList.add('active');
-  if (id === 'tab4' && !window._dbInited) { window._dbInited = true; initDb(); }
+  if (id === 'tab4' && !window._dbInited) { window._dbInited = true; initDashboard4(); }
   if (id === 'tab3' && !window._t3Inited) { window._t3Inited = true; initTab3(); }
   if (id === 'tab5' && !window._t5Inited) { window._t5Inited = true; initTab5(); }
 }

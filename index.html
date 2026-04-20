@@ -2336,7 +2336,7 @@ function certRenderCategory(category) {
     : '<div class="cert-empty">폴더가 없습니다. 아래 [＋ 폴더 추가] 버튼을 눌러 시작하세요.</div>';
   certUpdateCounts();
 }
-// --- 1. 화면 제어 스위치들 (폴더 열기/업로드창 열기) ---
+// --- 1. 화면 제어 스위치 (폴더 열기 / 업로드창 열기) ---
 function certToggleUploadZone(folderId) {
   const el = document.getElementById('cert-upload-zone-' + folderId);
   if (el) {
@@ -2351,7 +2351,7 @@ function certToggleFolder(folderId) {
   }
 }
 
-// --- 2. 폴더 모양 그리기 로직 ---
+// --- 2. 폴더 모양 그리기 (에러 수정 버전) ---
 function certFolderHtml(folder, category) {
   const files = folder.files || [];
   const filesHtml = files.length
@@ -2374,14 +2374,12 @@ function certFolderHtml(folder, category) {
           <button class="cert-folder-upload-btn" 
             onclick="event.stopPropagation(); certToggleUploadZone(${folder.id})" 
             style="margin-top:0; padding:4px 10px; font-size:11px;">＋ 파일 추가</button>
-          
           <button class="cert-folder-del-btn" 
             onclick="event.stopPropagation(); certDeleteFolder(${folder.id}, '${category}')">🗑</button>
         </div>
       </div>
       
       <div class="cert-folder-body" id="cert-folder-body-${folder.id}" style="display:none; padding:14px; border-top:1px solid #eee; background:#fff;">
-        
         <div id="cert-upload-zone-${folder.id}" class="cert-upload-zone" style="display:none; margin-bottom:15px; border:2px dashed #4a90d9; background:#f0f6ff;"
           ondragover="event.preventDefault(); this.classList.add('drag-over')"
           ondragleave="this.classList.remove('drag-over')"
@@ -2390,8 +2388,30 @@ function certFolderHtml(folder, category) {
           <div class="cert-upload-icon" style="font-size:20px;">☁️</div>
           <div class="cert-upload-text" style="font-size:12px;">파일을 여기에 끌어다 놓으세요</div>
         </div>
-
         <div class="cert-file-list">${filesHtml}</div>
+      </div>
+    </div>`;
+}
+
+// --- 3. 개별 파일 모양 그리기 (사라졌던 함수 - 다시 추가됨) ---
+function certFileHtml(f, category) {
+  const ext = (f.file_ext || '').toLowerCase();
+  const kb = (f.file_size || 0) / 1024;
+  const sizeStr = kb > 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb.toFixed(0) + ' KB';
+  const dateStr = f.created_at ? new Date(f.created_at).toLocaleDateString('ko-KR') : '';
+  const url = certStorageGetPublicUrl(f.storage_path);
+  return `
+    <div class="cert-file-item">
+      <div class="cert-file-info">
+        <span class="cert-file-ext ${ext}">${certEscape(ext || 'FILE')}</span>
+        <span class="cert-file-name" title="${certEscape(f.file_name)}">${certEscape(f.file_name)}</span>
+        <span class="cert-file-size">${sizeStr}</span>
+        <span class="cert-file-date">${dateStr}</span>
+      </div>
+      <div class="cert-file-actions">
+        <button class="cert-btn cert-btn-view" onclick="window.open('${certEscapeAttr(url)}', '_blank')">👁 보기</button>
+        <a class="cert-btn cert-btn-dl" href="${certEscapeAttr(url)}" download="${certEscape(f.file_name)}" style="text-decoration:none;display:inline-block">⬇ 다운로드</a>
+        <button class="cert-btn cert-btn-del" onclick="certDeleteFile(${f.id}, '${certEscapeAttr(f.storage_path)}', '${certEscapeAttr(f.file_name)}', '${category}')">🗑</button>
       </div>
     </div>`;
 }

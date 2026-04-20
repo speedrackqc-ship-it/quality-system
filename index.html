@@ -2338,43 +2338,19 @@ function certRenderCategory(category) {
 }
 // 업로드 창을 보였다 안 보였다 하게 해주는 스위치입니다.
 function certToggleUploadZone(folderId) {
+  // 폴더 몸통을 보였다 안 보였다 하게 해주는 스위치입니다.
+function certToggleFolder(folderId) {
+  const el = document.getElementById('cert-folder-body-' + folderId);
+  if (el) {
+    el.style.display = (el.style.display === 'none') ? 'block' : 'none';
+  }
+}
   const el = document.getElementById('cert-upload-zone-' + folderId);
   if (el) {
     el.style.display = (el.style.display === 'none') ? 'block' : 'none';
   }
 }
-function certFolderHtml(folder, category) {
-  const files = folder.files || [];
-  const filesHtml = files.length
-    ? files.map(f => certFileHtml(f, category)).join('')
-    : '<div class="cert-empty">📭 업로드된 파일이 없습니다</div>';
-    
-  return `
-    <div class="cert-folder-block">
-      <div class="cert-folder-header">
-        📁
-        <input type="text" class="cert-folder-name-input"
-          value="${certEscape(folder.name)}"
-          onblur="certRenameFolder(${folder.id}, '${category}', this.value)"
-          onkeydown="if(event.key==='Enter'){this.blur();event.preventDefault();}">
-        <span style="font-size:11px;color:#888">${files.length}개</span>
-        <button class="cert-folder-upload-btn" onclick="certToggleUploadZone(${folder.id})" style="margin-left:auto; margin-right:10px;">＋ 파일 추가</button>
-        <button class="cert-folder-del-btn" onclick="certDeleteFolder(${folder.id}, '${category}')">🗑 폴더 삭제</button>
-      </div>
-      <div class="cert-folder-body">
-        <div id="cert-upload-zone-${folder.id}" class="cert-upload-zone" style="display:none; margin-bottom:15px;"
-          ondragover="event.preventDefault(); this.classList.add('drag-over')"
-          ondragleave="this.classList.remove('drag-over')"
-          ondrop="event.preventDefault(); this.classList.remove('drag-over'); certUpload(${folder.id}, '${category}', event.dataTransfer.files)">
-          <input type="file" multiple onchange="certUpload(${folder.id}, '${category}', this.files); this.value='';">
-          <div class="cert-upload-icon">☁️</div>
-          <div class="cert-upload-text">파일을 끌어다 놓거나 클릭하여 업로드</div>
-          <div class="cert-upload-sub">PDF · 이미지 · 엑셀 · 워드 등 모든 파일</div>
-        </div>
-        <div class="cert-file-list">${filesHtml}</div>
-      </div>
-    </div>`;
-}
+function certFolderHtml
 
 function certFileHtml(f, category) {
   const ext = (f.file_ext || '').toLowerCase();

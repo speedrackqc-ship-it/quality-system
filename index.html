@@ -2336,11 +2336,16 @@ function certRenderCategory(category) {
     : '<div class="cert-empty">폴더가 없습니다. 아래 [＋ 폴더 추가] 버튼을 눌러 시작하세요.</div>';
   certUpdateCounts();
 }
-// --- 1. 화면 제어 스위치 (폴더 열기 / 업로드창 열기) ---
+// --- 1. 화면 제어 스위치 (오류 수정 및 기능 개선 버전) ---
 function certToggleUploadZone(folderId) {
-  const el = document.getElementById('cert-upload-zone-' + folderId);
-  if (el) {
-    el.style.display = (el.style.display === 'none') ? 'block' : 'none';
+  // 1-1. 업로드 칸이 보일 수 있게 먼저 폴더 몸통을 무조건 엽니다.
+  const body = document.getElementById('cert-folder-body-' + folderId);
+  if (body) body.style.display = 'block';
+
+  // 1-2. 업로드 칸을 껐다 켰다(Toggle) 합니다.
+  const zone = document.getElementById('cert-upload-zone-' + folderId);
+  if (zone) {
+    zone.style.display = (zone.style.display === 'none') ? 'block' : 'none';
   }
 }
 
@@ -2351,7 +2356,7 @@ function certToggleFolder(folderId) {
   }
 }
 
-// --- 2. 폴더 모양 그리기 (에러 수정 버전) ---
+// --- 2. 폴더 모양 그리기 로직 ---
 function certFolderHtml(folder, category) {
   const files = folder.files || [];
   const filesHtml = files.length
@@ -2374,6 +2379,7 @@ function certFolderHtml(folder, category) {
           <button class="cert-folder-upload-btn" 
             onclick="event.stopPropagation(); certToggleUploadZone(${folder.id})" 
             style="margin-top:0; padding:4px 10px; font-size:11px;">＋ 파일 추가</button>
+          
           <button class="cert-folder-del-btn" 
             onclick="event.stopPropagation(); certDeleteFolder(${folder.id}, '${category}')">🗑</button>
         </div>

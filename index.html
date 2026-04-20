@@ -2711,22 +2711,7 @@ function loadAll4(){
 
     // 현재 선택된 화면 즉시 갱신
     applyFilters4(st4.view);
-    // 탭별 데이터 분배
-    // frame 탭: frame_return_items 전체
-    st4.data['frame'] = normalizedFrame;
-    // rack 탭: rack_return_items 전체 (경량랙 + 중량랙 + 기타)
-    st4.data['rack']  = normalizedRack;
-    // plywood/defect/powder: frame+rack 전체에서 category 키워드로 자동 분류
-    var allCombined = normalizedFrame.concat(normalizedRack);
-    var plywoodRows = allCombined.filter(function(r){ return (r.category||'').indexOf('합판') !== -1; });
-    var defectRows  = allCombined.filter(function(r){ return (r.category||'').indexOf('불량') !== -1; });
-    var powderRows  = allCombined.filter(function(r){ return (r.category||'').indexOf('분체') !== -1 || (r.item_type||'').indexOf('분체') !== -1; });
-    st4.data['plywood'] = plywoodRows.length > 0 ? plywoodRows : allCombined;
-    st4.data['defect']  = defectRows.length  > 0 ? defectRows  : allCombined;
-    st4.data['powder']  = powderRows.length  > 0 ? powderRows  : allCombined;
-
-    VIEWS4.forEach(function(v){st4.loaded[v]=true;});
-    st4._allLoaded=true;
+    
 
     // KPI는 frame + rack 합산
     updateKPI4(normalizedFrame.concat(normalizedRack));

@@ -1308,113 +1308,143 @@ t2Init();
 // ===================================================
 // TAB 3: 재도장 실적 (데이터 유실 방지 및 중복 정리 통합본)
 // ===================================================
+// ===================================================
+// TAB 3: 재도장 실적 (데이터 보호 및 문법 오류 완벽 수정본)
+// ===================================================
 const T3 = {
-  stdCost: {},        // 현재 선택 월의 표준원가
-  monthStdCost: {},   // 월별 표준원가 저장소
-  inputRows: [],       // 현재 입력창 데이터
-  saved: [],           // 월별 합산 데이터
-  sessions: [],        // DB에서 가져온 원본 세션들
+  stdCost: {},
+  monthStdCost: {},
+  inputRows: [],
+  saved: [],
+  sessions: [],
   IRON: 7.85,
   _editSessionId: null
 };
 
-// 1. 기초 초기화 및 로드
-function initTab3() {
-  const now = new Date();
-  const m = now.getMonth() + 1;
+// 1. 초기화 및 로드
+async function initTab3() {
+  const m = new Date().getMonth() + 1;
   const selMonth = document.getElementById('t3_sel_month');
   if (selMonth) selMonth.value = String(m);
   
-  t3ResetForm();
+  T3.inputRows = [{name:'',thickness:'',size:'',qty:'',repaint:'',stdcost:''},{name:'',thickness:'',size:'',qty:'',repaint:'',stdcost:''},{name:'',thickness:'',size:'',qty:'',repaint:'',stdcost:''}];
   
-  (async () => {
-    try {
-      await t3LoadStdCostFromSB();
-      await t3LoadSessions();
-    } catch(e) { console.error('초기 로드 실패:', e); }
-  })();
-}
-
-// 2. 저장 로직 (중요: 기존 데이터를 지우지 않고 '추가'만 함)
-async function t3SaveMonth() {
-  const month = +document.getElementById('t3_sel_month').value;
-  const scrap = +document.getElementById('t3_scrap_price').value || 250;
-  const rows = T3.inputRows.filter(r => r.name && r.name.trim());
-
-  if (!rows.length) { t3ShowToast('⚠️ 입력된 품목이 없습니다.', 'warn'); return; }
-
   try {
-    if (T3._editSessionId) {
-      // 수정 모드: 해당 세션만 업데이트
-      await sb3('repaint_sessions?id=eq.' + T3._editSessionId, { method: 'PATCH', body: { month, scrap_price: scrap } });
-      await sb3('repaint_items?session_id=eq.' + T3._editSessionId, { method: 'DELETE', prefer: '' });
-      const items = rows.map(r => ({
-        session_id: T3._editSessionId, name: r.name, thickness: r.thickness,
-        size: +r.size||0, qty: +r.qty||0, repaint: +r.repaint||0, stdcost: +r.stdcost||0
-      }));
-      await sb3('repaint_items', { method: 'POST', body: items });
-    } else {
-      // 신규 저장: 무조건 누적 (기존 데이터 삭제 로직 제거됨)
-      await t3SaveSession(month, scrap, rows);
-    }
-
-    await t3LoadSessions(); // 전체 새로고침
-    t3ShowToast('✅ 데이터가 안전하게 저장되었습니다.');
-    t3ResetForm();
-  } catch(e) { t3ShowToast('❌ 저장 오류: ' + e.message, 'error'); }
+    await t3LoadStdCostFromSB();
+    await t3LoadSessions();
+    t3RenderInput();
+  } catch(e) { console.error('T3 로드 실패:', e); }
 }
 
-// 3. 화면 그리기 (DB에 저장된 단가 우선 표시)
-function t3RenderResults() {
-  const wrap = document.getElementById('t3_results_wrap');
-  if (!wrap) return;
-  if (!T3.saved.length) { wrap.innerHTML = '<p style="color:#888;padding:20px">저장된 데이터가 없습니다.</p>'; return; }
-
-  wrap.innerHTML = [...T3.saved].sort((a,b) => b.month - a.month).map(s => {
-    let monthPL = 0;
-    const rowsHtml = s.rows.map(r => {
-      const res = t3CalcRow(r, s.scrap);
-      monthPL += res.totPL;
-      return `<tr>
-        <td class="td-name">${r.name}</td>
-        <td class="td-mono td-right col-blue">${r.size}</td>
-        <td class="td-mono td-center col-gray">${r.thickness}</td>
-        <td class="td-mono td-right">${(+r.qty).toLocaleString()}</td>
-        <td class="td-mono td-right col-gray">${res.weight.toFixed(4)}</td>
-        <td class="td-mono td-right col-gray">${Math.round(res.sAmt).toLocaleString()}</td>
-        <td class="td-mono td-right">${(+r.repaint).toLocaleString()}</td>
-        <td class="td-mono td-right col-blue">${(+r.stdcost).toLocaleString()}</td>
-        <td class="td-mono td-right ${res.totPL >=0 ? 'col-green':'col-red'}">${Math.round(res.totPL).toLocaleString()}</td>
-      </tr>`;
-    }).join('');
-
-    return `<div class="panel" style="margin-bottom:20px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:10px">
-        <strong>${s.month}월 합계 실적</strong>
-        <span class="${monthPL >=0 ? 'col-green':'col-red'}">총 손익: ${Math.round(monthPL).toLocaleString()}원</span>
-      </div>
-      <div class="table-wrap"><table>${rowsHtml}</table></div>
-    </div>`;
-  }).join('');
+// 2. DB 연동 함수들
+async function t3LoadStdCostFromSB() {
+  try {
+    const rows = await sb3('repaint_stdcost?select=*');
+    (rows || []).forEach(r => { T3.monthStdCost[r.month] = { fileName: r.file_name, data: r.data }; });
+  } catch(e) { console.error(e); }
 }
 
-// 4. 보조 함수들 (계산, 입력창 제어 등)
+async function t3LoadSessions() {
+  try {
+    const raw = await sb3('repaint_sessions?select=id,month,scrap_price,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.asc');
+    T3.sessions = (raw || []).map(s => ({
+      id: s.id, month: s.month, scrap: s.scrap_price, created_at: s.created_at,
+      items: (s.repaint_items||[]).map(r => ({
+        id: r.id, name: r.name, thickness: r.thickness, size: r.size, qty: r.qty, repaint: r.repaint, stdcost: r.stdcost
+      }))
+    }));
+    t3BuildSaved();
+    t3RenderResults();
+    t3LoadLog();
+  } catch(e) { console.error(e); }
+}
+
+function t3BuildSaved() {
+  const monthMap = {};
+  (T3.sessions || []).forEach(s => {
+    if (!monthMap[s.month]) monthMap[s.month] = { month: s.month, scrap: s.scrap, rows: {} };
+    const m = monthMap[s.month];
+    s.items.forEach(r => {
+      const key = (r.name||'') + '|' + (r.size||'') + '|' + (r.thickness||'');
+      if (!m.rows[key]) m.rows[key] = { name: r.name, thickness: r.thickness, size: r.size, qty: 0, repaint: r.repaint, stdcost: r.stdcost };
+      m.rows[key].qty += (+r.qty||0);
+    });
+  });
+  T3.saved = Object.values(monthMap).map(m => ({
+    month: m.month, scrap: m.scrap, rows: Object.values(m.rows)
+  })).sort((a,b) => a.month - b.month);
+}
+
+// 3. 계산 및 화면 출력 로직
 function t3CalcRow(r, scrap) {
   const nm = r.name || '';
   const thickness = +r.thickness || (nm === '홈던트기둥' ? 0.8 : (nm.includes('홈던트') ? 1.2 : 0));
   const width = nm === '홈던트기둥' ? 129 : 64;
-  const weight = (thickness * width * 7.85 * (+r.size || 0)) / 1000000;
+  const size = +r.size || 0;
+  const weight = (thickness * width * 7.85 * size) / 1000000;
   const sAmt = weight * (scrap || 250);
-  const totPL = ((+r.stdcost || 0) - (+r.repaint || 0) - sAmt) * (+r.qty || 0);
-  return { weight, sAmt, totPL };
+  const repaint = +r.repaint || 0;
+  const std = +r.stdcost || 0;
+  const totPL = (std - repaint - sAmt) * (+r.qty || 0);
+  return { weight, sAmt, std, repaint, totPL };
+}
+
+function t3RenderResults() {
+  const wrap = document.getElementById('t3_results_wrap');
+  if (!wrap) return;
+  if (!T3.saved.length) { wrap.innerHTML = '<p style="padding:20px; color:#888;">데이터가 없습니다.</p>'; return; }
+
+  wrap.innerHTML = [...T3.saved].sort((a,b) => b.month - a.month).map(s => {
+    let mPL = 0;
+    const rowsHtml = s.rows.map(r => {
+      const res = t3CalcRow(r, s.scrap);
+      mPL += res.totPL;
+      return `<tr><td>${r.name}</td><td>${r.size}</td><td>${r.thickness}</td><td>${(+r.qty).toLocaleString()}</td>
+              <td>${res.weight.toFixed(4)}</td><td>${Math.round(res.sAmt).toLocaleString()}</td>
+              <td>${res.repaint.toLocaleString()}</td><td>${res.std.toLocaleString()}</td>
+              <td class="${res.totPL>=0?'col-green':'col-red'}">${Math.round(res.totPL).toLocaleString()}</td></tr>`;
+    }).join('');
+    return `<div class="panel" style="margin-bottom:20px;">
+              <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                <b style="font-size:16px;">${s.month}월 합계 실적</b>
+                <span style="font-weight:700;" class="${mPL>=0?'col-green':'col-red'}">총 손익: ${Math.round(mPL).toLocaleString()}원</span>
+              </div>
+              <div class="table-wrap"><table><thead><tr><th>품명</th><th>규격</th><th>두께</th><th>수량</th><th>무게</th><th>막고철</th><th>재도장비</th><th>표준원가</th><th>총손익</th></tr></thead>
+              <tbody>${rowsHtml}</tbody></table></div>
+            </div>`;
+  }).join('');
+}
+
+// 4. 저장 및 유틸 (기존 데이터 삭제 방지 핵심 로직)
+async function t3SaveMonth() {
+  const month = +document.getElementById('t3_sel_month').value;
+  const scrap = +document.getElementById('t3_scrap_price').value || 250;
+  const rows = T3.inputRows.filter(r => r.name && r.name.trim());
+  if (!rows.length) return t3ShowToast('⚠️ 입력 내용 없음', 'warn');
+
+  try {
+    if (T3._editSessionId) {
+      await sb3('repaint_sessions?id=eq.' + T3._editSessionId, { method: 'PATCH', body: { month, scrap_price: scrap } });
+      await sb3('repaint_items?session_id=eq.' + T3._editSessionId, { method: 'DELETE', prefer: '' });
+      const items = rows.map(r => ({ session_id: T3._editSessionId, name: r.name, thickness: r.thickness, size: +r.size, qty: +r.qty, repaint: +r.repaint, stdcost: +r.stdcost }));
+      await sb3('repaint_items', { method: 'POST', body: items });
+    } else {
+      const sess = await sb3('repaint_sessions', { method: 'POST', body: { month, scrap_price: scrap } });
+      const sid = sess[0].id;
+      const items = rows.map(r => ({ session_id: sid, name: r.name, thickness: r.thickness, size: +r.size, qty: +r.qty, repaint: +r.repaint, stdcost: +r.stdcost }));
+      await sb3('repaint_items', { method: 'POST', body: items });
+    }
+    t3ShowToast('✅ 저장 완료');
+    T3._editSessionId = null;
+    await t3LoadSessions();
+    t3ResetForm();
+  } catch(e) { t3ShowToast('❌ 오류: ' + e.message, 'error'); }
 }
 
 function t3ResetForm() {
   T3.inputRows = [{name:'',thickness:'',size:'',qty:'',repaint:'',stdcost:''},{name:'',thickness:'',size:'',qty:'',repaint:'',stdcost:''},{name:'',thickness:'',size:'',qty:'',repaint:'',stdcost:''}];
   T3._editSessionId = null;
   t3RenderInput();
-  t3RenderResults();
-  t3LoadLog();
 }
 
 function t3LogToggle() {
@@ -1422,520 +1452,8 @@ function t3LogToggle() {
   if (body) body.style.display = (body.style.display === 'none' ? 'block' : 'none');
 }
 
-// 5. 기타 유틸 함수 (행추가, 삭제 등 기존 로직 유지)
 function t3AddRow() { T3.inputRows.push({name:'',thickness:'',size:'',qty:'',repaint:'',stdcost:''}); t3RenderInput(); }
 function t3DelRow(i) { T3.inputRows.splice(i, 1); t3RenderInput(); }
-  if (!confirm(dateStr + itemDesc + '\n\n이 세션 데이터를 삭제하시겠습니까?\n(삭제 후 복구 불가)')) return;
-  (async () => {
-    try {
-      await sb3('repaint_items?session_id=eq.' + sessionId, { method: 'DELETE', prefer: '' });
-      await sb3('repaint_sessions?id=eq.' + sessionId, { method: 'DELETE', prefer: '' });
-      T3.sessions = T3.sessions.filter(x => x.id !== sessionId);
-      t3BuildSaved(); t3RenderResults(); t3LoadLog(); t3SaveToStorage();
-    } catch(e) { alert('삭제 오류: ' + e.message); }
-  })();
-}
-
-// localStorage 데이터를 Supabase로 이전
-async function t3MigrateFromLocalStorage() {
-  try {
-    const savedRaw = localStorage.getItem('t3_saved');
-    const stdRaw   = localStorage.getItem('t3_monthStdCost');
-    if (!savedRaw && !stdRaw) {
-      alert('localStorage에 이전할 데이터가 없습니다.');
-      return;
-    }
-    if (!confirm('localStorage의 기존 데이터를 Supabase로 이전하겠습니까?\n(기존 Supabase 데이터는 유지됩니다)')) return;
-
-    let count = 0;
-
-    // 표준원가 이전
-    if (stdRaw) {
-      const stdData = JSON.parse(stdRaw);
-      for (const [month, val] of Object.entries(stdData)) {
-        if (val && val.data) {
-          await t3SaveStdCostToSB(+month, val.fileName || '', val.data);
-          T3.monthStdCost[+month] = val;
-          count++;
-        }
-      }
-    }
-
-    // 실적 이전
-    if (savedRaw) {
-      const sessions = JSON.parse(savedRaw);
-      for (const s of sessions) {
-        await t3SaveSession(s.month, s.scrap || 250, s.rows || []);
-        count++;
-      }
-    }
-
-    // 다시 로드
-    await t3LoadStdCostFromSB();
-    await t3LoadSessions();
-    t3RenderResults();
-    t3UpdateStdSavedList();
-
-    const m = +document.getElementById('t3_sel_month').value;
-    if (T3.monthStdCost[m]) {
-      T3.stdCost = T3.monthStdCost[m].data;
-      document.getElementById('t3_std_status').textContent =
-        `✅ ${m}월 표준원가 ${Object.keys(T3.stdCost).length}건`;
-    }
-
-    alert(`✅ 이전 완료! (${count}건 처리됨)\n이제 누구나 같은 데이터를 볼 수 있어요.`);
-  } catch(e) {
-    alert('이전 중 오류: ' + e.message);
-    console.error(e);
-  }
-}
-
-
-// 파일 품명 → { appName, thickness } 매핑
-function t3MapName(filName) {
-  if (!filName) return null;
-  const n = filName.trim();
-  // 홈던트: 기둥, 받침만 (타공받침/하프받침/행거받침 제외)
-  if (n.startsWith('홈던트/080/기둥'))        return { appName:'홈던트기둥',  thick:'0.8' };
-  if (n.startsWith('홈던트/120/받침/'))        return { appName:'홈던트받침',  thick:'1.2' };
-  // 스피드랙 120 (1.2)
-  if (n.startsWith('스피드랙/120/R기둥/'))     return { appName:'스피드랙기둥', thick:'1.2' };
-  if (n.startsWith('스피드랙/120/기둥/'))      return { appName:'스피드랙기둥', thick:'1.2' };
-  if (n.startsWith('스피드랙/120/받침/'))      return { appName:'스피드랙받침', thick:'1.2' };
-  // 스피드랙 160 (1.4)
-  if (n.startsWith('스피드랙/160/기둥/'))      return { appName:'스피드랙기둥', thick:'1.4' };
-  if (n.startsWith('스피드랙/160/받침/'))      return { appName:'스피드랙받침', thick:'1.4' };
-  // 스피드랙 200 (1.8)
-  if (n.startsWith('스피드랙/200/기둥/'))      return { appName:'스피드랙기둥', thick:'1.8' };
-  if (n.startsWith('스피드랙/200/받침/'))      return { appName:'스피드랙받침', thick:'1.8' };
-  return null;
-}
-
-function t3LoadStdCost(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const month = +document.getElementById('t3_sel_month').value;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const wb = XLSX.read(e.target.result, { type: 'array' });
-      const wsName = wb.SheetNames.find(n => n.includes('프레임')) || wb.SheetNames[0];
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wsName], { header:1, defval:null });
-      const header = rows[0] || [];
-
-      // 선택한 월에 맞는 표준원가 컬럼 찾기
-      // 1월: "1월\n표준\n원가"(idx11), 2월: "2월\n표준원가"(idx21) 등
-      let stdCol = -1;
-      for (let i = 0; i < header.length; i++) {
-        const h = String(header[i] || '').replace(/\s/g, '');
-        const m = h.match(/(\d+)월/);
-        if (m && +m[1] === month && h.includes('표준원가')) {
-          stdCol = i;
-          break;
-        }
-      }
-      if (stdCol === -1) {
-        alert(`${month}월 표준원가 컬럼을 찾을 수 없어요.\n헤더: ` + header.filter(Boolean).join(', '));
-        return;
-      }
-      const repaintCol = 18; // 분체 도장비(col19, idx18) 고정
-
-      // stdMap 생성: { "앱품명_두께_규격": { std, repaint } }
-      const stdMap = {};
-      rows.slice(3).forEach(row => {
-        if (!row[0]) return;
-        const filName = String(row[4] || '').trim();
-        const size    = row[10];
-        const std     = row[stdCol];
-        const repaint = row[repaintCol];
-        const mapped  = t3MapName(filName);
-        if (!mapped || size == null || std == null) return;
-        const key = mapped.appName + '_' + mapped.thick + '_' + (+size);
-        if (!stdMap[key] || filName.endsWith('/W')) {
-          stdMap[key] = { std: Math.round(+std), repaint: Math.round(+repaint || 0) };
-        }
-      });
-
-      T3.monthStdCost[month] = { fileName: file.name, data: stdMap };
-      const cnt = Object.keys(stdMap).length;
-      document.getElementById('t3_std_status').textContent = `✅ ${month}월 ${cnt}건 저장 중...`;
-      if (input.value !== undefined) input.value = '';
-      // Supabase에 표준원가 저장
-      (async () => {
-        await t3SaveStdCostToSB(month, file.name, stdMap);
-        document.getElementById('t3_std_status').textContent = `✅ ${month}월 ${cnt}건 저장 (${file.name})`;
-        t3SaveToStorage();
-        t3UpdateStdSavedList();
-        t3RenderInput();
-      })();
-    } catch(err) { alert('파일 오류: ' + err.message); }
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-// ── TAB3 Supabase API ──────────────────────────────
-async function sb3(path, opt={}) {
-  const res = await fetch(SB3 + '/rest/v1/' + path, {
-    headers: {
-      'apikey': KEY3,
-      'Authorization': 'Bearer ' + KEY3,
-      'Content-Type': 'application/json',
-      'Prefer': opt.prefer || 'return=representation',
-      ...opt.headers
-    },
-    method: opt.method || 'GET',
-    body: opt.body ? JSON.stringify(opt.body) : undefined
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const txt = await res.text();
-  return txt ? JSON.parse(txt) : null;
-}
-
-// Supabase에 실적 저장
-async function t3SaveSession(month, scrap, rows, origCreatedAt) {
-  const sess = await sb3('repaint_sessions', {
-    method: 'POST',
-    body: Object.assign({ month, scrap_price: scrap }, origCreatedAt ? { created_at: origCreatedAt } : {})
-  });
-  const sessId = Array.isArray(sess) ? sess[0].id : sess.id;
-  const items = rows.filter(r => r.name).map(r => ({
-    session_id: sessId,
-    name: r.name, thickness: r.thickness,
-    size: +r.size||0, qty: +r.qty||0,
-    repaint: +r.repaint||0, stdcost: +r.stdcost||0
-  }));
-  if (items.length) await sb3('repaint_items', { method:'POST', body: items });
-  return sessId; // ← 반환 추가
-}
-
-// Supabase에서 전체 실적 로드
-
-// Supabase에 표준원가 저장
-async function t3SaveStdCostToSB(month, fileName, data) {
-  await sb3(`repaint_stdcost?month=eq.${month}`, { method:'DELETE', prefer:'' });
-  await sb3('repaint_stdcost', {
-    method: 'POST',
-    body: { month, file_name: fileName, data }
-  });
-}
-
-// Supabase에서 표준원가 로드
-
-
-function t3Debug() {
-  const out = document.getElementById('t3_debug_out');
-  const curMonth = +document.getElementById('t3_sel_month').value;
-  const curMap = (T3.monthStdCost[curMonth] && T3.monthStdCost[curMonth].data) || T3.stdCost || {};
-  const keys = Object.keys(curMap);
-  const speedKeys = keys.filter(k => k.includes('스피드랙받침_1.4'));
-  const row0 = T3.inputRows[0] || {};
-  const lookupKey = row0.name + '_' + (row0.thickness||'') + '_' + (+row0.size);
-  const found = curMap[lookupKey];
-  out.textContent = [
-    '📅 현재 월: ' + curMonth,
-    '📦 저장된 월: ' + Object.keys(T3.monthStdCost).join(', '),
-    '📦 curMap 키 수: ' + keys.length,
-    '🔍 스피드랙받침_1.4 키: ' + (speedKeys.slice(0,5).join(', ') || '없음'),
-    '',
-    '📝 1행 name=' + row0.name + ' thickness=' + row0.thickness + ' size=' + row0.size,
-    '🔑 조회 키: ' + lookupKey,
-    '✅ 결과: ' + JSON.stringify(found || '없음'),
-  ].join('\n');
-}
-
-
-// Tab키로 셀 간 이동
-function t3TabKey(e, el) {
-  if (e.key !== 'Tab') return;
-  e.preventDefault();
-
-  // 입력 가능한 필드 순서 (같은 행 기준)
-  const TAB_ORDER = ['size', 'qty', 'repaint', 'stdcost'];
-  const i   = +el.dataset.i;
-  const f   = el.dataset.f;
-  const cur = TAB_ORDER.indexOf(f);
-  if (cur === -1) return;
-
-  // blur 먼저 (현재 값 저장)
-  t3CellInput(el);
-
-  let nextF, nextI;
-  if (e.shiftKey) {
-    // Shift+Tab: 이전 칸
-    if (cur > 0) { nextF = TAB_ORDER[cur - 1]; nextI = i; }
-    else         { nextF = TAB_ORDER[TAB_ORDER.length - 1]; nextI = i - 1; }
-  } else {
-    // Tab: 다음 칸
-    if (cur < TAB_ORDER.length - 1) { nextF = TAB_ORDER[cur + 1]; nextI = i; }
-    else                              { nextF = TAB_ORDER[0];       nextI = i + 1; }
-  }
-
-  // 다음 행이 없으면 자동 추가
-  if (nextI >= T3.inputRows.length) {
-    T3.inputRows.push({});
-    t3RenderInput();
-  }
-
-  // 포커스 이동
-  const target = document.querySelector(
-    `#t3_input_tbody input[data-i="${nextI}"][data-f="${nextF}"]`
-  );
-  if (target) { target.focus(); target.select(); }
-}
-
-function t3SaveToStorage() {
-  try {
-    localStorage.setItem('t3_saved', JSON.stringify(T3.saved));
-    localStorage.setItem('t3_monthStdCost', JSON.stringify(T3.monthStdCost));
-  } catch(e) { console.warn('localStorage 저장 실패:', e); }
-}
-
-function t3StatTab(tab) {
-  var yearPanel  = document.getElementById("t3_stat_panel_year");
-  var monthPanel = document.getElementById("t3_stat_panel_month");
-  var yearBtn    = document.getElementById("t3_stat_tab_year");
-  var monthBtn   = document.getElementById("t3_stat_tab_month");
-  if (tab === "year") {
-    yearPanel.style.display  = "block";
-    monthPanel.style.display = "none";
-    yearBtn.style.background  = "var(--accent)"; yearBtn.style.color = "white"; yearBtn.style.borderColor = "var(--accent)";
-    monthBtn.style.background = "var(--surface)"; monthBtn.style.color = "var(--text2)"; monthBtn.style.borderColor = "var(--border)";
-  } else {
-    yearPanel.style.display  = "none";
-    monthPanel.style.display = "block";
-    monthBtn.style.background = "var(--accent)"; monthBtn.style.color = "white"; monthBtn.style.borderColor = "var(--accent)";
-    yearBtn.style.background  = "var(--surface)"; yearBtn.style.color = "var(--text2)"; yearBtn.style.borderColor = "var(--border)";
-  }
-}
-
-function t3RenderStats() {
-  var wrap = document.getElementById("t3_stats_wrap");
-  if (!T3.saved.length) { wrap.style.display = "none"; return; }
-  wrap.style.display = "block";
-
-  // 연별 합산
-  var yearMap = {};
-  T3.saved.forEach(function(s) {
-    var scrap = s.scrap;
-    var mMonth = s.month;
-    var stdMap = (T3.monthStdCost[mMonth] && T3.monthStdCost[mMonth].data) || {};
-    s.rows.forEach(function(r) {
-      var key = (r.name||"") + "__" + (r.thickness||"") + "__" + (r.size||"");
-      if (!yearMap[key]) yearMap[key] = { name: r.name, thickness: r.thickness, size: r.size, qty: 0, totPL: 0 };
-      yearMap[key].qty   += +r.qty || 0;
-      yearMap[key].totPL += t3CalcRow(r, scrap, stdMap).totPL;
-    });
-  });
-  var yearRows = Object.values(yearMap).sort(function(a, b) {
-    if ((a.name||"") !== (b.name||"")) return (a.name||"").localeCompare(b.name||"", "ko");
-    if ((a.thickness||"") !== (b.thickness||"")) return (+a.thickness||0) - (+b.thickness||0);
-    return (+a.size||0) - (+b.size||0);
-  });
-  var yearTotQty = yearRows.reduce(function(s,r){ return s+r.qty; }, 0);
-  var yearTotPL  = yearRows.reduce(function(s,r){ return s+r.totPL; }, 0);
-  var ySign = yearTotPL >= 0 ? "col-green" : "col-red";
-
-  var yHTML = "";
-  yHTML += '<div style="font-size:13px;color:var(--text2);margin-bottom:12px">';
-  yHTML += '전체 <strong style="color:var(--text)">' + T3.saved.length + '개월</strong> 합산';
-  yHTML += ' &nbsp;|&nbsp; 총 수량 <strong class="td-mono col-blue">' + yearTotQty.toLocaleString() + '</strong>개';
-  yHTML += ' &nbsp;|&nbsp; 총 손익 <strong class="td-mono ' + ySign + '">' + Math.round(yearTotPL).toLocaleString() + '원</strong>';
-  yHTML += '</div>';
-  yHTML += '<div class="table-wrap"><div class="table-scroll">';
-  yHTML += '<table><thead><tr>';
-  yHTML += '<th style="text-align:left">품명</th>';
-  yHTML += '<th style="text-align:center">두께</th>';
-  yHTML += '<th style="text-align:right">규격(mm)</th>';
-  yHTML += '<th style="text-align:right">재도장 수량</th>';
-  yHTML += '<th style="text-align:right">총 손익</th>';
-  yHTML += '</tr></thead><tbody>';
-  yearRows.forEach(function(r) {
-    var pc = r.totPL >= 0 ? "col-green" : "col-red";
-    yHTML += "<tr>";
-    yHTML += '<td class="td-name">' + (r.name||"-") + '</td>';
-    yHTML += '<td class="td-mono td-center col-gray">' + (r.thickness||"-") + '</td>';
-    yHTML += '<td class="td-mono td-right col-blue">' + (r.size||"-") + '</td>';
-    yHTML += '<td class="td-mono td-right"><strong>' + r.qty.toLocaleString() + '</strong>개</td>';
-    yHTML += '<td class="td-mono td-right ' + pc + '" style="font-weight:700">' + Math.round(r.totPL).toLocaleString() + '원</td>';
-    yHTML += "</tr>";
-  });
-  yHTML += '</tbody><tfoot><tr style="background:var(--surface2);border-top:2px solid var(--border)">';
-  yHTML += '<td style="font-weight:700">TOTAL</td><td></td><td></td>';
-  yHTML += '<td class="td-mono td-right"><strong>' + yearTotQty.toLocaleString() + '</strong>개</td>';
-  yHTML += '<td class="td-mono td-right ' + ySign + '" style="font-weight:700">' + Math.round(yearTotPL).toLocaleString() + '원</td>';
-  yHTML += '</tr></tfoot></table></div></div>';
-  document.getElementById("t3_stat_panel_year").innerHTML = yHTML;
-
-  // 월별 상세
-  var months = T3.saved.slice().sort(function(a,b){ return a.month - b.month; });
-  var mAllHTML = "";
-  months.forEach(function(s) {
-    var scrap = s.scrap;
-    var mMonth = s.month;
-    var stdMap = (T3.monthStdCost[mMonth] && T3.monthStdCost[mMonth].data) || {};
-    var mMap = {};
-    s.rows.forEach(function(r) {
-      var key = (r.name||"") + "__" + (r.thickness||"") + "__" + (r.size||"");
-      if (!mMap[key]) mMap[key] = { name: r.name, thickness: r.thickness, size: r.size, qty: 0, totPL: 0 };
-      mMap[key].qty   += +r.qty || 0;
-      mMap[key].totPL += t3CalcRow(r, scrap, stdMap).totPL;
-    });
-    var mRows = Object.values(mMap).sort(function(a,b) {
-      if ((a.name||"") !== (b.name||"")) return (a.name||"").localeCompare(b.name||"", "ko");
-      return (+a.size||0) - (+b.size||0);
-    });
-    var mTotQty = mRows.reduce(function(sum,r){ return sum+r.qty; }, 0);
-    var mTotPL  = mRows.reduce(function(sum,r){ return sum+r.totPL; }, 0);
-    var mSign   = mTotPL >= 0 ? "col-green" : "col-red";
-    mAllHTML += '<div style="margin-bottom:24px">';
-    mAllHTML += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">';
-    mAllHTML += '<span style="font-size:15px;font-weight:900;color:var(--accent)">' + s.month + '월</span>';
-    mAllHTML += '<span style="font-size:12px;color:var(--text2)">막고철 <strong>' + s.scrap.toLocaleString() + '원</strong>/kg</span>';
-    mAllHTML += ' <span style="font-size:12px;color:var(--text2)">수량 <strong class="td-mono col-blue">' + mTotQty.toLocaleString() + '</strong>개</span>';
-    mAllHTML += ' <span style="font-size:12px;color:var(--text2)">손익 <strong class="td-mono ' + mSign + '">' + Math.round(mTotPL).toLocaleString() + '원</strong></span>';
-    mAllHTML += '</div>';
-    mAllHTML += '<div class="table-wrap"><div class="table-scroll"><table>';
-    mAllHTML += '<thead><tr>';
-    mAllHTML += '<th style="text-align:left">품명</th><th style="text-align:center">두께</th><th style="text-align:right">규격(mm)</th><th style="text-align:right">재도장 수량</th><th style="text-align:right">총 손익</th>';
-    mAllHTML += '</tr></thead><tbody>';
-    mRows.forEach(function(r) {
-      var pc = r.totPL >= 0 ? "col-green" : "col-red";
-      mAllHTML += "<tr>";
-      mAllHTML += '<td class="td-name">' + (r.name||"-") + '</td>';
-      mAllHTML += '<td class="td-mono td-center col-gray">' + (r.thickness||"-") + '</td>';
-      mAllHTML += '<td class="td-mono td-right col-blue">' + (r.size||"-") + '</td>';
-      mAllHTML += '<td class="td-mono td-right"><strong>' + r.qty.toLocaleString() + '</strong>개</td>';
-      mAllHTML += '<td class="td-mono td-right ' + pc + '" style="font-weight:700">' + Math.round(r.totPL).toLocaleString() + '원</td>';
-      mAllHTML += "</tr>";
-    });
-    mAllHTML += '</tbody><tfoot><tr style="background:var(--surface2);border-top:2px solid var(--border)">';
-    mAllHTML += '<td style="font-weight:700">TOTAL</td><td></td><td></td>';
-    mAllHTML += '<td class="td-mono td-right"><strong>' + mTotQty.toLocaleString() + '</strong>개</td>';
-    mAllHTML += '<td class="td-mono td-right ' + mSign + '" style="font-weight:700">' + Math.round(mTotPL).toLocaleString() + '원</td>';
-    mAllHTML += '</tr></tfoot></table></div></div></div>';
-  });
-  document.getElementById("t3_stat_panel_month").innerHTML = mAllHTML;
-}
-async function t3LoadLog() {
-  const el = document.getElementById('t3_log_content');
-  if (!el) return;
-  const guard = setTimeout(() => {
-    if (el.textContent.trim() === '로딩 중...') {
-      el.innerHTML = '<div style="text-align:center;color:#e53e3e;padding:16px;">데이터를 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.</div>';
-    }
-  }, 5000);
-  try {
-    let sessions = (T3 && T3.sessions && T3.sessions.length > 0) ? T3.sessions : null;
-    if (!sessions) {
-    const raw = await sb3('repaint_sessions?select=id,month,scrap_price,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.desc');
-      sessions = (raw || []).map(s => ({
-        id: s.id,
-        month: s.month,
-        scrap: s.scrap_price,
-        created_at: s.created_at,
-        items: (s.repaint_items || []).map(r => ({
-          id: r.id, name: r.name, thickness: r.thickness,
-          size: r.size, qty: r.qty, repaint: r.repaint, stdcost: r.stdcost
-        }))
-      }));
-      if (T3) T3.sessions = sessions;}
-    clearTimeout(guard);
-    if (!sessions || sessions.length === 0) {
-      el.innerHTML = '<div style="text-align:center;color:#888;padding:24px;">입력 이력이 없습니다.</div>';
-      return;
-    }
-    const sorted = [...sessions].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    let html = '';
-    sorted.forEach(s => {
-      const items = s.items || s.repaint_items || [];
-      const dateStr = s.created_at ? new Date(s.created_at).toLocaleString('ko-KR', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-';
-      const totalQty = items.reduce((acc, r) => acc + (Number(r.qty)||0), 0);
-      const totalRepaint = items.reduce((acc, r) => acc + (Number(r.repaint)||0), 0);
-      const sid = s.id;
-      html += '<div style="border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;overflow:hidden;">'
-        + '<div style="background:#f8f9fb;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e8edf2;">'
-        + '<span style="font-weight:700;color:#2d3748;font-size:14px;">&#x1F4C5; ' + s.month + '월 &nbsp;<span style="font-size:12px;color:#718096;font-weight:400;">' + dateStr + '</span></span>'
-        + '<div style="display:flex;gap:6px;">'
-        + '<button onclick="t3EditMonth(' + sid + ')" style="padding:4px 10px;background:#4a90d9;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;">수정</button>'
-        + '<button onclick="t3DownloadMonth(' + sid + ')" style="padding:4px 10px;background:#48bb78;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;">다운로드</button>'
-        + '<button onclick="t3DeleteMonth(' + sid + ')" style="padding:4px 10px;background:#e53e3e;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;">삭제</button>'
-        + '</div></div>'
-        + '<div style="padding:10px 16px;">'
-        + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-        + '<thead><tr style="color:#718096;">'
-        + '<th style="text-align:left;padding:4px 8px;">품명</th>'
-        + '<th style="text-align:center;padding:4px 8px;">두께</th>'
-        + '<th style="text-align:center;padding:4px 8px;">규격</th>'
-        + '<th style="text-align:right;padding:4px 8px;">생산수량</th>'
-        + '<th style="text-align:right;padding:4px 8px;">재도장</th>'
-        + '<th style="text-align:right;padding:4px 8px;">표준원가</th>'
-        + '</tr></thead><tbody>'
-        + items.map(function(r) {
-            return '<tr style="border-top:1px solid #f0f4f8;">'
-              + '<td style="padding:4px 8px;">' + (r.name||'-') + '</td>'
-              + '<td style="text-align:center;padding:4px 8px;">' + (r.thickness||'-') + '</td>'
-              + '<td style="text-align:center;padding:4px 8px;">' + (r.size||'-') + '</td>'
-              + '<td style="text-align:right;padding:4px 8px;">' + (r.qty||0).toLocaleString() + '</td>'
-              + '<td style="text-align:right;padding:4px 8px;color:#e67e22;">' + (r.repaint||0).toLocaleString() + '</td>'
-              + '<td style="text-align:right;padding:4px 8px;color:#2b6cb0;">' + (r.stdcost||0).toLocaleString() + '원</td>'
-              + '</tr>';
-          }).join('')
-        + '<tr style="border-top:2px solid #e2e8f0;font-weight:700;background:#f8f9fb;">'
-        + '<td colspan="3" style="padding:5px 8px;color:#718096;">합계</td>'
-        + '<td style="text-align:right;padding:5px 8px;">' + totalQty.toLocaleString() + '</td>'
-        + '<td style="text-align:right;padding:5px 8px;color:#e67e22;">' + totalRepaint.toLocaleString() + '</td>'
-        + '<td style="text-align:right;padding:5px 8px;"></td>'
-        + '</tr></tbody></table></div></div>';
-    });
-    el.innerHTML = html;
-  } catch(e) {
-    clearTimeout(guard);
-    console.error('t3LoadLog error:', e);
-    el.innerHTML = '<div style="text-align:center;color:#e53e3e;padding:16px;">이력 로드 오류: ' + e.message + '</div>';
-  }
-}
-
-function t3UpdateStdSavedList() {
-  const el = document.getElementById('t3_std_saved_list');
-  if (!el) return;
-  const months = Object.keys(T3.monthStdCost).sort((a,b) => a-b);
-  el.innerHTML = months.map(m => `
-    <span style="display:inline-flex;align-items:center;gap:4px;
-      background:rgba(110,64,201,0.08);border:1px solid rgba(110,64,201,0.25);
-      color:var(--accent5);padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600">
-      📋 ${m}월
-      <button onclick="t3DelStdCost(${m})"
-        style="border:none;background:none;cursor:pointer;color:var(--accent5);font-size:11px;padding:0 2px;line-height:1">✕</button>
-    </span>`).join('');
-}
-
-function t3DelStdCost(month) {
-  if (!confirm(`${month}월 표준원가를 삭제하겠습니까?`)) return;
-  delete T3.monthStdCost[month];
-  t3UpdateStdSavedList();
-  // 현재 선택 월이면 초기화
-  if (+document.getElementById('t3_sel_month').value === month) {
-    T3.stdCost = {};
-    document.getElementById('t3_std_status').textContent = '';
-    t3RenderInput();
-  }
-}
-
-
-
-function t3DownloadMonth(sessionId) {
-  const s = T3.sessions.find(x => x.id === sessionId);
-  if (!s) { alert('해당 세션을 찾을 수 없습니다.'); return; }
-  const headers = ['품명','규격','두께','생산수량','재도장수량','표준원가'];
-  const items = s.items || [];
-  const data = items.map(r => [r.name||'', r.size||'', r.thickness||'', r.qty||0, r.repaint||0, r.stdcost||0]);
-  const dateStr = s.created_at ? new Date(s.created_at).toLocaleDateString('ko-KR') : s.month + '월';
-  const wb = { SheetNames: ['재도장실적'], Sheets: {} };
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
-  wb.Sheets['재도장실적'] = ws;
-  XLSX.writeFile(wb, s.month + '월_재도장실적_' + dateStr + '.xlsx');
-}
-
 // ===================================================
 // TAB 5: 공인성적서/인증서/MSDS (SB5 전용)
 // ===================================================

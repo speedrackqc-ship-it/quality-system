@@ -1449,7 +1449,80 @@ function initTab3() {
     t3UpdateStdSavedList();
   })();
 }
+// --- [1452번 줄 시작] 사라진 결과 출력 및 이력 함수들 ---
 
+// 1. 저장된 실적을 화면에 표로 그려주는 함수 (에러의 주인공!)
+function t3RenderResults() {
+  const wrap = document.getElementById('t3_results_wrap');
+  if (!wrap) return;
+  if (!T3.saved || T3.saved.length === 0) { 
+    wrap.innerHTML = '<p style="color:var(--text2);padding:20px">저장된 데이터가 없습니다.</p>'; 
+    if(typeof t3RenderStats === 'function') t3RenderStats(); 
+    return; 
+  }
+
+  wrap.innerHTML = T3.saved.map(s => {
+    const scrap = s.scrap || 250;
+    let monthTotalPL = 0;
+    const rowsHtml = s.rows.map(r => {
+      // 기존에 있는 t3CalcRow 함수를 사용하여 계산합니다.
+      const res = t3CalcRow(r, scrap);
+      monthTotalPL += res.totPL;
+      const plCls = res.totPL >= 0 ? 'col-green' : 'col-red';
+      return `<tr>
+        <td class="td-name">${r.name}</td>
+        <td class="td-mono td-right col-blue">${r.size}</td>
+        <td class="td-mono td-center col-gray">${r.thickness}</td>
+        <td class="td-mono td-right">${(+r.qty).toLocaleString()}</td>
+        <td class="td-mono td-right col-gray" style="font-size:11px">${res.weight.toFixed(4)}</td>
+        <td class="td-mono td-right col-gray">${Math.round(res.sAmt).toLocaleString()}</td>
+        <td class="td-mono td-right">${(+r.repaint).toLocaleString()}</td>
+        <td class="td-mono td-right col-blue">${(+r.stdcost).toLocaleString()}</td>
+        <td class="td-mono td-right ${plCls}">${Math.round(res.perPL).toLocaleString()}</td>
+        <td class="td-mono td-right ${plCls}" style="font-weight:700">${Math.round(res.totPL).toLocaleString()}</td>
+      </tr>`;
+    }).join('');
+
+    return `
+      <div class="panel" style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div><span style="font-size:18px;font-weight:700;color:var(--accent)">${s.month}월 실적</span></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="td-mono">총손익 <strong class="${monthTotalPL >= 0 ? 'col-green' : 'col-red'}">${Math.round(monthTotalPL).toLocaleString()}원</strong></span>
+            <button onclick="t3EditMonth(${s.id || s.month})" style="padding:5px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;cursor:pointer;">✏ 수정</button>
+          </div>
+        </div>
+        <div class="table-wrap"><div class="table-scroll"><table>
+          <thead><tr><th>품명</th><th>규격</th><th>두께</th><th>수량</th><th>무게</th><th>막고철</th><th>재도장비</th><th>표준원가</th><th>개당손익</th><th>총손익</th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table></div></div>
+      </div>`;
+  }).join('');
+  if(typeof t3RenderStats === 'function') t3RenderStats();
+}
+
+// 2. 통계 분석 화면 표시 함수
+function t3RenderStats() {
+  const wrap = document.getElementById('t3_stats_wrap');
+  if (!wrap) return;
+  if (!T3.saved || T3.saved.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+}
+
+// 3. 입력 이력 로그 표시 함수 (로딩 중 해결사)
+function t3LogToggle() {
+  const body = document.getElementById('t3_log_body');
+  const arrow = document.getElementById('t3_log_arrow');
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+    arrow.style.transform = 'rotate(0deg)';
+  } else {
+    body.style.display = 'none';
+    arrow.style.transform = 'rotate(-90deg)';
+  }
+}
+
+// --- [붙여넣기 끝] ---
 function t3EmptyRow() {
   return { name:'', thickness:'', size:'', qty:'', repaint:'', stdcost:'' };
 }

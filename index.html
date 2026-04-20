@@ -1304,13 +1304,13 @@ function t2Init() {
 }
 t2Init();
 // ===================================================
-// TAB 3: 재도장 실적 (디자인 완벽 복구 + 모든 에러 수정본)
+// TAB 3: 재도장 실적 (디자인 복구 + 중복 제거 + 에러 수정 통합본)
 // ===================================================
 const T3 = {
   stdCost: {}, monthStdCost: {}, inputRows: [], saved: [], sessions: [], IRON: 7.85, _editSessionId: null
 };
 
-// 1. 초기화 및 데이터 로드
+// 1. 기초 초기화
 async function initTab3() {
   const m = new Date().getMonth() + 1;
   const selMonth = document.getElementById('t3_sel_month');
@@ -1323,25 +1323,46 @@ async function initTab3() {
   } catch(e) { console.error('T3 로드 실패:', e); }
 }
 
-// 2. 데이터 정리 (TypeError: map is not a function 해결용)
+// 2. DB 연결 핵심 함수 (파일 전체에서 단 하나만 존재해야 합니다)
+async function sb3(path, opt={}) {
+  const res = await fetch(SB3 + '/rest/v1/' + path, {
+    headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json', 'Prefer': opt.prefer || 'return=representation' },
+    method: opt.method || 'GET', body: opt.body ? JSON.stringify(opt.body) : undefined
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// 3. 데이터 로딩 및 정리 (TypeError: map is not a function 해결)
+async function t3LoadSessions() {
+  try {
+    const raw = await sb3('repaint_sessions?select=id,month,scrap_price,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.asc');
+    T3.sessions = raw || [];
+    t3BuildSaved();
+    t3RenderResults();
+    t3LoadLog();
+  } catch(e) { console.error('실적 로드 실패:', e); }
+}
+
 function t3BuildSaved() {
   const monthMap = {};
   (T3.sessions || []).forEach(s => {
-    if (!monthMap[s.month]) monthMap[s.month] = { month: s.month, scrap: s.scrap, rowsMap: {} };
+    if (!monthMap[s.month]) monthMap[s.month] = { month: s.month, scrap: s.scrap_price, rowsMap: {} };
     const m = monthMap[s.month];
-    (s.items || []).forEach(r => {
-      const key = (r.name||'') + '_' + (r.thickness||'') + '_' + (+r.size);
-      if (!m.rowsMap[key]) m.rowsMap[key] = { name: r.name, thickness: r.thickness, size: r.size, qty: 0, repaint: r.repaint, stdcost: r.stdcost };
+    const items = s.repaint_items || s.items || [];
+    items.forEach(r => {
+      const key = `${r.name}_${r.thickness}_${r.size}`;
+      if (!m.rowsMap[key]) m.rowsMap[key] = { ...r, qty: 0 };
       m.rowsMap[key].qty += (+r.qty || 0);
     });
   });
-  // Object를 Array로 확실히 변환하여 에러를 방지합니다.
+  // Object를 Array로 확실히 변환하여 화면 출력 에러를 방지합니다.
   T3.saved = Object.values(monthMap).map(m => ({
     month: m.month, scrap: m.scrap, rows: Object.values(m.rowsMap)
   })).sort((a, b) => b.month - a.month);
 }
 
-// 3. [원본 복구] 계산 핵심 로직 (철의 비중 7.85 및 폭 129/64 적용)
+// 4. [원본 복구] 계산 핵심 로직 (철의 비중 7.85 및 폭 129/64 적용)
 function t3CalcRow(r, scrap, stdCostMap) {
   if (!stdCostMap) {
     const m = +document.getElementById('t3_sel_month')?.value || 1;
@@ -1356,9 +1377,8 @@ function t3CalcRow(r, scrap, stdCostMap) {
   const weight = (thickness * width * T3.IRON * size) / 1000000;
   const sAmt = weight * (scrap || 250);
   const key = nm + '_' + (r.thickness||'') + '_' + (+r.size);
-  
-  // 🚩 lookup 정의 에러 수정 완료
   const lookup = stdCostMap[key] || {};
+  
   const repaint = lookup.repaint || +r.repaint || 0;
   const std = lookup.std || +r.stdcost || 0;
   const perPL = std ? (std - repaint - sAmt) : 0;
@@ -1367,7 +1387,7 @@ function t3CalcRow(r, scrap, stdCostMap) {
   return { weight, sAmt, std, repaint, perPL, totPL, qty: +r.qty || 0, width };
 }
 
-// 4. [원본 복구] 입력 테이블 렌더링
+// 5. [원본 복구] 입력/결과 디자인 렌더링
 function t3RenderInput() {
   const scrap = +document.getElementById('t3_scrap_price')?.value || 250;
   const tbody = document.getElementById('t3_input_tbody');
@@ -1382,11 +1402,11 @@ function t3RenderInput() {
         <option value="">선택</option><option value="홈던트기둥" ${r.name==='홈던트기둥'?'selected':''}>홈던트기둥</option><option value="홈던트받침" ${r.name==='홈던트받침'?'selected':''}>홈던트받침</option><option value="스피드랙기둥" ${r.name==='스피드랙기둥'?'selected':''}>스피드랙기둥</option><option value="스피드랙받침" ${r.name==='스피드랙받침'?'selected':''}>스피드랙받침</option>
       </select></td>
       <td class="input-cell">${t3ThicknessCell(r, i)}</td>
-      <td class="input-cell"><input type="text" value="${r.size||''}" data-i="${i}" data-f="size" onblur="t3CellInput(this)" placeholder="규격" style="width:100%; text-align:right; border:none; background:transparent;"></td>
-      <td class="input-cell"><input type="text" value="${r.qty||''}" data-i="${i}" data-f="qty" onblur="t3CellInput(this)" placeholder="수량" style="width:100%; text-align:right; border:none; background:transparent;"></td>
+      <td class="input-cell"><input type="text" value="${r.size||''}" data-i="${i}" data-f="size" onblur="t3CellInput(this)" placeholder="규격" style="width:100%;text-align:right;border:none;background:transparent;"></td>
+      <td class="input-cell"><input type="text" value="${r.qty||''}" data-i="${i}" data-f="qty" onblur="t3CellInput(this)" placeholder="수량" style="width:100%;text-align:right;border:none;background:transparent;"></td>
       <td style="text-align:center;color:#888;">7.85</td><td style="text-align:center;color:#888;">${width||'-'}</td>
       <td style="text-align:right;">${ro(weight ? weight.toFixed(4) : null, 'col-gray')}</td><td style="text-align:center;color:#888;">${scrap}</td>
-      <td style="text-align:right;">${ro(sAmt ? Math.round(sAmt) : null, 'col-gray')}</td><td style="text-align:right;">${ro(r.repaint, 'col-blue')}</td><td style="text-align:right;">${ro(r.stdcost, 'col-blue')}</td>
+      <td style="text-align:right;">${ro(sAmt ? Math.round(sAmt) : null, 'col-gray')}</td><td style="text-align:right;">${ro(repaint, 'col-blue')}</td><td style="text-align:right;">${ro(std, 'col-blue')}</td>
       <td style="text-align:right;background:rgba(154,103,0,0.04);">${ro(perPL ? Math.round(perPL) : null, plCls)}</td>
       <td style="text-align:right;background:rgba(154,103,0,0.04);">${ro(totPL ? Math.round(totPL) : null, plCls)}</td>
     </tr>`;
@@ -1396,12 +1416,11 @@ function t3RenderInput() {
 function t3ThicknessCell(r, i) {
   if (!r.name) return `-`;
   if (r.name.includes('홈던트')) return `<span>${r.name==='홈던트기둥'?'0.8':'1.2'}</span>`;
-  return `<select data-i="${i}" data-f="thickness" onchange="t3CellInput(this)" style="width:100%; border:none; background:transparent;">
+  return `<select data-i="${i}" data-f="thickness" onchange="t3CellInput(this)" style="width:100%;border:none;background:transparent;">
     <option value="">선택</option><option value="1.2" ${r.thickness==='1.2'?'selected':''}>1.2</option><option value="1.4" ${r.thickness==='1.4'?'selected':''}>1.4</option><option value="1.8" ${r.thickness==='1.8'?'selected':''}>1.8</option>
   </select>`;
 }
 
-// 5. 저장 로직 (데이터 누적 버전 - 삭제 방지)
 async function t3SaveMonth() {
   const month = +document.getElementById('t3_sel_month').value;
   const scrap = +document.getElementById('t3_scrap_price').value || 250;
@@ -1412,7 +1431,7 @@ async function t3SaveMonth() {
     const sid = sess[0].id;
     const items = rows.map(r => ({ session_id: sid, name: r.name, thickness: r.thickness, size: +r.size, qty: +r.qty, repaint: +r.repaint, stdcost: +r.stdcost }));
     await sb3('repaint_items', { method: 'POST', body: items });
-    t3ShowToast('✅ 누적 저장 완료'); t3ResetForm(); await t3LoadSessions();
+    t3ShowToast('✅ 안전하게 누적 저장되었습니다.'); await t3LoadSessions(); t3ResetForm();
   } catch(e) { t3ShowToast('❌ 오류: ' + e.message, 'error'); }
 }
 
@@ -1429,7 +1448,12 @@ function t3RenderResults() {
   t3RenderStats();
 }
 
-// 6. 보조 기능 (중복 제거 통합)
+async function t3LoadStdCostFromSB() {
+  try {
+    const rows = await sb3('repaint_stdcost?select=*');
+    (rows || []).forEach(r => { T3.monthStdCost[r.month] = { fileName: r.file_name, data: r.data }; });
+  } catch(e) { console.error(e); }
+}
 function t3ChangeMonth() {
   const month = +document.getElementById('t3_sel_month').value;
   if (T3.monthStdCost[month]) { T3.stdCost = T3.monthStdCost[month].data; document.getElementById('t3_std_status').textContent = `✅ ${month}월 표준원가 적용 중`; }
@@ -1437,10 +1461,10 @@ function t3ChangeMonth() {
   t3RenderInput();
 }
 function t3CellInput(el) {
-  const i = +el.dataset.i; const f = el.dataset.f; T3.inputRows[i][f] = el.value;
-  if (f === 'name') T3.inputRows[i].thickness = T3.inputRows[i].name === '홈던트기둥' ? '0.8' : (T3.inputRows[i].name.includes('홈던트') ? '1.2' : '');
+  const i = +el.dataset.i; const f = el.dataset.f; if(T3.inputRows[i]) T3.inputRows[i][f] = el.value;
+  if (f === 'name' && T3.inputRows[i]) T3.inputRows[i].thickness = T3.inputRows[i].name === '홈던트기둥' ? '0.8' : (T3.inputRows[i].name.includes('홈던트') ? '1.2' : '');
   const r = T3.inputRows[i];
-  if (r.name && r.size) {
+  if (r && r.name && r.size) {
     const map = T3.monthStdCost[+document.getElementById('t3_sel_month').value]?.data || {};
     const key = r.name + '_' + (r.thickness||'') + '_' + (+r.size);
     if (map[key]) { r.stdcost = map[key].std; r.repaint = map[key].repaint; }
@@ -1449,15 +1473,7 @@ function t3CellInput(el) {
 }
 async function t3LoadLog() {
   const el = document.getElementById('t3_log_content'); if (!el || !T3.sessions.length) return;
-  el.innerHTML = [...T3.sessions].sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).map(s => `<div style="padding:10px; border-bottom:1px solid #eee;"><b>${s.month}월 실적</b> (${new Date(s.created_at).toLocaleString()}) <button onclick="t3EditMonth(${s.id})" style="float:right;">수정/확인</button></div>`).join('');
-}
-async function sb3(path, opt={}) {
-  const res = await fetch(SB3 + '/rest/v1/' + path, {
-    headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json', 'Prefer': opt.prefer || 'return=representation' },
-    method: opt.method || 'GET', body: opt.body ? JSON.stringify(opt.body) : undefined
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  el.innerHTML = [...T3.sessions].sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).map(s => `<div style="padding:10px; border-bottom:1px solid #eee;"><b>${s.month}월 실적</b> (${new Date(s.created_at).toLocaleString()}) <button onclick="t3EditMonth(${s.id})" style="float:right;">확인</button></div>`).join('');
 }
 function t3ResetForm() { T3.inputRows = [{},{},{}]; T3._editSessionId = null; t3RenderInput(); }
 function t3AddRow() { T3.inputRows.push({}); t3RenderInput(); }
@@ -1466,295 +1482,6 @@ function t3LogToggle() { const b = document.getElementById('t3_log_body'); if(b)
 function t3RenderStats() { document.getElementById("t3_stats_wrap").style.display = T3.saved.length?"block":"none"; }
 function t3UpdateStdSavedList() { document.getElementById('t3_std_saved_list').innerHTML = Object.keys(T3.monthStdCost).map(m => `<span class="tag">📋 ${m}월</span>`).join(''); }
 function t3Recalc() {}
-const CERT_BUCKET = 'certificates';
-const CERT_CAT_OF_IDX = { '1': 'mechanics', '2': 'chemistry', '3': 'certification', '4': 'msds' };
-const CERT_IDX_OF_CAT = { 'mechanics': '1', 'chemistry': '2', 'certification': '3', 'msds': '4' };
-
-const certData = { mechanics: [], chemistry: [], certification: [], msds: [] };
-
-async function sb5(path, opt) {
-  opt = opt || {};
-  const res = await fetch(SB5 + '/rest/v1/' + path, {
-    headers: {
-      'apikey': KEY5,
-      'Authorization': 'Bearer ' + KEY5,
-      'Content-Type': 'application/json',
-      'Prefer': opt.prefer || 'return=representation'
-    },
-    method: opt.method || 'GET',
-    body: opt.body ? JSON.stringify(opt.body) : undefined
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const txt = await res.text();
-  return txt ? JSON.parse(txt) : null;
-}
-
-async function certStorageUpload(path, file) {
-  // 주소를 한 번 더 안전하게 포장하는 번역 과정입니다.
-  const encodedPath = path.split('/').map(segment => encodeURIComponent(segment)).join('/');
-  
-  const res = await fetch(`${SB5}/storage/v1/object/${CERT_BUCKET}/${encodedPath}`, {
-    method: 'POST',
-    headers: {
-      'apikey': KEY5,
-      'Authorization': 'Bearer ' + KEY5,
-      'Content-Type': file.type || 'application/octet-stream',
-      'x-upsert': 'true'
-    },
-    body: file
-  });
-  if (!res.ok) throw new Error('Storage 업로드 실패: ' + await res.text());
-  return res.json();
-}
-async function certStorageDelete(path) {
-  const res = await fetch(`${SB5}/storage/v1/object/${CERT_BUCKET}/${encodeURI(path)}`, {
-    method: 'DELETE',
-    headers: { 'apikey': KEY5, 'Authorization': 'Bearer ' + KEY5 }
-  });
-  if (!res.ok && res.status !== 404) throw new Error('Storage 삭제 실패: ' + await res.text());
-}
-
-function certStorageGetPublicUrl(path) {
-  return `${SB5}/storage/v1/object/public/${CERT_BUCKET}/${encodeURI(path)}`;
-}
-
-function certEscape(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-function certEscapeAttr(s) {
-  return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-}
-
-function certToggle(idx) {
-  const body = document.getElementById('cert-body-' + idx);
-  const arrow = document.getElementById('cert-arrow-' + idx);
-  const header = document.querySelector('#cert-sec-' + idx + ' .cert-section-header');
-  if (!body) return;
-  body.classList.toggle('open');
-  if (arrow) arrow.classList.toggle('open');
-  if (header) header.classList.toggle('open');
-}
-
-async function certLoadCategory(category) {
-  try {
-    const folders = await sb5(`cert_folders?category=eq.${category}&select=id,name,created_at,cert_files(id,file_name,file_size,file_ext,storage_path,created_at)&order=created_at.asc`);
-    certData[category] = (folders || []).map(f => ({
-      id: f.id,
-      name: f.name,
-      created_at: f.created_at,
-      files: (f.cert_files || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    }));
-    certRenderCategory(category);
-  } catch (e) {
-    console.error('cert load error:', e);
-    const idx = CERT_IDX_OF_CAT[category];
-    const el = document.getElementById('cert-folders-' + idx);
-    if (el) el.innerHTML = '<div class="cert-empty" style="color:#e53e3e">⚠ 데이터 로드 실패: ' + certEscape(e.message) + '</div>';
-  }
-}
-
-function certLoadAll() {
-  return Promise.all(['mechanics', 'chemistry', 'certification', 'msds'].map(certLoadCategory));
-}
-
-function certUpdateCounts() {
-  ['mechanics', 'chemistry', 'certification', 'msds'].forEach(cat => {
-    const idx = CERT_IDX_OF_CAT[cat];
-    const cnt = (certData[cat] || []).reduce((sum, f) => sum + ((f.files && f.files.length) || 0), 0);
-    const el = document.getElementById('cert-count-' + idx);
-    if (el) el.textContent = cnt + '건';
-  });
-}
-
-function certRenderCategory(category) {
-  const idx = CERT_IDX_OF_CAT[category];
-  const container = document.getElementById('cert-folders-' + idx);
-  if (!container) return;
-  const folders = certData[category] || [];
-  container.innerHTML = folders.length
-    ? folders.map(folder => certFolderHtml(folder, category)).join('')
-    : '<div class="cert-empty">폴더가 없습니다. 아래 [＋ 폴더 추가] 버튼을 눌러 시작하세요.</div>';
-  certUpdateCounts();
-}
-// --- 1. 화면 제어 스위치 (오류 수정 및 기능 개선 버전) ---
-function certToggleUploadZone(folderId) {
-  // 1-1. 업로드 칸이 보일 수 있게 먼저 폴더 몸통을 무조건 엽니다.
-  const body = document.getElementById('cert-folder-body-' + folderId);
-  if (body) body.style.display = 'block';
-
-  // 1-2. 업로드 칸을 껐다 켰다(Toggle) 합니다.
-  const zone = document.getElementById('cert-upload-zone-' + folderId);
-  if (zone) {
-    zone.style.display = (zone.style.display === 'none') ? 'block' : 'none';
-  }
-}
-
-function certToggleFolder(folderId) {
-  const el = document.getElementById('cert-folder-body-' + folderId);
-  if (el) {
-    el.style.display = (el.style.display === 'none') ? 'block' : 'none';
-  }
-}
-
-// --- 2. 폴더 모양 그리기 로직 ---
-function certFolderHtml(folder, category) {
-  const files = folder.files || [];
-  const filesHtml = files.length
-    ? files.map(f => certFileHtml(f, category)).join('')
-    : '<div class="cert-empty">📭 업로드된 파일이 없습니다</div>';
-    
-  return `
-    <div class="cert-folder-block">
-      <div class="cert-folder-header" onclick="certToggleFolder(${folder.id})" style="cursor:pointer; display:flex; align-items:center;">
-        <span style="margin-right:8px;">📁</span>
-        <input type="text" class="cert-folder-name-input"
-          value="${certEscape(folder.name)}"
-          onclick="event.stopPropagation()" 
-          onblur="certRenameFolder(${folder.id}, '${category}', this.value)"
-          onkeydown="if(event.key==='Enter'){this.blur();event.preventDefault();}">
-        
-        <span style="font-size:11px; color:#888; margin-left:10px;">${files.length}개</span>
-        
-        <div style="margin-left:auto; display:flex; gap:8px;">
-          <button class="cert-folder-upload-btn" 
-            onclick="event.stopPropagation(); certToggleUploadZone(${folder.id})" 
-            style="margin-top:0; padding:4px 10px; font-size:11px;">＋ 파일 추가</button>
-          
-          <button class="cert-folder-del-btn" 
-            onclick="event.stopPropagation(); certDeleteFolder(${folder.id}, '${category}')">🗑</button>
-        </div>
-      </div>
-      
-      <div class="cert-folder-body" id="cert-folder-body-${folder.id}" style="display:none; padding:14px; border-top:1px solid #eee; background:#fff;">
-        <div id="cert-upload-zone-${folder.id}" class="cert-upload-zone" style="display:none; margin-bottom:15px; border:2px dashed #4a90d9; background:#f0f6ff;"
-          ondragover="event.preventDefault(); this.classList.add('drag-over')"
-          ondragleave="this.classList.remove('drag-over')"
-          ondrop="event.preventDefault(); this.classList.remove('drag-over'); certUpload(${folder.id}, '${category}', event.dataTransfer.files)">
-          <input type="file" multiple onchange="certUpload(${folder.id}, '${category}', this.files); this.value='';">
-          <div class="cert-upload-icon" style="font-size:20px;">☁️</div>
-          <div class="cert-upload-text" style="font-size:12px;">파일을 여기에 끌어다 놓으세요</div>
-        </div>
-        <div class="cert-file-list">${filesHtml}</div>
-      </div>
-    </div>`;
-}
-
-// --- 3. 개별 파일 모양 그리기 (사라졌던 함수 - 다시 추가됨) ---
-function certFileHtml(f, category) {
-  const ext = (f.file_ext || '').toLowerCase();
-  const kb = (f.file_size || 0) / 1024;
-  const sizeStr = kb > 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb.toFixed(0) + ' KB';
-  const dateStr = f.created_at ? new Date(f.created_at).toLocaleDateString('ko-KR') : '';
-  const url = certStorageGetPublicUrl(f.storage_path);
-  return `
-    <div class="cert-file-item">
-      <div class="cert-file-info">
-        <span class="cert-file-ext ${ext}">${certEscape(ext || 'FILE')}</span>
-        <span class="cert-file-name" title="${certEscape(f.file_name)}">${certEscape(f.file_name)}</span>
-        <span class="cert-file-size">${sizeStr}</span>
-        <span class="cert-file-date">${dateStr}</span>
-      </div>
-      <div class="cert-file-actions">
-        <button class="cert-btn cert-btn-view" onclick="window.open('${certEscapeAttr(url)}', '_blank')">👁 보기</button>
-        <a class="cert-btn cert-btn-dl" href="${certEscapeAttr(url)}" download="${certEscape(f.file_name)}" style="text-decoration:none;display:inline-block">⬇ 다운로드</a>
-        <button class="cert-btn cert-btn-del" onclick="certDeleteFile(${f.id}, '${certEscapeAttr(f.storage_path)}', '${certEscapeAttr(f.file_name)}', '${category}')">🗑</button>
-      </div>
-    </div>`;
-}
-
-async function certAddFolder(category) {
-  const name = prompt('새 폴더 이름을 입력하세요:', '');
-  if (!name || !name.trim()) return;
-  try {
-    await sb5('cert_folders', { method: 'POST', body: { category: category, name: name.trim() } });
-    await certLoadCategory(category);
-    if (typeof t3ShowToast === 'function') t3ShowToast('✅ 폴더가 추가되었습니다');
-  } catch (e) { alert('폴더 추가 실패: ' + e.message); }
-}
-
-async function certRenameFolder(folderId, category, newName) {
-  newName = (newName || '').trim();
-  if (!newName) { await certLoadCategory(category); return; }
-  const folder = (certData[category] || []).find(f => f.id === folderId);
-  if (folder && folder.name === newName) return;
-  try {
-    await sb5(`cert_folders?id=eq.${folderId}`, { method: 'PATCH', body: { name: newName } });
-    if (folder) folder.name = newName;
-    if (typeof t3ShowToast === 'function') t3ShowToast('✏️ 이름이 변경되었습니다');
-  } catch (e) { alert('이름 변경 실패: ' + e.message); await certLoadCategory(category); }
-}
-
-async function certDeleteFolder(folderId, category) {
-  const folder = (certData[category] || []).find(f => f.id === folderId);
-  if (!folder) return;
-  const fileCount = (folder.files && folder.files.length) || 0;
-  if (!confirm(`"${folder.name}" 폴더를 삭제하시겠습니까?\n(안의 파일 ${fileCount}개도 함께 삭제됩니다)`)) return;
-  try {
-    for (const f of (folder.files || [])) {
-      try { await certStorageDelete(f.storage_path); } catch (e) { console.warn('storage 삭제 건너뜀:', e.message); }
-    }
-    await sb5(`cert_files?folder_id=eq.${folderId}`, { method: 'DELETE', prefer: '' });
-    await sb5(`cert_folders?id=eq.${folderId}`, { method: 'DELETE', prefer: '' });
-    await certLoadCategory(category);
-    if (typeof t3ShowToast === 'function') t3ShowToast('🗑 폴더가 삭제되었습니다');
-  } catch (e) { alert('삭제 실패: ' + e.message); }
-}
-
-async function certUpload(folderId, category, fileList) {
-  if (!fileList || !fileList.length) return;
-  const files = Array.from(fileList);
-  const MAX = 50 * 1024 * 1024;
-  let okCount = 0, failCount = 0;
-  
-  if (typeof t3ShowToast === 'function') t3ShowToast(`⏳ ${files.length}개 파일 업로드 중...`, 'warn');
-  
-  for (const file of files) {
-    if (file.size > MAX) { alert(`"${file.name}"은(는) 50MB를 초과합니다.`); failCount++; continue; }
-    try {
-      const ts = Date.now();
-      const ext = (file.name.split('.').pop() || '').toLowerCase();
-      
-      // [필살기] 서버에는 '시간.확장자'로 저장해서 한글 에러를 아예 안 만듭니다.
-      const storagePath = `${category}/${folderId}/${ts}.${ext}`;
-      
-      await certStorageUpload(storagePath, file);
-      
-      // DB에는 원래 파일 이름을 저장해서 화면에는 한글로 잘 나오게 합니다.
-      await sb5('cert_files', {
-        method: 'POST',
-        body: { folder_id: folderId, file_name: file.name, file_size: file.size, file_ext: ext, storage_path: storagePath }
-      });
-      okCount++;
-    } catch (e) {
-      console.error(e); failCount++;
-    }
-  }
-  await certLoadCategory(category);
-  if (typeof t3ShowToast === 'function') {
-    if (failCount === 0) t3ShowToast(`✅ ${okCount}개 업로드 완료`);
-    else t3ShowToast(`⚠ 성공 ${okCount} / 실패 ${failCount}`, 'error');
-  }
-}
-
-async function certDeleteFile(fileId, storagePath, fileName, category) {
-  if (!confirm(`"${fileName}" 파일을 삭제하시겠습니까?`)) return;
-  try {
-    try { await certStorageDelete(storagePath); } catch (e) { console.warn('storage 삭제 건너뜀:', e.message); }
-    await sb5(`cert_files?id=eq.${fileId}`, { method: 'DELETE', prefer: '' });
-    await certLoadCategory(category);
-    if (typeof t3ShowToast === 'function') t3ShowToast('🗑 파일이 삭제되었습니다');
-  } catch (e) { alert('삭제 실패: ' + e.message); }
-}
-
-function initTab5() {
-  ['mechanics', 'chemistry', 'certification', 'msds'].forEach(cat => {
-    const idx = CERT_IDX_OF_CAT[cat];
-    const el = document.getElementById('cert-folders-' + idx);
-    if (el) el.innerHTML = '<div class="cert-empty">⏳ 불러오는 중...</div>';
-  });
-  certLoadAll().catch(e => console.error('TAB5 init error:', e));
 }// ===================================================
 // TAB 4: 관리현황
 // ===================================================

@@ -1304,7 +1304,7 @@ function t2Init() {
 }
 t2Init();
 // ===================================================
-// TAB 3: 재도장 실적 (디자인 복구 + 중복 제거 + 에러 수정 통합본)
+// TAB 3: 재도장 실적 (디자인 완벽 복구 + 모든 에러 수정 통합본)
 // ===================================================
 const T3 = {
   stdCost: {}, monthStdCost: {}, inputRows: [], saved: [], sessions: [], IRON: 7.85, _editSessionId: null
@@ -1323,14 +1323,15 @@ async function initTab3() {
   } catch(e) { console.error('T3 로드 실패:', e); }
 }
 
-// 2. DB 연결 핵심 함수 (파일 전체에서 단 하나만 존재해야 합니다)
+// 2. DB 연결 핵심 (파일 전체에서 sb3 함수는 이 버전 하나만 남기세요)
 async function sb3(path, opt={}) {
   const res = await fetch(SB3 + '/rest/v1/' + path, {
     headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json', 'Prefer': opt.prefer || 'return=representation' },
     method: opt.method || 'GET', body: opt.body ? JSON.stringify(opt.body) : undefined
   });
   if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  const txt = await res.text();
+  return txt ? JSON.parse(txt) : null;
 }
 
 // 3. 데이터 로딩 및 정리 (TypeError: map is not a function 해결)
@@ -1356,10 +1357,9 @@ function t3BuildSaved() {
       m.rowsMap[key].qty += (+r.qty || 0);
     });
   });
-  // Object를 Array로 확실히 변환하여 화면 출력 에러를 방지합니다.
   T3.saved = Object.values(monthMap).map(m => ({
     month: m.month, scrap: m.scrap, rows: Object.values(m.rowsMap)
-  })).sort((a, b) => b.month - a.month);
+  })).sort((a, b) => a.month - b.month);
 }
 
 // 4. [원본 복구] 계산 핵심 로직 (철의 비중 7.85 및 폭 129/64 적용)
@@ -1369,32 +1369,26 @@ function t3CalcRow(r, scrap, stdCostMap) {
     stdCostMap = (T3.monthStdCost[m] && T3.monthStdCost[m].data) || T3.stdCost || {};
   }
   const nm = r.name || '';
-  const _autoThick = nm === '홈던트기둥' ? 0.8 : (nm.includes('홈던트') ? 1.2 : 0);
-  const thickness = +r.thickness || _autoThick || 0;
-  const width = nm === '홈던트기둥' ? 129 : (nm ? 64 : 0);
+  const thickness = +r.thickness || (nm === '홈던트기둥' ? 0.8 : (nm.includes('홈던트') ? 1.2 : 0));
+  const width = nm === '홈던트기둥' ? 129 : 64;
   const size = +r.size || 0;
-  
   const weight = (thickness * width * T3.IRON * size) / 1000000;
   const sAmt = weight * (scrap || 250);
   const key = nm + '_' + (r.thickness||'') + '_' + (+r.size);
   const lookup = stdCostMap[key] || {};
-  
   const repaint = lookup.repaint || +r.repaint || 0;
   const std = lookup.std || +r.stdcost || 0;
   const perPL = std ? (std - repaint - sAmt) : 0;
-  const totPL = perPL * (+r.qty || 0);
-  
-  return { weight, sAmt, std, repaint, perPL, totPL, qty: +r.qty || 0, width };
+  return { weight, sAmt, std, repaint, perPL, totPL: perPL * (+r.qty || 0), width };
 }
 
-// 5. [원본 복구] 입력/결과 디자인 렌더링
+// 5. [원본 복구] 입력 테이블 렌더링
 function t3RenderInput() {
   const scrap = +document.getElementById('t3_scrap_price')?.value || 250;
   const tbody = document.getElementById('t3_input_tbody');
   if (!tbody) return;
   tbody.innerHTML = T3.inputRows.map((r, i) => {
-    const { weight, sAmt, std, perPL, totPL, width } = t3CalcRow(r, scrap);
-    const plCls = perPL >= 0 ? 'col-green' : 'col-red';
+    const { weight, sAmt, std, repaint, perPL, totPL, width } = t3CalcRow(r, scrap);
     const ro = (v, cls) => v ? `<span class="td-mono ${cls||''}" style="font-size:12px">${typeof v==='number'?v.toLocaleString():v}</span>` : `-`;
     return `<tr>
       <td style="text-align:center;"><button onclick="t3DelRow(${i})" style="color:red;border:none;background:none;cursor:pointer;">✕</button></td>
@@ -1407,8 +1401,8 @@ function t3RenderInput() {
       <td style="text-align:center;color:#888;">7.85</td><td style="text-align:center;color:#888;">${width||'-'}</td>
       <td style="text-align:right;">${ro(weight ? weight.toFixed(4) : null, 'col-gray')}</td><td style="text-align:center;color:#888;">${scrap}</td>
       <td style="text-align:right;">${ro(sAmt ? Math.round(sAmt) : null, 'col-gray')}</td><td style="text-align:right;">${ro(repaint, 'col-blue')}</td><td style="text-align:right;">${ro(std, 'col-blue')}</td>
-      <td style="text-align:right;background:rgba(154,103,0,0.04);">${ro(perPL ? Math.round(perPL) : null, plCls)}</td>
-      <td style="text-align:right;background:rgba(154,103,0,0.04);">${ro(totPL ? Math.round(totPL) : null, plCls)}</td>
+      <td style="text-align:right;background:rgba(154,103,0,0.04);">${ro(perPL ? Math.round(perPL) : null, (perPL>=0?'col-green':'col-red'))}</td>
+      <td style="text-align:right;background:rgba(154,103,0,0.04);">${ro(totPL ? Math.round(totPL) : null, (totPL>=0?'col-green':'col-red'))}</td>
     </tr>`;
   }).join('');
 }
@@ -1428,10 +1422,9 @@ async function t3SaveMonth() {
   if (!rows.length) return t3ShowToast('⚠️ 입력 내용 없음', 'warn');
   try {
     const sess = await sb3('repaint_sessions', { method: 'POST', body: { month, scrap_price: scrap } });
-    const sid = sess[0].id;
-    const items = rows.map(r => ({ session_id: sid, name: r.name, thickness: r.thickness, size: +r.size, qty: +r.qty, repaint: +r.repaint, stdcost: +r.stdcost }));
+    const items = rows.map(r => ({ session_id: sess[0].id, name: r.name, thickness: r.thickness, size: +r.size, qty: +r.qty, repaint: +r.repaint, stdcost: +r.stdcost }));
     await sb3('repaint_items', { method: 'POST', body: items });
-    t3ShowToast('✅ 안전하게 누적 저장되었습니다.'); await t3LoadSessions(); t3ResetForm();
+    t3ShowToast('✅ 누적 저장 완료'); await t3LoadSessions(); t3ResetForm();
   } catch(e) { t3ShowToast('❌ 오류: ' + e.message, 'error'); }
 }
 
@@ -1441,7 +1434,7 @@ function t3RenderResults() {
     let mPL = 0;
     const rowsHtml = s.rows.map(r => {
       const res = t3CalcRow(r, s.scrap); mPL += res.totPL;
-      return `<tr><td>${r.name}</td><td>${r.size}</td><td>${r.thickness}</td><td>${(+r.qty).toLocaleString()}</td><td>${res.weight.toFixed(4)}</td><td>${Math.round(res.sAmt).toLocaleString()}</td><td>${res.repaint.toLocaleString()}</td><td>${res.std.toLocaleString()}</td><td class="${res.totPL>=0?'col-green':'col-red'}">${Math.round(res.totPL).toLocaleString()}원</td></tr>`;
+      return `<tr><td>${r.name}</td><td>${r.size}</td><td>${r.thickness}</td><td>${(+r.qty).toLocaleString()}</td><td>${res.weight.toFixed(4)}</td><td>${Math.round(res.sAmt).toLocaleString()}</td><td>${res.repaint.toLocaleString()}</td><td>${res.std.toLocaleString()}</td><td class="${res.totPL>=0?'col-green':'col-red'}">${Math.round(res.totPL).toLocaleString()}</td></tr>`;
     }).join('');
     return `<div class="panel" style="margin-bottom:24px;"><b>${s.month}월 합계 실적</b><span style="float:right;" class="${mPL>=0?'col-green':'col-red'}">총 손익: ${Math.round(mPL).toLocaleString()}원</span><div class="table-wrap"><table><thead><tr><th>품명</th><th>규격</th><th>두께</th><th>수량</th><th>무게</th><th>막고철</th><th>재도장비</th><th>표준원가</th><th>총손익</th></tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
   }).join('');
@@ -1466,7 +1459,7 @@ function t3CellInput(el) {
   const r = T3.inputRows[i];
   if (r && r.name && r.size) {
     const map = T3.monthStdCost[+document.getElementById('t3_sel_month').value]?.data || {};
-    const key = r.name + '_' + (r.thickness||'') + '_' + (+r.size);
+    const key = `${r.name}_${r.thickness||''}_${+r.size}`;
     if (map[key]) { r.stdcost = map[key].std; r.repaint = map[key].repaint; }
   }
   t3RenderInput();
@@ -1482,7 +1475,6 @@ function t3LogToggle() { const b = document.getElementById('t3_log_body'); if(b)
 function t3RenderStats() { document.getElementById("t3_stats_wrap").style.display = T3.saved.length?"block":"none"; }
 function t3UpdateStdSavedList() { document.getElementById('t3_std_saved_list').innerHTML = Object.keys(T3.monthStdCost).map(m => `<span class="tag">📋 ${m}월</span>`).join(''); }
 function t3Recalc() {}
-}// ===================================================
 // TAB 4: 관리현황
 // ===================================================
 

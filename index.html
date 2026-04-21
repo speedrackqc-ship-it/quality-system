@@ -2890,7 +2890,11 @@ async function deleteFolder(id) {
   await sb3(`cert_folders?id=eq.${id}`, { method: 'DELETE' });
   loadCertificates();
 }
-// 탭 5 아코디언 메뉴 열기/닫기 (누락된 함수 복구)
+// ===================================================
+// TAB 5: Supabase 실데이터 연동 시스템 (quality 프로젝트용)
+// ===================================================
+
+// 1. 탭 5 아코디언 메뉴 열기/닫기
 function certToggle(id) {
   const header = document.querySelector('#cert-sec-' + id + ' .cert-section-header');
   const body = document.getElementById('cert-body-' + id);
@@ -2899,6 +2903,165 @@ function certToggle(id) {
   if (header) header.classList.toggle('open');
   if (body) body.classList.toggle('open');
   if (arrow) arrow.classList.toggle('open');
+}
+
+// 2. 전체 데이터 로드 (조회)
+async function loadCertificates() {
+  try {
+    const [folders, files] = await Promise.all([
+      sb3('cert_folders?select=*&order=created_at.asc'),
+      sb3('cert_files?select=*&order=created_at.asc')
+    ]);
+
+    document.getElementById('cert-folders-1').innerHTML = '';
+    document.getElementById('cert-folders-2').innerHTML = '';
+    document.getElementById('cert-folders-3').innerHTML = '';
+    document.getElementById('cert-folders-4').innerHTML = '';
+
+    const counts = { mechanics: 0, chemistry: 0, certification: 0, msds: 0 };
+
+    if (folders && !folders.error) {
+      folders.forEach(f => {
+        if(counts[f.category] !== undefined) counts[f.category]++;
+        renderFolderUI(f.category, f.id, f.name);
+      });
+    }
+
+    if (files && !files.error) {
+      files.forEach(file => {
+        renderFileUI(file.folder_id, file);
+      });
+    }
+
+    document.getElementById('cert-count-1').textContent = (counts.mechanics || 0) + '건';
+    document.getElementById('cert-count-2').textContent = (counts.chemistry || 0) + '건';
+    document.getElementById('cert-count-3').textContent = (counts.certification || 0) + '건';
+    document.getElementById('cert-count-4').textContent = (counts.msds || 0) + '건';
+
+  } catch (e) {
+    console.error("데이터 로드 중 오류:", e);
+  }
+}
+
+// 3. 폴더 생성 (DB 저장)
+async function certAddFolder(type) {
+  const folderName = prompt("새 폴더 이름을 입력하세요:");
+  if (!folderName) return;
+
+  try {
+    await sb3('cert_folders', {
+      method: 'POST',
+      body: { name: folderName, category: type }
+    });
+    loadCertificates(); 
+  } catch (e) {
+    alert("폴더 생성 실패: " + e.message);
+  }
+}
+
+// 4. 파일 업로드 (Storage 저장 + DB 기록)
+async function handleCertUpload(input, folderId, category) {
+  const files = input.files;
+  if (!files || files.length === 0) return;
+
+  for (const file of Array.from(files)) {
+    try {
+      // 💡 수정됨: 버킷 이름을 certificates 로 변경했습니다!
+      const filePath = `${category}/${folderId}/${Date.now()}_${file.name}`;
+      const storageUrl = `${SB3}/storage/v1/object/certificates/${filePath}`;
+      
+      const res = await fetch(storageUrl, {
+        method: 'POST',
+        headers: { 'apikey': KEY3, 'Authorization': `Bearer ${KEY3}`, 'Content-Type': file.type },
+        body: file
+      });
+
+      if (!res.ok) throw new Error("파일 저장소 업로드 실패");
+
+      const ext = file.name.split('.').pop().toLowerCase();
+      
+      await sb3('cert_files', {
+        method: 'POST',
+        body: {
+          folder_id: folderId,
+          file_name: file.name,
+          file_size: file.size, 
+          file_ext: ext,
+          storage_path: filePath
+        }
+      });
+    } catch (e) {
+      alert(`'${file.name}' 업로드 오류: ` + e.message);
+    }
+  }
+  loadCertificates(); 
+}
+
+// --- 아래는 UI 그려주는 보조 함수들입니다 ---
+
+function renderFolderUI(category, folderId, folderName) {
+  const mapping = { mechanics: '1', chemistry: '2', certification: '3', msds: '4' };
+  const container = document.getElementById(`cert-folders-${mapping[category]}`);
+  if (!container) return;
+
+  const html = `
+    <div class="cert-folder-block fade-in" id="folder-${folderId}">
+      <div class="cert-folder-header" onclick="toggleFolderBody('${folderId}')" style="cursor:pointer">
+        <span>📁 <b>${folderName}</b></span>
+        <button class="cert-folder-del-btn" onclick="event.stopPropagation(); deleteFolder('${folderId}')">삭제</button>
+      </div>
+      <div class="cert-folder-body" id="body-${folderId}" style="display:none; padding:10px;">
+        <div class="cert-upload-zone" onclick="this.querySelector('input').click()" style="margin-bottom:10px;">
+          <div class="cert-upload-icon">☁️</div>
+          <div class="cert-upload-text">여기를 클릭하거나 파일을 드래그하여 업로드하세요</div>
+          <input type="file" style="display:none" onchange="handleCertUpload(this, '${folderId}', '${category}')" multiple />
+        </div>
+        <div class="cert-file-list" id="file-list-${folderId}"></div>
+      </div>
+    </div>`;
+  container.insertAdjacentHTML('beforeend', html);
+}
+
+function renderFileUI(folderId, file) {
+  const list = document.getElementById('file-list-' + folderId);
+  if (!list) return;
+
+  const ext = file.file_ext || 'file';
+  const sizeStr = file.file_size ? (file.file_size / 1024).toFixed(1) + ' KB' : '알 수 없음';
+  
+  // 💡 수정됨: 미리보기 주소도 certificates 버킷을 바라보게 변경했습니다!
+  const publicUrl = `${SB3}/storage/v1/object/public/certificates/${file.storage_path}`;
+
+  const html = `
+    <div class="cert-file-item fade-in">
+      <div class="cert-file-info">
+        <span class="cert-file-ext ${ext}">${ext}</span>
+        <span class="cert-file-name">${file.file_name}</span>
+        <span class="cert-file-size" style="margin-left:6px; color:#999; font-size:11px">${sizeStr}</span>
+      </div>
+      <div class="cert-file-actions">
+        <button class="cert-btn cert-btn-view" onclick="window.open('${publicUrl}', '_blank')">보기</button>
+        <button class="cert-btn cert-btn-del" onclick="deleteFile('${file.id}')">삭제</button>
+      </div>
+    </div>`;
+  list.insertAdjacentHTML('beforeend', html);
+}
+
+function toggleFolderBody(id) {
+  const b = document.getElementById('body-' + id);
+  b.style.display = b.style.display === 'none' ? 'block' : 'none';
+}
+
+async function deleteFile(id) {
+  if(!confirm("파일을 삭제하시겠습니까?")) return;
+  await sb3(`cert_files?id=eq.${id}`, { method: 'DELETE' });
+  loadCertificates();
+}
+
+async function deleteFolder(id) {
+  if(!confirm("폴더와 내부 파일을 모두 삭제하시겠습니까?")) return;
+  await sb3(`cert_folders?id=eq.${id}`, { method: 'DELETE' });
+  loadCertificates();
 }
 </script>
 </body>

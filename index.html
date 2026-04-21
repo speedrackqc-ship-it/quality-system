@@ -451,7 +451,8 @@ tr:hover td { background: rgba(9,105,218,0.03); }
   .cert-folder-del-btn:hover{opacity:1}
   .cert-folder-body{padding:14px}
   .cert-upload-zone{border:2px dashed #c0c8d8;border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;margin-bottom:12px;background:#fff;position:relative}
-  ..cert-upload-zone:hover{border-color:#4a90d9;background:#f0f6ff}.cert-upload-zone.drag-over{border-color:#2563eb;background:#dbeafe;transform:scale(1.01)}{border-color:#4a90d9;background:#f0f6ff}
+  .cert-upload-zone:hover{border-color:#4a90d9;background:#f0f6ff}
+  .cert-upload-zone.drag-over{border-color:#2563eb;background:#dbeafe;transform:scale(1.01)}
   .cert-upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
   .cert-upload-icon{font-size:24px;margin-bottom:5px}.cert-upload-text{font-size:13px;color:#666;font-weight:500}.cert-upload-sub{font-size:11px;color:#aaa;margin-top:2px}
   .cert-folder-upload-btn{margin-top:8px;padding:5px 14px;border-radius:6px;border:1.5px solid #4a90d9;background:#f0f6ff;color:#2563eb;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s}
@@ -780,7 +781,6 @@ tr:hover td { background: rgba(9,105,218,0.03); }
         </div>
         <input type="file" id="t3_std_file" accept=".xlsx,.xls" style="display:none" onchange="t3LoadStdCost(this)">
         <div id="t3_std_saved_list" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px"></div>
-        <div id="t3_std_saved_list" style="display:flex;gap:6px;flex-wrap:wrap"></div>
         <button onclick="if(confirm('표준원가 저장 데이터를 전부 초기화할까요?\n(저장된 실적은 유지됩니다)')){localStorage.removeItem('t3_monthStdCost');T3.monthStdCost={};T3.stdCost={};t3UpdateStdSavedList();t3RenderInput();document.getElementById('t3_std_status').textContent='✅ 초기화 완료';}" style="margin-top:6px;padding:3px 10px;font-size:11px;background:#ffe0e0;border:1px solid #f99;border-radius:6px;cursor:pointer">🗑 표준원가 초기화</button>
       </div>
     </div>
@@ -982,7 +982,7 @@ function switchTab(id, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   btn.classList.add('active');
-  if (id === 'tab4' && !window._dbInited) { window._dbInited = true; initDb(); }
+  if (id === 'tab4' && !window._dbInited) { window._dbInited = true; initDashboard4(); }
   if (id === 'tab3' && !window._t3Inited) { window._t3Inited = true; initTab3(); }
 }
 function showFade(el) {
@@ -2716,7 +2716,32 @@ if(document.readyState==='loading'){
 }else{
   initDashboard4();
 }
+// ... (기존 코드: TAB 4 관련 코드 끝부분)
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',initDashboard4);
+}else{
+  initDashboard4();
+}
 
+// ===================================================
+// TAB 5: 공인성적서/인증서 관련 함수 추가
+// ===================================================
+function certToggle(id) {
+  const header = document.querySelector('#cert-sec-' + id + ' .cert-section-header');
+  const body = document.getElementById('cert-body-' + id);
+  const arrow = document.getElementById('cert-arrow-' + id);
+  
+  if (header) header.classList.toggle('open');
+  if (body) body.classList.toggle('open');
+  if (arrow) arrow.classList.toggle('open');
+}
+
+function certAddFolder(type) {
+  alert('폴더 추가 기능은 데이터베이스 연동 후 사용할 수 있습니다. (' + type + ')');
+}
+
+</script> </body>
+</html>
 </script>
 </body>
 </html>

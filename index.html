@@ -1,5 +1,148 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>품질보증파트 통합관리 시스템</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg: #f0f2f5; --surface: #ffffff; --surface2: #f6f8fa; --border: #d0d7de;
+            --accent: #0969da; --accent2: #1a7f37; --accent3: #cf222e; --accent4: #9a6700; --accent5: #6e40c9;
+            --text: #1f2328; --text2: #636c76; --text3: #adb5bd;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5; }
+        header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 32px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+        .logo-icon { width: 34px; height: 34px; background: linear-gradient(135deg, var(--accent), #1f6feb); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+        header h1 { font-size: 16px; font-weight: 700; }
+        .tab-bar { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 32px; }
+        .tab-btn { padding: 12px 20px; font-size: 14px; font-weight: 600; color: var(--text2); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; transition: all 0.15s; }
+        .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .main { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+        .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px; margin-top: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+        .panel-title { font-size: 13px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+        .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-top: 10px; }
+        .table-scroll { overflow-x: auto; max-height: 600px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { padding: 10px 14px; background: var(--surface2); font-size: 11px; font-weight: 700; color: var(--text2); border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+        td { padding: 9px 14px; font-size: 13px; border-bottom: 1px solid #f1f1f1; }
+        .td-mono { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 12px; }
+        .col-green { color: var(--accent2); } .col-red { color: var(--accent3); } .col-blue { color: var(--accent); } .col-gray { color: #999; }
+        .input-cell { background: rgba(9,105,218,0.03); border: 1px solid transparent; }
+        .input-cell input, .input-cell select { width: 100%; border: none; background: transparent; outline: none; padding: 4px; }
+        .tag { background: #f0f6ff; color: #0969da; padding: 3px 10px; border-radius: 12px; font-size: 11px; border: 1px solid #cce0ff; font-weight: 600; margin-right: 5px; }
+        #toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); padding: 12px 24px; background: #333; color: #fff; border-radius: 8px; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; font-weight: bold; }
+        .t2-banner { background: linear-gradient(135deg,#1a1a2e 0%,#16213e 100%); border-radius: 16px; padding: 24px; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+        .t2-val { font-size: 32px; font-weight: 900; color: #f6c90e; }
+        .t2-mtab { padding: 8px 15px; border: 1px solid #ddd; background: #fff; cursor: pointer; border-radius: 8px; font-weight: 600; color: #666; transition: all 0.2s; }
+        .t2-mtab.on { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: 0 3px 8px rgba(9,105,218,0.3); }
+        .cert-folder { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 15px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo-icon">📦</div>
+    <h1>품질보증파트 통합관리 시스템</h1>
+</header>
+
+<div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('tab2',this)">💰 리퍼 실적</button>
+    <button class="tab-btn" onclick="switchTab('tab3',this)">🎨 재도장 실적</button>
+    <button class="tab-btn" onclick="switchTab('tab4',this)">📊 관리현황</button>
+    <button class="tab-btn" onclick="switchTab('tab5',this)">📋 인증서/MSDS</button>
+</div>
+
+<div id="toast">메시지</div>
+
+<div id="tab2" class="tab-content active">
+    <div class="main">
+        <div class="t2-banner">
+            <div>
+                <div style="font-size:14px; opacity:0.7;"><span id="t2AnnualYear">2026</span>년 리퍼 누적 합계</div>
+                <div class="t2-val" id="t2TotalAmt">0원</div>
+            </div>
+            <div>
+                <button onclick="t2ShiftYear(-1)" style="padding:5px 10px; border:1px solid #fff; background:none; color:#fff; cursor:pointer; border-radius:4px;">◀</button>
+                <span id="t2YearLabel" style="font-weight:bold; margin:0 15px; font-size:20px;">2026</span>
+                <button onclick="t2ShiftYear(1)" style="padding:5px 10px; border:1px solid #fff; background:none; color:#fff; cursor:pointer; border-radius:4px;">▶</button>
+            </div>
+        </div>
+        <div id="t2MonthTabs" style="display:flex; gap:8px; margin-top:20px; flex-wrap:wrap;"></div>
+        <div id="t2MonthInputPanel" class="panel" style="display:none;">
+            <div class="panel-title" id="t2InputTitle">월별 데이터 입력</div>
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr) auto; gap:15px; align-items:end;">
+                <div><label style="font-size:12px; color:#666;">포장 수량(개)</label><input type="number" id="t2InputPkg" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px;"></div>
+                <div><label style="font-size:12px; color:#666;">판매 수량(개)</label><input type="number" id="t2InputQty" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px;"></div>
+                <div><label style="font-size:12px; color:#666;">합계 금액(원)</label><input type="number" id="t2InputAmt" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px;"></div>
+                <button onclick="t2SaveMonthly()" style="padding:12px 24px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">💾 저장</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="tab3" class="tab-content">
+    <div class="main">
+        <div class="panel">
+            <div class="panel-title">📝 재도장 데이터 입력</div>
+            <div style="display:flex; gap:20px; align-items:center; margin-bottom:20px; flex-wrap:wrap;">
+                <select id="t3_sel_month" onchange="t3ChangeMonth()" style="padding:8px 12px; border-radius:8px; border:1px solid #ddd; font-weight:bold; background:#fff;">
+                    <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option><option value="4">4월</option><option value="5">5월</option><option value="6">6월</option><option value="7">7월</option><option value="8">8월</option><option value="9">9월</option><option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
+                </select>
+                <div>🔩 고철단가: <input type="number" id="t3_scrap_price" value="250" oninput="t3RenderInput()" style="width:80px; padding:6px; border:2px solid var(--accent); border-radius:6px; text-align:center; font-weight:bold;"> 원</div>
+                <div id="t3_std_saved_list" style="display:flex; gap:5px;"></div>
+                <div id="t3_std_status" style="font-size:12px; font-weight:bold; color:var(--accent);"></div>
+            </div>
+            <div class="table-wrap">
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:40px;"></th><th>품명</th><th style="width:80px;">두께</th><th style="width:80px;">규격</th><th style="width:80px;">수량</th>
+                                <th style="width:60px;">비중</th><th style="width:60px;">폭</th><th style="width:100px;">무게(kg)</th><th style="width:100px;">고철(원)</th>
+                                <th style="width:100px;">재도장</th><th style="width:100px;">표준원가</th><th style="background:#fff8e6">손익(개)</th><th style="background:#fff8e6">총 손익</th>
+                            </tr>
+                        </thead>
+                        <tbody id="t3_input_tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:15px;">
+                <button onclick="t3AddRow()" style="padding:8px 16px; border:1.5px solid var(--accent); color:var(--accent); background:#fff; border-radius:8px; cursor:pointer; font-weight:700;">+ 행 추가</button>
+                <button onclick="t3SaveMonth()" style="padding:10px 30px; background:var(--accent); color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:700; box-shadow:0 4px 12px rgba(9,105,218,0.2);">💾 실적 누적 저장</button>
+            </div>
+        </div>
+        <div id="t3_results_wrap"></div>
+        <div class="panel">
+            <div class="panel-title">📅 날짜별 입력 이력 (상세 요약 및 삭제)</div>
+            <div id="t3_log_content">데이터를 불러오는 중...</div>
+        </div>
+    </div>
+</div>
+
+<div id="tab4" class="tab-content">
+    <div class="main">
+        <div id="v4_kpi" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:20px;"></div>
+        <div id="v4_dashboard_root"></div>
+    </div>
+</div>
+
+<div id="tab5" class="tab-content">
+    <div class="main">
+        <div class="panel">
+            <div class="panel-title">📋 인증서 및 성적서 관리</div>
+            <div id="cert_root"></div>
+        </div>
+    </div>
+</div>
+
+<script>
 // ===================================================
-// 1. 공통 설정 및 탭 제어 (모든 탭 정상화)
+// 1. 공통 설정 및 탭 제어 (Supabase 연결 정보)
 // ===================================================
 const SB3 = 'https://kxlzdnfudvdwzlveqklh.supabase.co';
 const KEY3 = 'sb_publishable_8aTbER8PYcFprysUFig85A_CgXDC319';
@@ -15,247 +158,184 @@ function switchTab(id, btn) {
     if (target) target.classList.add('active');
     btn.classList.add('active');
     
-    if (id === 'tab2') t2UpdateDashboard();
-    if (id === 'tab3' && !window._t3Inited) { window._t3Inited = true; initTab3(); }
-    if (id === 'tab4' && !window._dbInited) { window._dbInited = true; initDashboard4(); }
-    if (id === 'tab5' && !window._t5Inited) { window._t5Inited = true; initTab5(); }
+    if (id === 'tab2') t2MonLoadSB();
+    if (id === 'tab3') initTab3();
+    if (id === 'tab4') v4Init();
+    if (id === 'tab5') certLoad();
 }
 
-function t3ShowToast(msg, type = 'success') {
-    const old = document.getElementById('t3_toast'); if (old) old.remove();
-    const t = document.createElement('div'); t.id = 't3_toast';
-    const bg = type === 'error' ? '#e53e3e' : '#1a7f37';
-    t.style.cssText = `position:fixed; top:24px; left:50%; transform:translateX(-50%); background:${bg}; color:#fff; padding:14px 28px; border-radius:10px; font-size:15px; font-weight:700; box-shadow:0 4px 20px rgba(0,0,0,0.22); z-index:99999;`;
-    t.textContent = msg; document.body.appendChild(t);
-    setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 2800);
+function t3ShowToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.style.opacity = '1';
+    setTimeout(() => t.style.opacity = '0', 2500);
+}
+
+async function sbFetch(url, key, path, opt={}) {
+    const res = await fetch(`${url}/rest/v1/${path}`, {
+        headers: { 'apikey': key, 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', 'Prefer': opt.prefer || 'return=representation' },
+        method: opt.method || 'GET', body: opt.body ? JSON.stringify(opt.body) : undefined
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
 }
 
 // ===================================================
 // 2. TAB 2: 리퍼 실적 로직
 // ===================================================
-let t2Year = 2026; let t2SelMonth = null; let _t2MonCache = {};
-
+let t2Year = 2026; let t2SelMonth = null; let _t2Cache = {};
 async function t2MonLoadSB() {
     try {
-        const res = await fetch(SB3 + '/rest/v1/refurb_monthly', { headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3 } });
-        const rows = await res.json();
-        _t2MonCache = {}; rows.forEach(r => _t2MonCache[r.month_key] = r);
+        const rows = await sbFetch(SB3, KEY3, 'refurb_monthly');
+        _t2Cache = {}; rows.forEach(r => _t2Cache[r.month_key] = r);
         t2UpdateDashboard();
     } catch(e) { console.error('T2 로드 실패'); }
 }
-
 function t2UpdateDashboard() {
-    const yearStr = String(t2Year);
     document.getElementById('t2AnnualYear').textContent = t2Year;
     document.getElementById('t2YearLabel').textContent = t2Year;
-    let totalAmt = 0;
+    let annualAmt = 0;
     const container = document.getElementById('t2MonthTabs');
     container.innerHTML = Array.from({length:12}, (_, i) => {
         const mm = String(i + 1).padStart(2, '0');
-        const mkey = yearStr + '-' + mm;
-        const d = _t2MonCache[mkey] || { amount: 0 };
-        totalAmt += d.amount;
-        const active = t2SelMonth === mkey ? 'on' : '';
-        return `<button class="t2-mtab ${active}" onclick="t2SelectMonth('${mkey}')">${i+1}월</button>`;
+        const key = `${t2Year}-${mm}`;
+        const d = _t2Cache[key] || { amount: 0 };
+        annualAmt += d.amount;
+        return `<button class="t2-mtab ${t2SelMonth===key?'on':''}" onclick="t2SelectMonth('${key}')">${i+1}월</button>`;
     }).join('');
-    document.getElementById('t2AnnualAmt').textContent = totalAmt.toLocaleString();
+    document.getElementById('t2TotalAmt').textContent = annualAmt.toLocaleString() + '원';
 }
-
 function t2SelectMonth(key) {
-    t2SelMonth = key;
-    document.getElementById('t2MonthInputPanel').style.display = 'block';
-    const d = _t2MonCache[key] || { pkg: 0, qty: 0, amount: 0 };
+    t2SelMonth = key; document.getElementById('t2MonthInputPanel').style.display = 'block';
+    const d = _t2Cache[key] || { pkg: '', qty: '', amount: '' };
     document.getElementById('t2InputPkg').value = d.pkg;
     document.getElementById('t2InputQty').value = d.qty;
     document.getElementById('t2InputAmt').value = d.amount;
     t2UpdateDashboard();
 }
-
 async function t2SaveMonthly() {
-    if (!t2SelMonth) return;
-    const body = { 
-        month_key: t2SelMonth, 
-        pkg: +document.getElementById('t2InputPkg').value, 
-        qty: +document.getElementById('t2InputQty').value, 
-        amount: +document.getElementById('t2InputAmt').value 
-    };
-    await fetch(SB3 + '/rest/v1/refurb_monthly?month_key=eq.' + t2SelMonth, { method: 'DELETE', headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3 } });
-    await fetch(SB3 + '/rest/v1/refurb_monthly', { 
-        method: 'POST', 
-        headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json' }, 
-        body: JSON.stringify(body) 
-    });
-    _t2MonCache[t2SelMonth] = body;
-    t2UpdateDashboard();
-    t3ShowToast('✅ 리퍼 실적이 저장되었습니다.');
+    const body = { month_key: t2SelMonth, pkg: +document.getElementById('t2InputPkg').value, qty: +document.getElementById('t2InputQty').value, amount: +document.getElementById('t2InputAmt').value };
+    await sbFetch(SB3, KEY3, `refurb_monthly?month_key=eq.${t2SelMonth}`, { method: 'DELETE', prefer: '' });
+    await sbFetch(SB3, KEY3, 'refurb_monthly', { method: 'POST', body });
+    t3ShowToast('✅ 리퍼 실적이 저장되었습니다.'); t2MonLoadSB();
 }
-
 function t2ShiftYear(v) { t2Year += v; t2UpdateDashboard(); }
 
 // ===================================================
-// 3. TAB 3: 재도장 실적 (원본 계산 + 삭제 + 상세 요약)
+// 3. TAB 3: 재도장 실적 (정밀 계산 7.85 + 상세 이력 + 삭제 버튼)
 // ===================================================
-const T3 = { IRON: 7.85, inputRows: [], monthStdCost: {}, sessions: [], saved: [], _editSessionId: null };
-
-async function sb3(path, opt={}) {
-    const res = await fetch(SB3 + '/rest/v1/' + path, {
-        headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json', 'Prefer': opt.prefer || 'return=representation' },
-        method: opt.method || 'GET', body: opt.body ? JSON.stringify(opt.body) : undefined
-    });
-    return res.json();
-}
+const T3 = { IRON: 7.85, inputRows: [{},{},{}], monthStdCost: {}, sessions: [], saved: [], _editId: null };
 
 async function initTab3() {
-    t3ResetForm();
-    await t3LoadStdCostFromSB();
-    await t3LoadSessions();
-    t3ChangeMonth();
-}
-
-async function t3LoadStdCostFromSB() {
-    const rows = await sb3('repaint_stdcost?select=*');
-    T3.monthStdCost = {}; rows.forEach(r => T3.monthStdCost[r.month] = r);
-    t3UpdateStdSavedList();
+    try {
+        const stds = await sbFetch(SB3, KEY3, 'repaint_stdcost');
+        T3.monthStdCost = {}; stds.forEach(s => T3.monthStdCost[s.month] = s);
+        await t3LoadSessions();
+        t3ChangeMonth();
+    } catch(e) { console.error('T3 초기화 실패'); }
 }
 
 async function t3LoadSessions() {
-    const raw = await sb3('repaint_sessions?select=*,repaint_items(*)&order=created_at.desc');
+    const raw = await sbFetch(SB3, KEY3, 'repaint_sessions?select=*,repaint_items(*)&order=created_at.desc');
     T3.sessions = raw || [];
-    t3BuildSaved(); t3RenderResults(); t3LoadLog();
+    t3BuildSaved(); t3RenderInput(); t3LoadLog();
 }
 
 function t3BuildSaved() {
     const monthMap = {};
     T3.sessions.forEach(s => {
-        if (!monthMap[s.month]) monthMap[s.month] = { month: s.month, scrap: s.scrap_price, rowsMap: {} };
+        if(!monthMap[s.month]) monthMap[s.month] = { month: s.month, scrap: s.scrap_price, rowsMap: {} };
         const m = monthMap[s.month];
         (s.repaint_items || []).forEach(r => {
             const key = `${r.name}_${r.thickness}_${r.size}`;
-            if (!m.rowsMap[key]) m.rowsMap[key] = { ...r, qty: 0 };
+            if(!m.rowsMap[key]) m.rowsMap[key] = { ...r, qty: 0 };
             m.rowsMap[key].qty += (+r.qty || 0);
         });
     });
     T3.saved = Object.values(monthMap).sort((a,b) => a.month - b.month);
+    t3RenderResults();
 }
 
 function t3CalcRow(r, scrap) {
     const m = +document.getElementById('t3_sel_month').value;
     const stdMap = (T3.monthStdCost[m] && T3.monthStdCost[m].data) || {};
     const nm = r.name || '';
-    const thickness = +r.thickness || (nm === '홈던트기둥' ? 0.8 : (nm.includes('홈던트') ? 1.2 : 0));
+    const thick = +r.thickness || (nm === '홈던트기둥' ? 0.8 : (nm.includes('홈던트') ? 1.2 : 0));
     const width = nm === '홈던트기둥' ? 129 : 64;
     const size = +r.size || 0;
-    const weight = (thickness * width * T3.IRON * size) / 1000000;
+    const weight = (thick * width * T3.IRON * size) / 1000000;
     const sAmt = weight * (scrap || 250);
     const key = `${nm}_${r.thickness||''}_${+size}`;
     const stdData = stdMap[key] || {};
     const repaint = stdData.repaint || +r.repaint || 0;
     const std = stdData.std || +r.stdcost || 0;
     const perPL = std ? (std - repaint - sAmt) : 0;
-    return { weight, sAmt, std, repaint, perPL, totPL: perPL * (+r.qty || 0), width, thickness };
+    return { weight, sAmt, std, repaint, perPL, totPL: perPL * (+r.qty || 0), width, thick };
 }
 
 function t3RenderInput() {
     const scrap = +document.getElementById('t3_scrap_price').value || 250;
     document.getElementById('t3_input_tbody').innerHTML = T3.inputRows.map((r, i) => {
         const res = t3CalcRow(r, scrap);
-        const ro = (v, f=0) => `<span class="td-mono">${typeof v==='number' ? v.toLocaleString(undefined,{maximumFractionDigits:f}) : (v||'-')}</span>`;
+        const fmt = (v, f=0) => typeof v==='number' ? v.toLocaleString(undefined,{maximumFractionDigits:f}) : (v||'-');
         return `<tr>
-            <td style="text-align:center;"><button onclick="t3DelRow(${i})" style="color:red;border:none;background:none;cursor:pointer;">✕</button></td>
+            <td style="text-align:center;"><button onclick="t3DelRow(${i})" style="color:red; border:none; background:none; cursor:pointer;">✕</button></td>
             <td class="input-cell"><select onchange="t3CellInput(${i}, 'name', this.value)">
-                <option value="">선택</option><option value="홈던트기둥" ${r.name==='홈던트기둥'?'selected':''}>홈던트기둥</option><option value="홈던트받침" ${r.name==='홈던트받침'?'selected':''}>홈던트받침</option><option value="스피드랙기둥" ${r.name==='스피드랙기둥'?'selected':''}>스피드랙기둥</option><option value="스피드랙받침" ${r.name==='스피드랙받침'?'selected':''}>스피드랙받침</option>
+                <option value="">선택</option>
+                <option value="홈던트기둥" ${r.name==='홈던트기둥'?'selected':''}>홈던트기둥</option>
+                <option value="홈던트받침" ${r.name==='홈던트받침'?'selected':''}>홈던트받침</option>
+                <option value="스피드랙기둥" ${r.name==='스피드랙기둥'?'selected':''}>스피드랙기둥</option>
+                <option value="스피드랙받침" ${r.name==='스피드랙받침'?'selected':''}>스피드랙받침</option>
             </select></td>
-            <td class="input-cell">${t3ThicknessCell(r, i)}</td>
+            <td class="input-cell">${t3ThickCell(r, i)}</td>
             <td class="input-cell"><input type="text" value="${r.size||''}" onblur="t3CellInput(${i}, 'size', this.value)" placeholder="규격"></td>
             <td class="input-cell"><input type="text" value="${r.qty||''}" onblur="t3CellInput(${i}, 'qty', this.value)" placeholder="수량"></td>
             <td style="color:#888;">7.85</td><td style="color:#888;">${res.width}</td>
-            <td style="text-align:right;">${ro(res.weight, 4)}</td><td style="text-align:center;color:#888;">${scrap}</td>
-            <td style="text-align:right;">${ro(res.sAmt)}</td><td style="text-align:right;" class="col-blue">${ro(r.repaint)}</td><td style="text-align:right;" class="col-blue">${ro(r.stdcost)}</td>
-            <td style="text-align:right;background:rgba(154,103,0,0.04);" class="${res.perPL>=0?'col-green':'col-red'}">${ro(res.perPL)}</td>
-            <td style="text-align:right;background:rgba(154,103,0,0.04);" class="${res.totPL>=0?'col-green':'col-red'}">${ro(res.totPL)}</td>
+            <td style="text-align:right;">${fmt(res.weight, 4)}</td><td style="text-align:center;color:#888;">${scrap}</td>
+            <td style="text-align:right;">${fmt(res.sAmt)}</td><td style="text-align:right;" class="col-blue">${fmt(res.repaint)}</td><td style="text-align:right;" class="col-blue">${fmt(res.std)}</td>
+            <td style="text-align:right;background:#fff8e6" class="${res.perPL>=0?'col-green':'col-red'}">${fmt(res.perPL)}</td>
+            <td style="text-align:right;background:#fff8e6" class="${res.totPL>=0?'col-green':'col-red'}">${fmt(res.totPL)}</td>
         </tr>`;
     }).join('');
 }
 
-function t3ThicknessCell(r, i) {
+function t3ThickCell(r, i) {
     if (r.name?.includes('홈던트')) return `<span>${r.name==='홈던트기둥'?'0.8':'1.2'}</span>`;
     return `<select onchange="t3CellInput(${i}, 'thickness', this.value)"><option value="">-</option><option value="1.2" ${r.thickness==='1.2'?'selected':''}>1.2</option><option value="1.4" ${r.thickness==='1.4'?'selected':''}>1.4</option><option value="1.8" ${r.thickness==='1.8'?'selected':''}>1.8</option></select>`;
 }
 
-function t3CellInput(i, f, v) {
-    T3.inputRows[i][f] = v;
-    if(f === 'name') T3.inputRows[i].thickness = v === '홈던트기둥' ? '0.8' : (v.includes('홈던트') ? '1.2' : '');
+function t3CellInput(i, f, v) { 
+    T3.inputRows[i][f] = v; 
+    if(f==='name') T3.inputRows[i].thickness = v==='홈던트기둥'?'0.8':(v.includes('홈던트')?'1.2':'');
     const r = T3.inputRows[i];
     if (r.name && r.size) {
         const stdMap = (T3.monthStdCost[+document.getElementById('t3_sel_month').value]?.data) || {};
         const key = `${r.name}_${r.thickness||''}_${+r.size}`;
         if (stdMap[key]) { T3.inputRows[i].stdcost = stdMap[key].std; T3.inputRows[i].repaint = stdMap[key].repaint; }
     }
-    t3RenderInput();
+    t3RenderInput(); 
 }
+function t3AddRow() { T3.inputRows.push({}); t3RenderInput(); }
+function t3DelRow(i) { T3.inputRows.splice(i, 1); t3RenderInput(); }
 
 async function t3SaveMonth() {
-    const month = +document.getElementById('t3_sel_month').value;
+    const m = +document.getElementById('t3_sel_month').value;
     const scrap = +document.getElementById('t3_scrap_price').value;
     const rows = T3.inputRows.filter(r => r.name && r.size && r.qty);
     if(!rows.length) return alert('입력된 데이터가 없습니다.');
     try {
-        if(T3._editSessionId) {
-            await sb3(`repaint_sessions?id=eq.${T3._editSessionId}`, { method: 'PATCH', body: { month, scrap_price: scrap } });
-            await sb3(`repaint_items?session_id=eq.${T3._editSessionId}`, { method: 'DELETE', prefer: '' });
-            const items = rows.map(r => ({ session_id: T3._editSessionId, name: r.name, thickness: r.thickness, size: +r.size, qty: +r.qty, repaint: +r.repaint||0, stdcost: +r.stdcost||0 }));
-            await sb3('repaint_items', { method: 'POST', body: items });
+        if(T3._editId) {
+            await sbFetch(SB3, KEY3, `repaint_sessions?id=eq.${T3._editId}`, { method: 'PATCH', body: { month: m, scrap_price: scrap } });
+            await sbFetch(SB3, KEY3, `repaint_items?session_id=eq.${T3._editId}`, { method: 'DELETE', prefer: '' });
+            const items = rows.map(r => ({ session_id: T3._editId, name: r.name, thickness: r.thickness, size: +r.size, qty: +r.qty, repaint: +r.repaint||0, stdcost: +r.stdcost||0 }));
+            await sbFetch(SB3, KEY3, 'repaint_items', { method: 'POST', body: items });
         } else {
-            const sess = await sb3('repaint_sessions', { method: 'POST', body: { month, scrap_price: scrap } });
+            const sess = await sbFetch(SB3, KEY3, 'repaint_sessions', { method: 'POST', body: { month: m, scrap_price: scrap } });
             const sid = sess[0].id;
             const items = rows.map(r => ({ session_id: sid, name: r.name, thickness: r.thickness, size: +r.size, qty: +r.qty, repaint: +r.repaint||0, stdcost: +r.stdcost||0 }));
-            await sb3('repaint_items', { method: 'POST', body: items });
+            await sbFetch(SB3, KEY3, 'repaint_items', { method: 'POST', body: items });
         }
-        t3ShowToast('✅ 실적이 안전하게 저장되었습니다.'); T3._editSessionId = null; await initTab3();
-    } catch(e) { alert('저장 오류 발생'); }
-}
-
-function t3RenderLog() {
-    const el = document.getElementById('t3_log_content');
-    el.innerHTML = T3.sessions.map(s => {
-        const summary = (s.repaint_items || []).map(r => `${r.name} ${r.size}(${r.qty}개)`).join(', ');
-        return `<div style="padding:15px; border-bottom:1px solid #eee; background:#fff; margin-bottom:8px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <div><b>${s.month}월 실적</b> <small style="color:#999;">${new Date(s.created_at).toLocaleString()}</small></div>
-                <div style="display:flex; gap:8px;">
-                    <button onclick="t3Edit(${s.id})" style="padding:5px 12px; cursor:pointer; background:#fff; border:1px solid #ddd; border-radius:6px; font-size:12px; font-weight:600;">수정</button>
-                    <button onclick="t3DeleteSession(${s.id})" style="padding:5px 12px; cursor:pointer; background:#fff; border:1px solid #ffcfcf; color:#e53e3e; border-radius:6px; font-size:12px; font-weight:600;">삭제</button>
-                </div>
-            </div>
-            <div style="font-size:12px; color:#666; background:#f9f9f9; padding:8px; border-radius:6px;"><b>입력 상세:</b> ${summary || '데이터 없음'}</div>
-        </div>`;
-    }).join('');
-}
-
-async function t3DeleteSession(sid) {
-    if(!confirm('정말 이 실적을 삭제할까요?')) return;
-    await sb3(`repaint_items?session_id=eq.${sid}`, { method: 'DELETE', prefer: '' });
-    await sb3(`repaint_sessions?id=eq.${sid}`, { method: 'DELETE', prefer: '' });
-    t3ShowToast('🗑️ 삭제 완료'); await initTab3();
-}
-
-function t3Edit(sid) {
-    const s = T3.sessions.find(x => x.id === sid);
-    T3._editSessionId = sid; T3.inputRows = JSON.parse(JSON.stringify(s.repaint_items || []));
-    document.getElementById('t3_sel_month').value = s.month;
-    document.getElementById('t3_scrap_price').value = s.scrap_price;
-    t3RenderInput(); window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function t3ChangeMonth() {
-    const m = +document.getElementById('t3_sel_month').value;
-    document.getElementById('t3_std_status').textContent = T3.monthStdCost[m] ? `✅ ${m}월 표준원가 적용 중` : `⚠️ ${m}월 표준원가 없음`;
-    t3RenderInput();
-}
-
-function t3UpdateStdSavedList() {
-    const el = document.getElementById('t3_std_saved_list');
-    el.innerHTML = Object.keys(T3.monthStdCost).sort((a,b)=>a-b).map(m => `<span class="tag">📋 ${m}월</span>`).join('');
+        t3ShowToast('✅ 실적이 저장되었습니다.'); T3.inputRows = [{},{},{}]; T3._editId = null; await initTab3();
+    } catch(e) { alert('저장 중 오류 발생'); }
 }
 
 function t3RenderResults() {
@@ -266,43 +346,89 @@ function t3RenderResults() {
             const res = t3CalcRow(r, s.scrap); totalPL += res.totPL;
             return `<tr><td>${r.name}</td><td>${r.size}</td><td>${r.thickness}</td><td>${(+r.qty).toLocaleString()}</td><td>${res.weight.toFixed(4)}</td><td class="${res.totPL>=0?'col-green':'col-red'}">${res.totPL.toLocaleString()}원</td></tr>`;
         }).join('');
-        return `<div class="panel"><b>${s.month}월 누적 실적 합계</b> <span style="float:right; font-weight:bold; color:var(--accent);">총 손익: ${totalPL.toLocaleString()}원</span>
+        return `<div class="panel"><b>${s.month}월 누적 합계 실적</b> <span style="float:right; font-weight:bold; color:var(--accent);">총 손익: ${totalPL.toLocaleString()}원</span>
                 <div class="table-wrap"><table><thead><tr><th>품명</th><th>규격</th><th>두께</th><th>수량</th><th>무게</th><th>총손익</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
     }).join('');
 }
 
-function t3ResetForm() { T3.inputRows = [{},{},{}]; T3._editSessionId = null; t3RenderInput(); }
-function t3AddRow() { T3.inputRows.push({}); t3RenderInput(); }
-function t3DelRow(i) { T3.inputRows.splice(i, 1); t3RenderInput(); }
-function t3LogToggle() { const b = document.getElementById('t3_log_body'); if(b) b.style.display = b.style.display==='none'?'block':'none'; }
+function t3LoadLog() {
+    const el = document.getElementById('t3_log_content');
+    el.innerHTML = T3.sessions.map(s => {
+        const summary = (s.repaint_items || []).map(r => `${r.name} ${r.size}(${r.qty})`).join(', ');
+        return `<div style="padding:15px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; background:#fff; margin-bottom:5px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+            <div><b style="color:var(--accent);">${s.month}월 실적</b> <small style="color:#888;">(${new Date(s.created_at).toLocaleString()})</small><br>
+            <small style="color:#666; font-weight:500;">상세: ${summary || '데이터 없음'}</small></div>
+            <div style="display:flex; gap:8px;">
+                <button onclick="t3EditSession(${s.id})" style="padding:6px 12px; cursor:pointer; background:#fff; border:1px solid #ddd; border-radius:6px; font-size:12px; font-weight:bold;">수정</button>
+                <button onclick="t3DeleteSession(${s.id})" style="padding:6px 12px; cursor:pointer; background:#fff; border:1px solid #ffcfcf; color:red; border-radius:6px; font-size:12px; font-weight:bold;">삭제</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function t3DeleteSession(sid) {
+    if(!confirm('정말로 이 실적 기록을 삭제하시겠습니까?')) return;
+    await sbFetch(SB3, KEY3, `repaint_items?session_id=eq.${sid}`, { method: 'DELETE', prefer: '' });
+    await sbFetch(SB3, KEY3, `repaint_sessions?id=eq.${sid}`, { method: 'DELETE', prefer: '' });
+    t3ShowToast('🗑️ 실적이 삭제되었습니다.'); await initTab3();
+}
+
+function t3EditSession(sid) {
+    const s = T3.sessions.find(x => x.id === sid);
+    T3._editId = sid; T3.inputRows = JSON.parse(JSON.stringify(s.repaint_items || []));
+    document.getElementById('t3_sel_month').value = s.month;
+    document.getElementById('t3_scrap_price').value = s.scrap_price;
+    t3RenderInput(); window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function t3ChangeMonth() {
+    const m = +document.getElementById('t3_sel_month').value;
+    document.getElementById('t3_std_status').textContent = T3.monthStdCost[m] ? `✅ ${m}월 표준원가 적용 중` : `⚠️ ${m}월 표준원가 없음`;
+    const elTags = document.getElementById('t3_std_saved_list');
+    elTags.innerHTML = Object.keys(T3.monthStdCost).sort((a,b)=>a-b).map(m => `<span class="tag">📋 ${m}월</span>`).join('');
+    t3RenderInput();
+}
+
+function t3ResetForm() { T3.inputRows = [{},{},{}]; T3._editId = null; t3RenderInput(); }
 
 // ===================================================
-// 4. TAB 4 & 5 연결 브릿지 (관리현황 및 인증서)
+// 4. TAB 4: 관리현황
 // ===================================================
 async function v4Init() {
-    const [f, r] = await Promise.all([fetchSB4('frame_return_items'), fetchSB4('rack_return_items')]);
+    const [f, r] = await Promise.all([sbFetch(SB4, KEY4, 'frame_return_items'), sbFetch(SB4, KEY4, 'rack_return_items')]);
     const all = f.concat(r);
-    const root = document.getElementById('v4-dashboard-root');
     const totalIn = all.reduce((s,x) => s+(+x.received_quantity||0), 0);
     const totalDis = all.reduce((s,x) => s+(+x.dispose_quantity||0), 0);
-    root.innerHTML = `<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:15px; margin-bottom:20px;">
-        <div class="panel" style="text-align:center;"><div class="panel-title">총 입고량</div><div class="t2-val" style="color:var(--accent);">${totalIn.toLocaleString()}</div></div>
-        <div class="panel" style="text-align:center;"><div class="panel-title">총 폐기량</div><div class="t2-val" style="color:var(--accent3);">${totalDis.toLocaleString()}</div></div>
-        <div class="panel" style="text-align:center;"><div class="panel-title">전체 폐기율</div><div class="t2-val" style="color:var(--accent4);">${totalIn?(totalDis/totalIn*100).toFixed(1):0}%</div></div>
-    </div>`;
+    document.getElementById('v4_kpi').innerHTML = `
+        <div class="panel" style="text-align:center; flex:1;"><div class="panel-title">총 입고량</div><div class="t2-val" style="color:var(--accent); font-size:28px;">${totalIn.toLocaleString()}</div></div>
+        <div class="panel" style="text-align:center; flex:1;"><div class="panel-title">총 폐기량</div><div class="t2-val" style="color:var(--accent3); font-size:28px;">${totalDis.toLocaleString()}</div></div>
+        <div class="panel" style="text-align:center; flex:1;"><div class="panel-title">전체 폐기율</div><div class="t2-val" style="color:var(--accent4); font-size:28px;">${totalIn?(totalDis/totalIn*100).toFixed(1):0}%</div></div>
+    `;
+    document.getElementById('v4_dashboard_root').innerHTML = `<div class="panel"><div class="panel-title">최근 입고 상세 현황</div><div class="table-wrap"><table><thead><tr><th>날짜</th><th>카테고리</th><th>규격</th><th>입고</th><th>폐기</th></tr></thead><tbody>${all.slice(-20).reverse().map(x=>`<tr><td>${x.session_date||'-'}</td><td>${x.category}</td><td>${x.size||x.specifications}</td><td>${x.received_quantity}</td><td>${x.dispose_quantity}</td></tr>`).join('')}</tbody></table></div></div>`;
 }
-async function fetchSB4(path) {
-    const res = await fetch(`${SB4}/rest/v1/${path}`, { headers: { 'apikey': KEY4, 'Authorization': `Bearer ${KEY4}` } });
-    return res.json();
-}
-function initDashboard4() { v4Init(); }
-function initTab5() { certLoad(); }
-async function certLoad() { document.getElementById('cert_root') ? certRender() : null; }
 
 // ===================================================
-// 5. 초기 실행
+// 5. TAB 5: 인증서/MSDS
+// ===================================================
+async function certLoad() {
+    const folders = await sbFetch(SB5, KEY5, 'cert_folders?select=*,cert_files(*)&order=created_at.asc');
+    const root = document.getElementById('cert_root');
+    root.innerHTML = folders.map(f => `
+        <div class="cert-folder">
+            <div style="display:flex; justify-content:space-between;"><b>📁 ${f.name}</b> <small>${(f.cert_files||[]).length}개 파일</small></div>
+            <div style="margin-top:10px; display:flex; flex-direction:column; gap:5px;">
+                ${(f.cert_files||[]).map(file => `<div style="display:flex; justify-content:space-between; background:#fff; padding:5px 10px; border-radius:5px; font-size:12px;"><span>📄 ${file.file_name}</span><a href="${SB5}/storage/v1/object/public/certificates/${file.storage_path}" target="_blank" style="color:var(--accent); text-decoration:none; font-weight:bold;">열기</a></div>`).join('')}
+            </div>
+        </div>`).join('') || '폴더가 없습니다.';
+}
+
+// ===================================================
+// 6. 시스템 시작
 // ===================================================
 window.onload = () => {
     t2MonLoadSB();
     initTab3();
 };
+</script>
+</body>
+</html>

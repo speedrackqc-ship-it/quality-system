@@ -8,16 +8,29 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-<script>
-// 💡 사장님의 '품질' 프로젝트 정보로 완벽하게 교체되었습니다.
-const SB3  = 'https://gifzxwzzqkuxvjkewshi.supabase.co';
-const KEY3 = 'sb_publishable_hdoh8W4OruihkO5n-ULF8g_34tA5Hu3';
+// 기존 시스템(리퍼 실적, 재도장) 복구용 원래 주소!
+const SB3  = 'https://kxlzdnfudvdwzlveqklh.supabase.co';
+const KEY3 = 'sb_publishable_8aTbER8PYcFprysUFig85A_CgXDC319';
 
-// 기존 SB4 정보는 그대로 유지됩니다.
+// 기존 관리현황용 주소
 const SB4  = 'https://gigfzkyrmudcdksgpeoo.supabase.co';
 const KEY4 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpZ2Z6a3lybXVkY2Rrc2dwZW9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MTQyNDgsImV4cCI6MjA4MDk5MDI0OH0.wd1CXZF0Nwl4PqugWOYBIz1LELyuE_wgIGMEDvo27x8';
 const H4   = { 'apikey': KEY4, 'Authorization': `Bearer ${KEY4}` };
 
+// 🌟 탭 5(공인성적서) 전용 새 주소 추가!!
+const SB5  = 'https://gifzxwzzqkuxvjkewshi.supabase.co';
+const KEY5 = 'sb_publishable_hdoh8W4OruihkO5n-ULF8g_34tA5Hu3';
+// 탭 5 전용 통신 함수
+async function sb5(path, opt={}) {
+  const res = await fetch(SB5 + '/rest/v1/' + path, {
+    headers: { 'apikey': KEY5, 'Authorization': 'Bearer ' + KEY5, 'Content-Type': 'application/json', 'Prefer': opt.prefer || 'return=representation', ...opt.headers },
+    method: opt.method || 'GET',
+    body: opt.body ? JSON.stringify(opt.body) : undefined
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const txt = await res.text();
+  return txt ? JSON.parse(txt) : null;
+}
 // Supabase에서 표준원가 로드
 async function t3LoadStdCostFromSB() {
   try {
@@ -2895,10 +2908,9 @@ async function deleteFolder(id) {
   loadCertificates();
 }
 // ===================================================
-// TAB 5: 공인성적서 시스템 최종 연동 (품질 프로젝트 전용)
+// TAB 5: 공인성적서 시스템 최종 연동 (새 프로젝트 SB5 전용)
 // ===================================================
 
-// 1. 탭 5 메뉴 열기/닫기
 function certToggle(id) {
   const header = document.querySelector('#cert-sec-' + id + ' .cert-section-header');
   const body = document.getElementById('cert-body-' + id);
@@ -2909,16 +2921,14 @@ function certToggle(id) {
   if (arrow) arrow.classList.toggle('open');
 }
 
-// 2. 데이터베이스에서 폴더와 파일 불러오기
 async function loadCertificates() {
   try {
-    // 사장님의 새 프로젝트(SB3)에서 데이터를 가져옵니다.
+    // 💡 탭 5 전용 sb5 창고에서 불러옵니다!
     const [folders, files] = await Promise.all([
-      sb3('cert_folders?select=*&order=created_at.asc'),
-      sb3('cert_files?select=*&order=created_at.asc')
+      sb5('cert_folders?select=*&order=created_at.asc'),
+      sb5('cert_files?select=*&order=created_at.asc')
     ]);
 
-    // 화면 비우기
     document.getElementById('cert-folders-1').innerHTML = '';
     document.getElementById('cert-folders-2').innerHTML = '';
     document.getElementById('cert-folders-3').innerHTML = '';
@@ -2926,7 +2936,6 @@ async function loadCertificates() {
 
     const counts = { mechanics: 0, chemistry: 0, certification: 0, msds: 0 };
 
-    // 폴더 UI 생성
     if (folders && !folders.error) {
       folders.forEach(f => {
         if(counts[f.category] !== undefined) counts[f.category]++;
@@ -2934,14 +2943,12 @@ async function loadCertificates() {
       });
     }
 
-    // 파일 UI를 각 폴더 안에 배치
     if (files && !files.error) {
       files.forEach(file => {
         renderFileUI(file.folder_id, file);
       });
     }
 
-    // 상단 카운트(건수) 업데이트
     document.getElementById('cert-count-1').textContent = (counts.mechanics || 0) + '건';
     document.getElementById('cert-count-2').textContent = (counts.chemistry || 0) + '건';
     document.getElementById('cert-count-3').textContent = (counts.certification || 0) + '건';
@@ -2952,44 +2959,42 @@ async function loadCertificates() {
   }
 }
 
-// 3. 폴더 추가 버튼 클릭 시
 async function certAddFolder(type) {
-  const folderName = prompt("새 폴더의 이름을 입력하세요.");
+  const folderName = prompt("새 폴더 이름을 입력하세요:");
   if (!folderName) return;
 
   try {
-    await sb3('cert_folders', {
+    await sb5('cert_folders', {
       method: 'POST',
       body: { name: folderName, category: type }
     });
     loadCertificates(); 
   } catch (e) {
-    alert("폴더 저장 실패: " + e.message);
+    alert("폴더 생성 실패: " + e.message);
   }
 }
 
-// 4. 파일 업로드 실행 (Storage 저장 + DB 기록)
 async function handleCertUpload(input, folderId, category) {
   const files = input.files;
   if (!files || files.length === 0) return;
 
   for (const file of Array.from(files)) {
     try {
-      // (1) 사장님의 'certificates' 버킷으로 업로드
+      // 💡 탭 5 전용 SB5, KEY5 로 업로드!
       const filePath = `${category}/${folderId}/${Date.now()}_${file.name}`;
-      const storageUrl = `${SB3}/storage/v1/object/certificates/${filePath}`;
+      const storageUrl = `${SB5}/storage/v1/object/certificates/${filePath}`;
       
       const res = await fetch(storageUrl, {
         method: 'POST',
-        headers: { 'apikey': KEY3, 'Authorization': `Bearer ${KEY3}`, 'Content-Type': file.type },
+        headers: { 'apikey': KEY5, 'Authorization': `Bearer ${KEY5}`, 'Content-Type': file.type },
         body: file
       });
 
-      if (!res.ok) throw new Error("저장소 업로드 실패");
+      if (!res.ok) throw new Error("파일 저장소 업로드 실패");
 
-      // (2) DB 테이블(cert_files)에 정보 기록
       const ext = file.name.split('.').pop().toLowerCase();
-      await sb3('cert_files', {
+      
+      await sb5('cert_files', {
         method: 'POST',
         body: {
           folder_id: folderId,
@@ -3000,13 +3005,11 @@ async function handleCertUpload(input, folderId, category) {
         }
       });
     } catch (e) {
-      alert(`'${file.name}' 업로드 실패: ` + e.message);
+      alert(`'${file.name}' 업로드 오류: ` + e.message);
     }
   }
   loadCertificates(); 
 }
-
-// --- 화면 구성을 위한 보조 함수들 ---
 
 function renderFolderUI(category, folderId, folderName) {
   const mapping = { mechanics: '1', chemistry: '2', certification: '3', msds: '4' };
@@ -3037,14 +3040,14 @@ function renderFileUI(folderId, file) {
 
   const ext = file.file_ext || 'file';
   const sizeStr = file.file_size ? (file.file_size / 1024).toFixed(1) + ' KB' : '';
-  const publicUrl = `${SB3}/storage/v1/object/public/certificates/${file.storage_path}`;
+  const publicUrl = `${SB5}/storage/v1/object/public/certificates/${file.storage_path}`;
 
   const html = `
     <div class="cert-file-item fade-in">
       <div class="cert-file-info">
         <span class="cert-file-ext ${ext}">${ext}</span>
         <span class="cert-file-name">${file.file_name}</span>
-        <span class="cert-file-size">${sizeStr}</span>
+        <span class="cert-file-size" style="margin-left:6px; color:#999; font-size:11px">${sizeStr}</span>
       </div>
       <div class="cert-file-actions">
         <button class="cert-btn cert-btn-view" onclick="window.open('${publicUrl}', '_blank')">보기</button>
@@ -3061,13 +3064,13 @@ function toggleFolderBody(id) {
 
 async function deleteFile(id) {
   if(!confirm("파일을 삭제하시겠습니까?")) return;
-  await sb3(`cert_files?id=eq.${id}`, { method: 'DELETE' });
+  await sb5(`cert_files?id=eq.${id}`, { method: 'DELETE' });
   loadCertificates();
 }
 
 async function deleteFolder(id) {
-  if(!confirm("폴더를 삭제하면 내부 파일 정보도 모두 삭제됩니다.")) return;
-  await sb3(`cert_folders?id=eq.${id}`, { method: 'DELETE' });
+  if(!confirm("폴더와 내부 파일을 모두 삭제하시겠습니까?")) return;
+  await sb5(`cert_folders?id=eq.${id}`, { method: 'DELETE' });
   loadCertificates();
 }
 </script>

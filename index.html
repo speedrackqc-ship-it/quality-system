@@ -984,6 +984,7 @@ function switchTab(id, btn) {
   btn.classList.add('active');
   if (id === 'tab4' && !window._dbInited) { window._dbInited = true; initDashboard4(); }
   if (id === 'tab3' && !window._t3Inited) { window._t3Inited = true; initTab3(); }
+if (id === 'tab5' && !window._t5Inited) { window._t5Inited = true; loadCertificates(); }
 }
 function showFade(el) {
   el.style.display = 'block';
@@ -2733,7 +2734,32 @@ function certToggle(id) {
 function certAddFolder(type) {
   alert('폴더 추가 기능은 데이터베이스 연동 후 사용할 수 있습니다. (' + type + ')');
 }
+async function loadCertificates() {
+  try {
+    // 1. Supabase에서 데이터 가져오기 (주의: 'cert_files' 부분은 실제 DB 테이블 이름으로 바꿔야 합니다)
+    const certData = await sb3('cert_files?select=*'); 
+    
+    // DB에 데이터가 없으면 함수 종료
+    if (!certData || certData.length === 0) return;
 
+    // 2. 카테고리별로 데이터 나누기
+    const mechanics = certData.filter(c => c.category === 'mechanics');
+    const chemistry = certData.filter(c => c.category === 'chemistry');
+    const certificates = certData.filter(c => c.category === 'certification');
+    const msds = certData.filter(c => c.category === 'msds');
+
+    // 3. 화면의 '0건' 숫자를 진짜 갯수로 바꿔주기
+    document.getElementById('cert-count-1').textContent = mechanics.length + '건';
+    document.getElementById('cert-count-2').textContent = chemistry.length + '건';
+    document.getElementById('cert-count-3').textContent = certificates.length + '건';
+    document.getElementById('cert-count-4').textContent = msds.length + '건';
+
+    // (참고: 나중에 여기에 화면에 파일 목록을 그려주는 코드를 추가해야 합니다)
+    
+  } catch (error) {
+    console.error("인증서 로드 실패:", error);
+  }
+}
 </script>
 </body>
 </html>

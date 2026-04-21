@@ -2716,12 +2716,6 @@ if(document.readyState==='loading'){
 }else{
   initDashboard4();
 }
-// ... (기존 코드: TAB 4 관련 코드 끝부분)
-if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded',initDashboard4);
-}else{
-  initDashboard4();
-}
 
 // ===================================================
 // TAB 5: 공인성적서/인증서 관련 함수 추가
@@ -2740,8 +2734,6 @@ function certAddFolder(type) {
   alert('폴더 추가 기능은 데이터베이스 연동 후 사용할 수 있습니다. (' + type + ')');
 }
 
-</script> </body>
-</html>
 </script>
 </body>
 </html>

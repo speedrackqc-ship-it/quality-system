@@ -2890,6 +2890,16 @@ async function deleteFolder(id) {
   await sb3(`cert_folders?id=eq.${id}`, { method: 'DELETE' });
   loadCertificates();
 }
+// 탭 5 아코디언 메뉴 열기/닫기 (누락된 함수 복구)
+function certToggle(id) {
+  const header = document.querySelector('#cert-sec-' + id + ' .cert-section-header');
+  const body = document.getElementById('cert-body-' + id);
+  const arrow = document.getElementById('cert-arrow-' + id);
+  
+  if (header) header.classList.toggle('open');
+  if (body) body.classList.toggle('open');
+  if (arrow) arrow.classList.toggle('open');
+}
 </script>
 </body>
 </html>

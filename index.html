@@ -2722,7 +2722,7 @@ if(document.readyState==='loading'){
 }
 
 // ===================================================
-// TAB 5: Supabase 실데이터 연동 시스템
+// TAB 5: Supabase 실데이터 연동 시스템 (현재 DB 맞춤형)
 // ===================================================
 
 // 1. 전체 데이터 로드 (조회)
@@ -2792,7 +2792,7 @@ async function handleCertUpload(input, folderId, category) {
   for (const file of Array.from(files)) {
     try {
       // (1) Storage 업로드 (버킷 이름: cert_files)
-      const filePath = `${category}/${Date.now()}_${file.name}`;
+      const filePath = `${category}/${folderId}/${Date.now()}_${file.name}`;
       const storageUrl = `${SB3}/storage/v1/object/cert_files/${filePath}`;
       
       const res = await fetch(storageUrl, {
@@ -2803,16 +2803,17 @@ async function handleCertUpload(input, folderId, category) {
 
       if (!res.ok) throw new Error("파일 저장소 업로드 실패");
 
-      // (2) DB에 정보 기록
-      const publicUrl = `${SB3}/storage/v1/object/public/cert_files/${filePath}`;
+      // (2) 💥 현재 DB 구조에 맞게 기록 (file_url 대신 storage_path, file_size를 int8로)
+      const ext = file.name.split('.').pop().toLowerCase();
+      
       await sb3('cert_files', {
         method: 'POST',
         body: {
           folder_id: folderId,
           file_name: file.name,
-          file_url: publicUrl,
-          file_size: (file.size / 1024).toFixed(1) + ' KB',
-          category: category
+          file_size: file.size, // DB가 int8이므로 원본 사이즈(숫자)를 넘김
+          file_ext: ext,        // 확장자 기록
+          storage_path: filePath // DB 구조에 맞춰 경로 저장
         }
       });
     } catch (e) {
@@ -2830,14 +2831,15 @@ function renderFolderUI(category, folderId, folderName) {
   if (!container) return;
 
   const html = `
-    <div class="cert-folder-block" id="folder-${folderId}">
+    <div class="cert-folder-block fade-in" id="folder-${folderId}">
       <div class="cert-folder-header" onclick="toggleFolderBody('${folderId}')" style="cursor:pointer">
         <span>📁 <b>${folderName}</b></span>
         <button class="cert-folder-del-btn" onclick="event.stopPropagation(); deleteFolder('${folderId}')">삭제</button>
       </div>
       <div class="cert-folder-body" id="body-${folderId}" style="display:none; padding:10px;">
         <div class="cert-upload-zone" onclick="this.querySelector('input').click()" style="margin-bottom:10px;">
-          <span style="font-size:12px; color:#666;">☁️ 클릭하여 파일 추가</span>
+          <div class="cert-upload-icon">☁️</div>
+          <div class="cert-upload-text">여기를 클릭하거나 파일을 드래그하여 업로드하세요</div>
           <input type="file" style="display:none" onchange="handleCertUpload(this, '${folderId}', '${category}')" multiple />
         </div>
         <div class="cert-file-list" id="file-list-${folderId}"></div>
@@ -2850,15 +2852,22 @@ function renderFileUI(folderId, file) {
   const list = document.getElementById('file-list-' + folderId);
   if (!list) return;
 
-  const ext = file.file_name.split('.').pop().toLowerCase();
+  // 💥 바뀐 DB 데이터를 화면용으로 가공
+  const ext = file.file_ext || file.file_name.split('.').pop().toLowerCase();
+  const sizeStr = file.file_size ? (file.file_size / 1024).toFixed(1) + ' KB' : '알 수 없음';
+  
+  // 저장된 path를 기반으로 언제든 볼 수 있는 public URL 자동 완성
+  const publicUrl = `${SB3}/storage/v1/object/public/cert_files/${file.storage_path}`;
+
   const html = `
-    <div class="cert-file-item">
+    <div class="cert-file-item fade-in">
       <div class="cert-file-info">
         <span class="cert-file-ext ${ext}">${ext}</span>
         <span class="cert-file-name">${file.file_name}</span>
+        <span class="cert-file-size" style="margin-left:6px; color:#999; font-size:11px">${sizeStr}</span>
       </div>
       <div class="cert-file-actions">
-        <button class="cert-btn cert-btn-view" onclick="window.open('${file.file_url}', '_blank')">보기</button>
+        <button class="cert-btn cert-btn-view" onclick="window.open('${publicUrl}', '_blank')">보기</button>
         <button class="cert-btn cert-btn-del" onclick="deleteFile('${file.id}')">삭제</button>
       </div>
     </div>`;

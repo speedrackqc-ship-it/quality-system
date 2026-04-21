@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -13,7 +14,8 @@ const SB4  = 'https://gigfzkyrmudcdksgpeoo.supabase.co';
 const KEY4 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpZ2Z6a3lybXVkY2Rrc2dwZW9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MTQyNDgsImV4cCI6MjA4MDk5MDI0OH0.wd1CXZF0Nwl4PqugWOYBIz1LELyuE_wgIGMEDvo27x8';
 const SB5  = 'https://gifzxwzzqkuxvjkewshi.supabase.co';
 const KEY5 = 'sb_publishable_hdoh8W4OruihkO5n-ULF8g_34tA5Hu3';
-const H4   = { 'apikey': KEY4, 'Authorization': `Bearer ${KEY4}` };
+  
+  const H4   = { 'apikey': KEY4, 'Authorization': `Bearer ${KEY4}` };
 
 // Supabase에서 표준원가 로드
 async function t3LoadStdCostFromSB() {
@@ -22,25 +24,26 @@ async function t3LoadStdCostFromSB() {
     rows.forEach(r => {
       T3.monthStdCost[r.month] = { fileName: r.file_name, data: r.data };
     });
-    // [추가] 로드 후 상단 태그 업데이트
-    t3UpdateStdSavedList();
   } catch(e) { console.error('표준원가 로드 오류:', e); }
 }
 
 // Supabase에서 전체 실적 로드
 async function t3LoadSessions() {
   try {
-    const sessions = await sb3('repaint_sessions?select=id,month,scrap_price,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.desc');
+    const sessions = await sb3('repaint_sessions?select=id,month,scrap_price,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.asc');
     T3.sessions = sessions.map(s => ({
-      id: s.id, month: s.month, scrap: s.scrap_price, created_at: s.created_at,
+      id: s.id,
+      month: s.month,
+      scrap: s.scrap_price,
+      created_at: s.created_at,
       items: (s.repaint_items||[]).map(r => ({
-        id: r.id, name: r.name, thickness: r.thickness, size: r.size, qty: r.qty,
+        id: r.id,
+        name: r.name, thickness: r.thickness,
+        size: r.size, qty: r.qty,
         repaint: r.repaint, stdcost: r.stdcost
       }))
     }));
     t3BuildSaved();
-    t3RenderResults();
-    t3LoadLog(); // [추가] 이력 목록 갱신
   } catch(e) { console.error('실적 로드 오류:', e); }
 }
 // ── Toast 알림 ──
@@ -52,10 +55,21 @@ function t3ShowToast(msg, type) {
   t.id = 't3_toast';
   const bg = type === 'error' ? '#e53e3e' : type === 'warn' ? '#d97706' : '#1a7f37';
   t.style.cssText = [
-    'position:fixed', 'top:24px', 'left:50%', 'transform:translateX(-50%)',
-    'background:' + bg, 'color:#fff', 'padding:14px 28px', 'border-radius:10px',
-    'font-size:15px', 'font-weight:700', 'box-shadow:0 4px 20px rgba(0,0,0,0.22)',
-    'z-index:99999', 'pointer-events:none', 'opacity:1', 'transition:opacity 0.4s'
+    'position:fixed',
+    'top:24px',
+    'left:50%',
+    'transform:translateX(-50%)',
+    'background:' + bg,
+    'color:#fff',
+    'padding:14px 28px',
+    'border-radius:10px',
+    'font-size:15px',
+    'font-weight:700',
+    'box-shadow:0 4px 20px rgba(0,0,0,0.22)',
+    'z-index:99999',
+    'pointer-events:none',
+    'opacity:1',
+    'transition:opacity 0.4s'
   ].join(';');
   t.textContent = msg;
   document.body.appendChild(t);
@@ -70,6 +84,7 @@ function t3ResetForm() {
     { name:'', thickness:'', size:'', qty:'', repaint:'', stdcost:'' }
   ];
   T3._editSessionId = null;
+  T3._editCreatedAt = null;
   const sv = document.querySelector('#t3_save_btn');
   if (sv) sv.textContent = '💾 저장';
   const monthEl = document.getElementById('t3_sel_month');
@@ -77,60 +92,452 @@ function t3ResetForm() {
   const scrapEl = document.getElementById('t3_scrap_price');
   if (scrapEl) scrapEl.value = '250';
   t3RenderInput();
+  t3RenderResults();
 }
 
 function t3BuildSaved() {
   const monthMap = {};
   (T3.sessions||[]).forEach(s => {
-    if (!monthMap[s.month]) monthMap[s.month] = { month: s.month, scrap: s.scrap, rows: {}, totQty: 0 };
+    if (!monthMap[s.month]) monthMap[s.month] = { month: s.month, scrap: s.scrap, rows: {}, totQty: 0, totPL: 0 };
     const m = monthMap[s.month];
+    m.scrap = s.scrap;
     s.items.forEach(r => {
       const key = (r.name||'') + '|' + (r.size||'') + '|' + (r.thickness||'');
       if (!m.rows[key]) m.rows[key] = { name: r.name, thickness: r.thickness, size: r.size, qty: 0, repaint: r.repaint, stdcost: r.stdcost };
       m.rows[key].qty += (+r.qty||0);
     });
   });
-  T3.saved = Object.values(monthMap).map(m => ({
-    month: m.month, scrap: m.scrap, rows: Object.values(m.rows)
-  })).sort((a,b) => a.month - b.month);
+  T3.saved = Object.values(monthMap).map(m => {
+    const rows = Object.values(m.rows);
+    const totQty = rows.reduce((a,r) => a + (+r.qty||0), 0);
+    return { month: m.month, scrap: m.scrap, rows, totQty, totPL: 0 };
+  }).sort((a,b) => a.month - b.month);
 }
 
 </script>
 <style>
-:root { --bg: #f0f2f5; --surface: #ffffff; --surface2: #f6f8fa; --border: #d0d7de; --accent: #0969da; --accent2: #1a7f37; --accent3: #cf222e; --accent4: #9a6700; --accent5: #6e40c9; --text: #1f2328; --text2: #636c76; --text3: #adb5bd; }
+:root {
+  --bg: #f0f2f5;
+  --surface: #ffffff;
+  --surface2: #f6f8fa;
+  --border: #d0d7de;
+  --accent: #0969da;
+  --accent2: #1a7f37;
+  --accent3: #cf222e;
+  --accent4: #9a6700;
+  --accent5: #6e40c9;
+  --text: #1f2328;
+  --text2: #636c76;
+  --text3: #adb5bd;
+}
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 32px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-.logo-icon { width: 34px; height: 34px; background: linear-gradient(135deg, var(--accent), #1f6feb); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+
+header {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 14px 32px; display: flex; align-items: center; gap: 12px;
+  position: sticky; top: 0; z-index: 100;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.logo-icon {
+  width: 34px; height: 34px;
+  background: linear-gradient(135deg, var(--accent), #1f6feb);
+  border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 17px;
+}
 header h1 { font-size: 16px; font-weight: 700; }
-.tab-bar { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 32px; }
-.tab-btn { padding: 12px 20px; font-size: 14px; font-weight: 600; color: var(--text2); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; }
+header span { font-size: 12px; color: var(--text2); margin-left: 6px; }
+
+.tab-bar {
+  display: flex; border-bottom: 1px solid var(--border);
+  background: var(--surface); padding: 0 32px;
+}
+.tab-btn {
+  padding: 12px 20px; font-size: 14px; font-weight: 600;
+  color: var(--text2); cursor: pointer; border: none; background: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: all 0.15s; font-family: 'Noto Sans KR', sans-serif;
+}
+.tab-btn:hover { color: var(--text); }
 .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
 .tab-content { display: none; }
 .tab-content.active { display: block; }
 .main { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
-.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px; margin-top: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+
+/* 업로드 */
+.upload-zone {
+  border: 2px dashed var(--border); border-radius: 12px; padding: 48px 32px;
+  text-align: center; cursor: pointer; transition: all 0.2s;
+  background: var(--surface);
+}
+.upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(9,105,218,0.04); }
+.upload-zone .upload-icon { font-size: 40px; margin-bottom: 12px; }
+.upload-zone h2 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+.upload-zone p { color: var(--text2); font-size: 14px; }
+.upload-zone input { display: none; }
+.file-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(26,127,55,0.1); border: 1px solid rgba(26,127,55,0.3);
+  color: var(--accent2); padding: 5px 12px; border-radius: 16px;
+  font-size: 12px; font-weight: 500; margin-top: 12px;
+}
+.badge-yellow {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(154,103,0,0.1); border: 1px solid rgba(154,103,0,0.3);
+  color: var(--accent4); padding: 4px 10px; border-radius: 14px;
+  font-size: 12px; font-weight: 500; margin-top: 10px;
+}
+
+.panel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 22px; margin-top: 18px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
 .panel-title { font-size: 12px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 16px; }
+.filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.filter-group label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 8px; font-weight: 600; }
+.keyword-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }
+.tag {
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(9,105,218,0.1); border: 1px solid rgba(9,105,218,0.25);
+  color: var(--accent); padding: 4px 10px; border-radius: 14px;
+  font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono', monospace; user-select: none;
+}
+.tag .remove { font-size: 14px; line-height: 1; color: var(--text3); cursor: pointer; }
+.tag .remove:hover { color: var(--accent3); }
+.add-keyword { display: flex; gap: 8px; margin-top: 8px; }
+.add-keyword input {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); padding: 7px 11px; border-radius: 7px;
+  font-size: 13px; font-family: 'JetBrains Mono', monospace; outline: none; transition: border-color 0.15s;
+}
+.add-keyword input:focus { border-color: var(--accent); }
+.btn-add {
+  background: rgba(9,105,218,0.12); border: 1px solid rgba(9,105,218,0.3);
+  color: var(--accent); padding: 7px 14px; border-radius: 7px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-top: 1px solid var(--border); margin-top: 8px;
+}
+.toggle-row span { font-size: 14px; color: var(--text2); }
+.toggle {
+  width: 40px; height: 22px; background: var(--border);
+  border-radius: 11px; cursor: pointer; position: relative; transition: all 0.2s; flex-shrink: 0;
+}
+.toggle.on { background: var(--accent2); }
+.toggle::after {
+  content: ''; width: 16px; height: 16px; border-radius: 50%;
+  background: white; position: absolute; top: 3px; left: 3px;
+  transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.toggle.on::after { transform: translateX(18px); }
+.btn-run {
+  width: 100%; padding: 13px;
+  background: var(--accent); border: none; border-radius: 9px; color: white;
+  font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 14px;
+  transition: background 0.15s; font-family: 'Noto Sans KR', sans-serif;
+}
+.btn-run:hover { background: #0860c7; }
+.btn-run.yellow { background: var(--accent4); }
+.btn-run.yellow:hover { background: #7d5600; }
+.btn-run.purple { background: var(--accent5); }
+.btn-run.purple:hover { background: #5a34a3; }
+.btn-run.red { background: #d1242f; }
+.btn-run.red:hover { background: #b91c25; }
+
+.results-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 24px; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;
+}
+.stat-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 5px 12px; border-radius: 14px; font-size: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.chip .num { font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+.chip.green .num { color: var(--accent2); }
+.chip.blue .num { color: var(--accent); }
+.chip.yellow .num { color: var(--accent4); }
+.chip.red .num { color: var(--accent3); }
+.chip.purple .num { color: var(--accent5); }
+
+.btn-download {
+  display: flex; align-items: center; gap: 7px;
+  background: rgba(26,127,55,0.1); border: 1px solid rgba(26,127,55,0.25);
+  color: var(--accent2); padding: 7px 16px; border-radius: 7px;
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+.btn-download:hover { background: rgba(26,127,55,0.18); }
+.btn-download.yellow { background: rgba(154,103,0,0.1); border-color: rgba(154,103,0,0.25); color: var(--accent4); }
+.btn-download.yellow:hover { background: rgba(154,103,0,0.18); }
+
 .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
 .table-scroll { overflow-x: auto; max-height: 560px; overflow-y: auto; }
 table { width: 100%; border-collapse: collapse; }
-th { padding: 10px 14px; background: var(--surface2); font-size: 11px; font-weight: 700; color: var(--text2); border-bottom: 1px solid var(--border); text-align: left; }
+thead tr { background: var(--surface2); position: sticky; top: 0; z-index: 10; }
+th {
+  padding: 10px 14px; text-align: left;
+  font-size: 11px; font-weight: 700; color: var(--text2);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
 td { padding: 9px 14px; font-size: 13px; border-bottom: 1px solid rgba(208,215,222,0.6); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(9,105,218,0.03); }
+.td-name { font-weight: 500; }
 .td-mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; }
-.col-green { color: var(--accent2); } .col-blue { color: var(--accent); } .col-red { color: var(--accent3); } .col-gray { color: var(--text2); }
-.tag { display: inline-flex; align-items: center; gap: 5px; background: rgba(9,105,218,0.1); border: 1px solid rgba(9,105,218,0.25); color: var(--accent); padding: 4px 10px; border-radius: 14px; font-size: 12px; font-weight: 600; margin-right: 5px; }
-.t2-annual-banner { background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%); border-radius:18px; padding:28px 36px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 8px 32px rgba(0,0,0,.18); color: white; }
-.t2-annual-val { font-size:34px; font-weight:800; color:#f6c90e; }
-.t2-mtab { padding:8px 15px; border:none; background:transparent; cursor:pointer; font-weight:600; color:#a0aec0; }
-.t2-mtab.active { background:var(--accent); color:white; border-radius:8px; }
-.cert-section-body { display: none; padding: 20px; } .cert-section-body.open { display: block; }
-</style>
+.td-right { text-align: right; }
+.td-center { text-align: center; }
+.col-green { color: var(--accent2); }
+.col-blue { color: var(--accent); }
+.col-yellow { color: var(--accent4); }
+.col-red { color: var(--accent3); }
+.col-purple { color: var(--accent5); }
+.col-gray { color: var(--text2); }
+.tfoot-row td { background: var(--surface2); font-weight: 700; border-top: 2px solid var(--border); border-bottom: none; }
+.upload-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.upload-mini {
+  border: 2px dashed var(--border); border-radius: 10px; padding: 24px 18px;
+  text-align: center; cursor: pointer; transition: all 0.2s; background: var(--surface);
+}
+.upload-mini:hover { border-color: var(--accent); background: rgba(9,105,218,0.03); }
+.upload-mini input { display: none; }
+.upload-mini .icon { font-size: 26px; margin-bottom: 7px; }
+.upload-mini h3 { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+.upload-mini p { font-size: 11px; color: var(--text2); }
+.info-box {
+  background: rgba(9,105,218,0.06); border: 1px solid rgba(9,105,218,0.18);
+  border-radius: 9px; padding: 11px 14px; font-size: 13px; color: var(--text2);
+  margin-bottom: 14px; line-height: 1.7;
+}
+.info-box strong { color: var(--accent); }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+.fade-in { animation: fadeIn 0.25s ease; }
+
+/* ===== TAB4 실시간 DB 전용 스타일 ===== */
+.db-header {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
+}
+.db-status {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600;
+  background: var(--surface2); border: 1px solid var(--border);
+  padding: 5px 12px; border-radius: 14px;
+}
+.db-status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); }
+.db-status.connected .dot { background: var(--accent2); animation: pulse-dot 2s infinite; }
+@keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+.db-status .label { color: var(--text2); }
+
+.table-selector {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px;
+}
+.tbl-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  border: 1.5px solid var(--border); background: var(--surface); color: var(--text2);
+  cursor: pointer; transition: all 0.15s; font-family: 'Noto Sans KR', sans-serif;
+}
+.tbl-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(9,105,218,0.05); }
+.tbl-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(9,105,218,0.08); }
+.tbl-btn .count {
+  background: rgba(9,105,218,0.12); color: var(--accent);
+  font-size: 11px; padding: 1px 7px; border-radius: 10px; font-family: 'JetBrains Mono', monospace;
+}
+.tbl-btn.active .count { background: var(--accent); color: white; }
+
+.filter-bar {
+  display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;
+}
+.filter-bar input, .filter-bar select {
+  padding: 7px 11px; border: 1px solid var(--border); border-radius: 7px;
+  font-size: 13px; font-family: 'Noto Sans KR', sans-serif; outline: none;
+  background: var(--surface); color: var(--text); transition: border-color 0.15s;
+}
+.filter-bar input:focus, .filter-bar select:focus { border-color: var(--accent); }
+.filter-bar input { flex: 1; min-width: 200px; }
+.refresh-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border: 1px solid var(--border); border-radius: 7px;
+  font-size: 12px; font-weight: 600; cursor: pointer; background: var(--surface);
+  color: var(--text2); transition: all 0.15s; font-family: 'Noto Sans KR', sans-serif;
+  white-space: nowrap;
+}
+.refresh-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+.refresh-btn.spinning .icon { display: inline-block; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-overlay {
+  display: flex; align-items: center; justify-content: center;
+  padding: 60px; color: var(--text2); font-size: 14px; gap: 10px;
+}
+.loading-spinner {
+  width: 18px; height: 18px; border: 2px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.pagination {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-top: 1px solid var(--border);
+  background: var(--surface2); font-size: 12px; color: var(--text2);
+  flex-wrap: wrap; gap: 8px;
+}
+.page-btns { display: flex; gap: 6px; }
+.page-btn {
+  padding: 4px 10px; border: 1px solid var(--border); border-radius: 5px;
+  font-size: 12px; cursor: pointer; background: var(--surface);
+  color: var(--text2); transition: all 0.1s;
+}
+.page-btn:hover { border-color: var(--accent); color: var(--accent); }
+.page-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+.page-btn:disabled { opacity: 0.4; cursor: default; }
+
+.badge-status {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; font-family: 'JetBrains Mono', monospace;
+}
+.badge-ok { background: rgba(26,127,55,0.12); color: var(--accent2); }
+.badge-warn { background: rgba(154,103,0,0.12); color: var(--accent4); }
+.badge-err { background: rgba(207,34,46,0.12); color: var(--accent3); }
+.badge-gray { background: rgba(99,108,118,0.1); color: var(--text2); }
+
+/* ── 재도장 입력칸 강조 ── */
+.input-cell {
+  background: rgba(59,130,246,0.08) !important;
+  position: relative;
+}
+.input-cell:hover {
+  background: rgba(59,130,246,0.15) !important;
+}
+.input-cell input:focus {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+.input-cell select:focus {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+.input-cell input::placeholder {
+  color: #93c5fd;
+  font-size: 10px;
+  font-style: italic;
+}
+
+  
+  /* ===== TAB5: 공인성적서/인증서 ===== */
+  .cert-section{background:#fff;border:1px solid #e0e4ea;border-radius:12px;margin-bottom:18px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.05)}
+  .cert-section-header{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;cursor:pointer;background:#f8f9fb;border-bottom:1px solid transparent;transition:background .2s;user-select:none}
+  .cert-section-header:hover{background:#eef1f7}
+  .cert-section-header.open{background:#eef1f7;border-bottom:1px solid #e0e4ea}
+  .cert-section-title{font-size:15px;font-weight:700;color:#222;display:flex;align-items:center;gap:10px}
+  .cert-icon{font-size:18px}.cert-count{font-size:11px;background:#4a90d9;color:#fff;border-radius:12px;padding:2px 9px;font-weight:600}
+  .cert-arrow{font-size:12px;color:#888;transition:transform .25s}.cert-arrow.open{transform:rotate(180deg)}
+  .cert-section-body{display:none;padding:22px;background:#fff}.cert-section-body.open{display:block}
+  .cert-folder-list{display:flex;flex-direction:column;gap:14px;margin-bottom:14px}
+  .cert-folder-block{border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#fafbfd}
+  .cert-folder-header{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f1f4f9;border-bottom:1px solid #e2e8f0}
+  .cert-folder-name-input{font-size:13px;font-weight:700;color:#222;border:none;background:transparent;outline:none;flex:1;min-width:0}
+  .cert-folder-name-input:focus{background:#fff;border-bottom:2px solid #4a90d9}
+  .cert-folder-del-btn{font-size:12px;color:#e74c3c;background:none;border:none;cursor:pointer;padding:2px 6px;opacity:.7}
+  .cert-folder-del-btn:hover{opacity:1}
+  .cert-folder-body{padding:14px}
+  .cert-upload-zone{border:2px dashed #c0c8d8;border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;margin-bottom:12px;background:#fff;position:relative}
+  .cert-upload-zone:hover{border-color:#4a90d9;background:#f0f6ff}
+  .cert-upload-zone.drag-over{border-color:#2563eb;background:#dbeafe;transform:scale(1.01)}
+  .cert-upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+  .cert-upload-icon{font-size:24px;margin-bottom:5px}.cert-upload-text{font-size:13px;color:#666;font-weight:500}.cert-upload-sub{font-size:11px;color:#aaa;margin-top:2px}
+  .cert-folder-upload-btn{margin-top:8px;padding:5px 14px;border-radius:6px;border:1.5px solid #4a90d9;background:#f0f6ff;color:#2563eb;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s}
+  .cert-folder-upload-btn:hover{background:#dbeafe}
+  .cert-file-list{display:flex;flex-direction:column;gap:7px}
+  .cert-file-item{display:flex;align-items:center;justify-content:space-between;background:#f4f6fa;border:1px solid #e2e6ef;border-radius:7px;padding:9px 13px}
+  .cert-file-item:hover{background:#e9edf5}
+  .cert-file-info{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
+  .cert-file-ext{font-size:10px;font-weight:700;background:#4a90d9;color:#fff;padding:2px 6px;border-radius:4px;flex-shrink:0;text-transform:uppercase}
+  .cert-file-ext.pdf{background:#e74c3c}.cert-file-ext.jpg,.cert-file-ext.jpeg,.cert-file-ext.png{background:#27ae60}.cert-file-ext.xlsx,.cert-file-ext.xls{background:#217346}.cert-file-ext.docx,.cert-file-ext.doc{background:#2b579a}
+  .cert-file-name{font-size:13px;color:#333;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px}
+  .cert-file-size{font-size:11px;color:#999;flex-shrink:0;margin-left:4px}.cert-file-date{font-size:11px;color:#bbb;flex-shrink:0;margin-left:4px}
+  .cert-file-actions{display:flex;gap:6px;flex-shrink:0;margin-left:8px}
+  .cert-btn{padding:4px 11px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;border:none;transition:opacity .15s}.cert-btn:hover{opacity:.8}
+  .cert-btn-view{background:#4a90d9;color:#fff}.cert-btn-dl{background:#27ae60;color:#fff}.cert-btn-del{background:#f0f0f0;color:#e74c3c;border:1px solid #e0e0e0}
+  .cert-empty{text-align:center;color:#bbb;font-size:12px;padding:12px 0 4px}.cert-uploading{text-align:center;color:#4a90d9;font-size:12px;padding:8px}
+  .cert-add-folder-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:2px dashed #b0bec5;background:#f8f9fb;color:#555;transition:all .15s;margin-top:2px}
+  .cert-add-folder-btn:hover{border-color:#4a90d9;color:#4a90d9;background:#f0f6ff}
+
+
+  /* ===== TAB2: 리퍼 실적 ===== */
+  .t2-main { max-width:1100px; margin:0 auto; padding:28px 20px; display:flex; flex-direction:column; gap:22px; }
+  .t2-annual-banner { background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%); border-radius:18px; padding:28px 36px; display:flex; align-items:center; justify-content:space-between; gap:20px; box-shadow:0 8px 32px rgba(0,0,0,.18); }
+  .t2-annual-left { flex:1; }
+  .t2-annual-label { font-size:15px; font-weight:700; color:#a0aec0; letter-spacing:.08em; margin-bottom:16px; }
+  .t2-annual-nums { display:flex; align-items:center; gap:0; }
+  .t2-annual-block { display:flex; flex-direction:column; gap:4px; padding:0 28px; }
+  .t2-annual-block:first-child { padding-left:0; }
+  .t2-annual-divider { width:1px; height:56px; background:rgba(255,255,255,.15); }
+  .t2-annual-unit { font-size:12px; color:#718096; font-weight:500; }
+  .t2-annual-val { font-size:34px; font-weight:800; color:#fff; letter-spacing:-1px; }
+  .t2-annual-money { color:#f6c90e; }
+  .t2-annual-unit2 { font-size:13px; color:#a0aec0; font-weight:500; }
+  .t2-year-nav { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.07); border-radius:12px; padding:10px 18px; }
+  .t2-yr-btn { background:rgba(255,255,255,.12); border:none; color:#fff; font-size:16px; cursor:pointer; border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; transition:background .15s; }
+  .t2-yr-btn:hover { background:rgba(255,255,255,.25); }
+  .t2-yr-label { font-size:20px; font-weight:700; color:#fff; min-width:48px; text-align:center; }
+  .t2-month-tabs { display:flex; gap:6px; flex-wrap:wrap; background:#f8f9fb; border-radius:12px; padding:10px 12px; border:1px solid #e8edf2; }
+  .t2-mtab { display:flex; flex-direction:column; align-items:center; gap:3px; padding:8px 12px; border:none; background:transparent; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; color:#718096; transition:all .15s; min-width:56px; }
+  .t2-mtab:hover { background:#e9f0ff; color:#3182ce; }
+  .t2-mtab.on { background:linear-gradient(135deg,#4a90d9,#2c5f8a); color:#fff; box-shadow:0 3px 10px rgba(74,144,217,.35); }
+  .t2-mtab-dot { width:6px; height:6px; border-radius:50%; background:#48bb78; display:none; }
+  .t2-mtab.has-data .t2-mtab-dot { display:block; }
+  .t2-mtab.on .t2-mtab-dot { background:#fff; display:block; }
+  .t2-month-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .t2-mcard { background:#fff; border-radius:14px; padding:20px 24px; border:1.5px solid #e8edf2; box-shadow:0 2px 10px rgba(0,0,0,.05); display:flex; flex-direction:column; gap:8px; }
+  .t2-mcard-green { border-color:#9ae6b4; background:linear-gradient(135deg,#f0fff4,#e6ffed); }
+  .t2-mcard-blue { border-color:#90cdf4; background:linear-gradient(135deg,#ebf8ff,#e3f2fd); }
+  .t2-mcard-yellow { border-color:#fbd38d; background:linear-gradient(135deg,#fffff0,#fefce8); }
+  .t2-mcard-label { font-size:13px; color:#718096; font-weight:600; }
+  .t2-mcard-val { font-size:32px; font-weight:800; color:#2d3748; }
+  .t2-mcard-val em { font-size:14px; font-weight:500; color:#a0aec0; font-style:normal; margin-left:4px; }
+  .t2-mcard-money { color:#d69e2e; }
+  .t2-input-panel { background:#fff; border-radius:16px; border:1.5px solid #e2e8f0; padding:24px 28px; box-shadow:0 2px 12px rgba(0,0,0,.06); }
+  .t2-input-panel-header { display:flex; align-items:baseline; gap:12px; margin-bottom:20px; padding-bottom:14px; border-bottom:1px solid #f0f4f8; }
+  .t2-input-panel-header > span:first-child { font-size:17px; font-weight:700; color:#2d3748; }
+  .t2-input-panel-hint { font-size:12px; color:#a0aec0; }
+  .t2-input-row-wrap { display:grid; grid-template-columns:repeat(3,1fr) auto; gap:14px; align-items:end; }
+  .t2-input-field { display:flex; flex-direction:column; gap:6px; }
+  .t2-input-field label { font-size:12px; font-weight:600; color:#718096; }
+  .t2-input-field input { padding:10px 14px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:15px; font-weight:600; color:#2d3748; outline:none; transition:border .15s; }
+  .t2-input-field input:focus { border-color:#4a90d9; box-shadow:0 0 0 3px rgba(74,144,217,.12); }
+  .t2-save-btn { padding:10px 24px; background:linear-gradient(135deg,#d4a017,#b8860b); color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; height:42px; white-space:nowrap; box-shadow:0 3px 10px rgba(180,130,0,.25); transition:all .15s; }
+  .t2-save-btn:hover { background:linear-gradient(135deg,#e8b020,#c99a10); transform:translateY(-1px); }
+  .t2-calc-summary { display:flex; align-items:center; gap:0; background:#f8f9fb; border-radius:12px; padding:16px 24px; border:1px solid #e8edf2; }
+  .t2-sum-item { display:flex; flex-direction:column; gap:4px; padding:0 24px; }
+  .t2-sum-item:first-child { padding-left:0; }
+  .t2-sum-item .label { font-size:12px; color:#718096; font-weight:500; }
+  .t2-sum-item .num { font-size:22px; font-weight:800; color:#2d3748; }
+  .t2-sum-divider { width:1px; height:44px; background:#e2e8f0; }
+  .t2-table-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .t2-table-title { font-size:16px; font-weight:700; color:#2d3748; }
+  .t2-table-actions { display:flex; gap:8px; }
+  
+  </style>
 </head>
 <body>
 
 <header>
   <div class="logo-icon">📦</div>
   <h1>품질보증파트 통합관리 시스템</h1>
+  <span>재고분석 · 리퍼계산 · 재도장 · 실시간 DB</span>
 </header>
 
 <div class="tab-bar">
@@ -140,301 +547,992 @@ td { padding: 9px 14px; font-size: 13px; border-bottom: 1px solid rgba(208,215,2
   <button class="tab-btn" onclick="switchTab('tab5',this)">📋 공인성적서/인증서/MSDS</button>
 </div>
 
-<div id="tab2" class="tab-content active">
-<div class="main t2-main">
-  <div class="t2-annual-banner">
-    <div><span id="t2AnnualYear">2026</span>년 리퍼 누적 TOTAL<br><span class="t2-annual-val" id="t2AnnualAmt">0</span>원</div>
-    <div><button onclick="t2ShiftYear(-1)">◀</button><span id="t2YearLabel" style="margin:0 15px; font-weight:bold;">2026</span><button onclick="t2ShiftYear(1)">▶</button></div>
-  </div>
-  <div class="t2-month-tabs" id="t2MonthTabs" style="display:flex; gap:5px; background:#f8f9fb; padding:10px; border-radius:12px; margin-top:20px; border:1px solid #e8edf2;"></div>
-  <div id="t2MonthInputPanel" class="panel" style="display:none">
-    <div style="display:grid; grid-template-columns: repeat(3,1fr) auto; gap:15px; align-items:end;">
-      <div>포장수량<input type="number" id="t2InputPkg" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></div>
-      <div>판매수량<input type="number" id="t2InputQty" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></div>
-      <div>합계금액<input type="number" id="t2InputAmt" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></div>
-      <button onclick="t2SaveMonthly()" style="padding:10px 20px; background:var(--accent); color:white; border:none; border-radius:6px; cursor:pointer;">💾 저장</button>
+<!-- ===== TAB 5: 공인성적서/인증서 ===== -->
+<div id="tab5" class="tab-content">
+  <div class="main" style="padding:32px 24px; max-width:960px; margin:0 auto;">
+    <div style="margin-bottom:28px;">
+      <h2 style="font-size:20px;font-weight:800;color:#222;margin:0 0 6px;">📋 공인성적서 / 인증서 / MSDS</h2>
+      <p style="font-size:13px;color:#888;margin:0;">항목을 클릭해 펼치고, 폴더를 만들어 파일을 업로드하면 누구나 확인 및 다운로드할 수 있습니다.</p>
+    </div>
+    <div class="cert-section" id="cert-sec-1">
+      <div class="cert-section-header" onclick="certToggle('1')">
+        <div class="cert-section-title"><span class="cert-icon">⚙️</span> 역학 시험 <span class="cert-count" id="cert-count-1">0건</span></div>
+        <span class="cert-arrow" id="cert-arrow-1">▼</span>
+      </div>
+      <div class="cert-section-body" id="cert-body-1">
+        <div id="cert-folders-1" class="cert-folder-list"></div>
+        <button class="cert-add-folder-btn" onclick="certAddFolder('mechanics')">＋ 폴더 추가</button>
+      </div>
+    </div>
+    <div class="cert-section" id="cert-sec-2">
+      <div class="cert-section-header" onclick="certToggle('2')">
+        <div class="cert-section-title"><span class="cert-icon">🧪</span> 화학 시험 <span class="cert-count" id="cert-count-2">0건</span></div>
+        <span class="cert-arrow" id="cert-arrow-2">▼</span>
+      </div>
+      <div class="cert-section-body" id="cert-body-2">
+        <div id="cert-folders-2" class="cert-folder-list"></div>
+        <button class="cert-add-folder-btn" onclick="certAddFolder('chemistry')">＋ 폴더 추가</button>
+      </div>
+    </div>
+    <div class="cert-section" id="cert-sec-3">
+      <div class="cert-section-header" onclick="certToggle('3')">
+        <div class="cert-section-title"><span class="cert-icon">🏆</span> 인증서 <span class="cert-count" id="cert-count-3">0건</span></div>
+        <span class="cert-arrow" id="cert-arrow-3">▼</span>
+      </div>
+      <div class="cert-section-body" id="cert-body-3">
+        <div id="cert-folders-3" class="cert-folder-list"></div>
+        <button class="cert-add-folder-btn" onclick="certAddFolder('certification')">＋ 폴더 추가</button>
+      </div>
+    </div>
+
+    <div class="cert-section" id="cert-sec-4">
+      <div class="cert-section-header" onclick="certToggle('4')">
+        <div class="cert-section-title"><span class="cert-icon">⚗️</span> MSDS <span class="cert-count" id="cert-count-4">0건</span></div>
+        <span class="cert-arrow" id="cert-arrow-4">▼</span>
+      </div>
+      <div class="cert-section-body" id="cert-body-4">
+        <div id="cert-folders-4" class="cert-folder-list"></div>
+        <button class="cert-add-folder-btn" onclick="certAddFolder('msds')">＋ 폴더 추가</button>
+      </div>
     </div>
   </div>
 </div>
-</div>
 
-<div id="tab3" class="tab-content">
-<div class="main">
-  <div class="panel">
-    <div class="panel-title">📝 재도장 월별 데이터 입력</div>
-    <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px; flex-wrap:wrap;">
-      <select id="t3_sel_month" onchange="t3ChangeMonth()" style="padding:7px 12px; border:1px solid #ddd; border-radius:8px; font-weight:bold;">
-        <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option>
-        <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
-        <option value="7">7월</option><option value="8">8월</option><option value="9">9월</option>
-        <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
-      </select>
-      🔩 막고철단가: <input type="number" id="t3_scrap_price" value="250" oninput="t3RenderInput()" style="width:80px; padding:6px; border:2px solid #3b82f6; border-radius:6px; text-align:center; font-weight:bold;"> 원
-      <div id="t3_std_saved_list"></div>
-      <div id="t3_std_status" style="font-size:12px; font-weight:bold; color:var(--accent);"></div>
+<!-- ===== TAB 1: 재고 분석기 ===== -->
+<!-- ===== TAB 2: 리퍼 실적 ===== -->
+<div id="tab2" class="tab-content active">
+<div class="main t2-main">
+
+  <!-- ① 연도 TOTAL 대시보드 -->
+  <div class="t2-annual-banner">
+    <div class="t2-annual-left">
+      <div class="t2-annual-label">
+        <span id="t2AnnualYear">2026</span>년 누적 TOTAL
+      </div>
+      <div class="t2-annual-nums">
+        <div class="t2-annual-block">
+          <span class="t2-annual-unit">총 리퍼 포장 수량</span>
+          <span class="t2-annual-val" id="t2AnnualPkg">0</span>
+          <span class="t2-annual-unit2">개</span>
+        </div>
+        <div class="t2-annual-divider"></div>
+        <div class="t2-annual-block">
+          <span class="t2-annual-unit">총 리퍼 판매 수량</span>
+          <span class="t2-annual-val" id="t2AnnualQty">0</span>
+          <span class="t2-annual-unit2">개</span>
+        </div>
+        <div class="t2-annual-divider"></div>
+        <div class="t2-annual-block">
+          <span class="t2-annual-unit">총 합계 금액</span>
+          <span class="t2-annual-val t2-annual-money" id="t2AnnualAmt">0</span>
+          <span class="t2-annual-unit2">원</span>
+        </div>
+      </div>
+    </div>
+    <div class="t2-year-nav">
+      <button class="t2-yr-btn" onclick="t2ShiftYear(-1)">◀</button>
+      <span class="t2-yr-label" id="t2YearLabel">2026</span>
+      <button class="t2-yr-btn" onclick="t2ShiftYear(1)">▶</button>
+    </div>
+  </div>
+
+  <!-- ② 월 탭 -->
+  <div class="t2-month-tabs" id="t2MonthTabs"></div>
+
+  <!-- ③ 선택 월 요약 카드 -->
+  <div class="t2-month-cards">
+    <div class="t2-mcard t2-mcard-green">
+      <div class="t2-mcard-label">📦 <span id="t2SelMonthLabel">선택한 달</span> 리퍼 포장 수량</div>
+      <div class="t2-mcard-val"><span id="t2MonthPkg">0</span><em>개</em></div>
+    </div>
+    <div class="t2-mcard t2-mcard-blue">
+      <div class="t2-mcard-label">📦 <span id="t2SelMonthLabel2">선택한 달</span> 리퍼 판매 수량</div>
+      <div class="t2-mcard-val"><span id="t2MonthQty">0</span><em>개</em></div>
+    </div>
+    <div class="t2-mcard t2-mcard-yellow">
+      <div class="t2-mcard-label">💰 <span id="t2SelMonthLabel3">선택한 달</span> 합계 금액</div>
+      <div class="t2-mcard-val t2-mcard-money"><span id="t2MonthAmt">0</span><em>원</em></div>
+    </div>
+  </div>
+
+  <!-- ③-b 월별 직접 입력 패널 -->
+  <div id="t2MonthInputPanel" class="t2-input-panel" style="display:none">
+    <div class="t2-input-panel-header">
+      <span id="t2PanelTitle">월별 직접 입력</span>
+      <span class="t2-input-panel-hint">입력 후 저장 버튼을 누르면 TOTAL에 반영됩니다</span>
+    </div>
+    <div class="t2-input-row-wrap">
+      <div class="t2-input-field">
+        <label>📦 리퍼 포장 수량 (개)</label>
+        <input type="number" id="t2InputPkg" placeholder="예: 1500" min="0">
+      </div>
+      <div class="t2-input-field">
+        <label>📦 리퍼 판매 수량 (개)</label>
+        <input type="number" id="t2InputQty" placeholder="예: 1250" min="0">
+      </div>
+      <div class="t2-input-field">
+        <label>💰 합계 금액 (원)</label>
+        <input type="number" id="t2InputAmt" placeholder="예: 3250000" min="0">
+      </div>
+      <button id="t2SaveMonBtn" class="t2-save-btn" onclick="t2SaveMonthly()">
+        💾 저장하기
+      </button>
+    </div>
+  </div>
+
+  <!-- ④ 파일 업로드 + 계산 옵션 -->
+  <div class="info-box">
+    <strong>사용 방법:</strong> 생산실적(포장수량) 파일과 할인가 파일을 각각 업로드 후 계산을 실행하세요.<br>
+    브랜드(<strong>스피드랙</strong>, <strong>H하우스 → 홈던트하우스</strong>) 자동 매칭 및 규격(<strong>*5S → *5단</strong>) 변환이 적용됩니다.
+  </div>
+  <div class="upload-pair">
+    <div class="upload-mini" id="zone2a" onclick="document.getElementById('file2a').click()">
+      <div class="icon">🏭</div>
+      <h3>생산실적 (포장수량) 파일</h3>
+      <p>header=1 형식의 .xlsx</p>
+      <input type="file" id="file2a" accept=".xlsx,.xls">
+      <div id="badge2a" style="display:none" class="badge-yellow">✅ <span id="name2a"></span></div>
+    </div>
+    <div class="upload-mini" id="zone2b" onclick="document.getElementById('file2b').click()">
+      <div class="icon">💲</div>
+      <h3>할인가 파일</h3>
+      <p>상품명 / 품목명 / 할인가 포함 .xlsx</p>
+      <input type="file" id="file2b" accept=".xlsx,.xls">
+      <div id="badge2b" style="display:none" class="badge-yellow">✅ <span id="name2b"></span></div>
+    </div>
+  </div>
+  <div class="panel" style="margin-top:14px">
+    <div class="panel-title">⚙ 계산 옵션</div>
+    <div class="toggle-row" style="border-top:none;padding-top:0">
+      <span>단가 0원 항목도 결과에 포함 (매칭 실패 항목 확인용)</span>
+      <div class="toggle" id="toggleZeroPrice" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <button class="btn-run yellow" onclick="runCalc()">💰 금액 계산 실행</button>
+  </div>
+
+  <!-- ⑤ 계산 결과 표 -->
+  <div id="resultsArea2" style="display:none">
+    <div class="t2-table-top">
+      <span class="t2-table-title" id="t2TableTitle">계산 결과</span>
+      <div class="t2-table-actions">
+        <div class="t2-calc-summary" id="t2CalcSummary" style="display:none">
+          <span class="t2-sum-item">📦 <strong id="t2SumQty">0</strong>개</span>
+          <span class="t2-sum-divider">|</span>
+          <span class="t2-sum-item">💰 <strong id="t2SumAmt">0</strong>원</span>
+        </div>
+        <button class="btn-reset-red" onclick="t2Reset()">🗑 결과 초기화</button>
+        <button class="btn-download yellow" onclick="downloadExcel2()">⬇ 엑셀 다운로드</button>
+      </div>
     </div>
     <div class="table-wrap"><div class="table-scroll">
       <table>
-        <thead><tr><th></th><th>품명</th><th>두께</th><th>규격</th><th>수량</th><th>비중</th><th>폭</th><th>무게</th><th>막고철</th><th>재도장</th><th>표준원가</th><th>개당손익</th><th>총손익</th></tr></thead>
+        <thead><tr>
+          <th>#</th>
+          <th style="text-align:center">작업일</th>
+          <th>공정품명</th>
+          <th style="text-align:center">공정품규격</th>
+          <th style="text-align:right">생산수량</th>
+          <th style="text-align:right">단가</th>
+          <th style="text-align:right">최종 금액</th>
+        </tr></thead>
+        <tbody id="tableBody2"></tbody>
+        <tfoot id="tableFoot2"></tfoot>
+      </table>
+    </div></div>
+  </div>
+
+</div>
+</div>
+
+<!-- ===== TAB 3: 재도장 실적 ===== -->
+<div id="tab3" class="tab-content">
+<div class="main">
+
+  <!-- 입력 패널 -->
+  <div class="panel" style="margin-bottom:24px">
+    <div class="panel-title">📝 월별 데이터 입력</div>
+
+    <!-- 월 / 막고철단가 -->
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:13px;font-weight:700;color:var(--text2)">📅 월</label>
+        <select id="t3_sel_month" onchange="t3ChangeMonth()"
+          style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;background:var(--surface)">
+          <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option>
+          <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
+          <option value="7">7월</option><option value="8">8월</option><option value="9">9월</option>
+          <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:13px;font-weight:700;color:var(--text2)">🔩 막고철단가</label>
+        <input type="number" id="t3_scrap_price" value="250" min="0" onchange="t3RenderInput()" oninput="t3RenderInput()"
+          style="width:90px;padding:7px 10px;border:2px solid #3b82f6;border-radius:8px;font-size:13px;font-family:inherit;background:rgba(59,130,246,0.07)">
+        <span style="font-size:12px;color:var(--text2)">원/kg</span>
+      </div>
+      <div>
+        <div id="t3_std_dropzone"
+          ondragover="event.preventDefault();this.style.borderColor='var(--accent5)';this.style.background='rgba(110,64,201,0.08)'"
+          ondragleave="this.style.borderColor='rgba(110,64,201,0.35)';this.style.background=''"
+          ondrop="event.preventDefault();this.style.borderColor='rgba(110,64,201,0.35)';this.style.background='';t3LoadStdCost({files:event.dataTransfer.files})"
+          onclick="document.getElementById('t3_std_file').click()"
+          style="border:2px dashed rgba(110,64,201,0.35);border-radius:10px;padding:10px 20px;
+            cursor:pointer;transition:all 0.2s;text-align:center;min-width:220px">
+          <div style="font-size:13px;font-weight:700;color:var(--accent5)">📋 표준원가 파일</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">드래그하거나 클릭해서 업로드</div>
+          <div id="t3_std_status" style="font-size:11px;color:var(--accent5);font-weight:600;margin-top:4px"></div>
+        </div>
+        <input type="file" id="t3_std_file" accept=".xlsx,.xls" style="display:none" onchange="t3LoadStdCost(this)">
+        <div id="t3_std_saved_list" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px"></div>
+        
+        <button onclick="if(confirm('표준원가 저장 데이터를 전부 초기화할까요?\n(저장된 실적은 유지됩니다)')){localStorage.removeItem('t3_monthStdCost');T3.monthStdCost={};T3.stdCost={};t3UpdateStdSavedList();t3RenderInput();document.getElementById('t3_std_status').textContent='✅ 초기화 완료';}" style="margin-top:6px;padding:3px 10px;font-size:11px;background:#ffe0e0;border:1px solid #f99;border-radius:6px;cursor:pointer">🗑 표준원가 초기화</button>
+      </div>
+    </div>
+
+    <!-- 입력 테이블 -->
+    <div style="margin-bottom:6px">
+      <button onclick="t3AddRow()"
+        style="padding:6px 16px;border:1.5px solid var(--accent);color:var(--accent);background:white;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+        + 행 추가
+      </button>
+    </div>
+    <div class="table-wrap" style="margin-bottom:12px"><div class="table-scroll">
+      <table id="t3_input_tbl" style="min-width:1000px">
+        <thead>
+          <tr>
+            <th style="width:32px"></th>
+            <th style="min-width:130px;text-align:left">품명</th>
+            <th style="min-width:90px;text-align:left">두께</th>
+            <th style="min-width:65px;text-align:right">규격</th>
+            <th style="min-width:75px;text-align:right">수량</th>
+            <th style="min-width:70px;text-align:right">철의비중</th>
+            <th style="min-width:65px;text-align:right">폭</th>
+            <th style="min-width:75px;text-align:right">무게(kg)</th>
+            <th style="min-width:80px;text-align:right">막고철단가</th>
+            <th style="min-width:80px;text-align:right">막고철(원)</th>
+            <th style="min-width:75px;text-align:right">재도장비용</th>
+            <th style="min-width:75px;text-align:right">표준원가</th>
+            <th style="min-width:75px;text-align:right;background:rgba(154,103,0,0.06)">개당손익</th>
+            <th style="min-width:85px;text-align:right;background:rgba(154,103,0,0.06)">총 손익</th>
+          </tr>
+        </thead>
         <tbody id="t3_input_tbody"></tbody>
       </table>
     </div></div>
-    <div style="display:flex; justify-content:space-between; margin-top:15px;">
-      <button onclick="t3AddRow()" style="padding:8px 16px; border:1.5px solid var(--accent); color:var(--accent); background:white; border-radius:8px; cursor:pointer; font-weight:bold;">+ 행 추가</button>
-      <button id="t3_save_btn" onclick="t3SaveMonth()" style="padding:10px 25px; background:var(--accent); color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">💾 저장</button>
+
+    <!-- 하단 버튼 -->
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
+
+      <button onclick="t3SaveMonth()"
+        style="padding:8px 24px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">
+        💾 저장
+      </button>
     </div>
   </div>
+
+  <!-- 저장된 월별 결과 -->
   <div id="t3_results_wrap"></div>
-  <div class="panel">
-    <div class="panel-title">📅 날짜별 입력 이력 (상세 품목 포함)</div>
-    <div id="t3_log_content">로딩 중...</div>
+
+  <!-- 통계 분석 -->
+  <div id="t3_stats_wrap" style="display:none">
+    <div style="display:flex;align-items:center;gap:10px;margin-top:32px;margin-bottom:16px">
+      <h2 style="font-size:16px;font-weight:900;color:var(--text)">📊 재도장 통계 분석</h2>
+      <div style="height:1px;flex:1;background:var(--border)"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button id="t3_stat_tab_year" onclick="t3StatTab('year')"
+        style="padding:7px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;border:1.5px solid var(--accent);background:var(--accent);color:white;">📅 연별 합산</button>
+      <button id="t3_stat_tab_month" onclick="t3StatTab('month')"
+        style="padding:7px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;border:1.5px solid var(--border);background:var(--surface);color:var(--text2);">🗓 월별 상세</button>
+    </div>
+    <div id="t3_stat_panel_year" class="panel" style="padding:20px"></div>
+    <div id="t3_stat_panel_month" class="panel" style="padding:20px;display:none"></div>
   </div>
+
+  <!-- 날짜별 입력 이력 -->
+  <div id="t3_log_wrap" class="panel" style="margin-top:24px">
+    <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="t3LogToggle()">
+      <span>📅 날짜별 입력 이력</span>
+      <span id="t3_log_arrow" style="font-size:13px;transition:transform 0.2s">▼</span>
+    </div>
+    <div id="t3_log_body">
+      <div id="t3_log_content" style="margin-top:12px">
+        <div style="padding:24px 0;text-align:center;color:#888">로딩 중...</div>
+      </div>
+    </div>
+  </div>
+
 </div>
 </div>
 
-<div id="tab4" class="tab-content"><div class="main"><div id="v4-dashboard-root"></div></div></div>
-<div id="tab5" class="tab-content">
-  <div class="main">
-    <div class="panel" onclick="certToggle('1')" style="cursor:pointer;"><b>⚙️ 역학 시험</b> <span id="cert-count-1"></span></div><div id="cert-body-1" class="cert-section-body"><div id="cert-folders-1"></div></div>
-    <div class="panel" onclick="certToggle('2')" style="cursor:pointer;"><b>🧪 화학 시험</b> <span id="cert-count-2"></span></div><div id="cert-body-2" class="cert-section-body"><div id="cert-folders-2"></div></div>
+<!-- ===== TAB 4: 관리현황 ===== -->
+<div id="tab4" class="tab-content">
+<div class="main">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+    <div id="dbStatus4" style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;background:var(--surface2);border:1px solid var(--border);padding:5px 12px;border-radius:14px">
+      <div id="dbDot4" style="width:7px;height:7px;border-radius:50%;background:var(--text3)"></div>
+      <span id="dbLabel4">연결 중...</span>
+    </div>
+    <button onclick="refreshAll4()" id="refreshAllBtn4" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;background:var(--surface);color:var(--text2);font-family:'Noto Sans KR',sans-serif">
+      <span id="refreshIcon4" style="display:inline-block">&#8635;</span> 전체 새로고침
+    </button>
+    <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="lastRefresh4"></div>
   </div>
+  <div id="v4-dashboard-root"></div>
+
 </div>
+</div>
+
+<style>
+
+/* ====== V4 관리현황 대시보드 CSS ====== */
+:root{--v4-bg:#f0f2f5;--v4-card:#fff;--v4-border:#e2e8f0;--v4-accent:#3b82f6;--v4-green:#22c55e;--v4-red:#ef4444;--v4-orange:#f97316;--v4-purple:#8b5cf6;--v4-text:#1e293b;--v4-text2:#64748b;--v4-text3:#94a3b8;--v4-shadow:0 1px 4px rgba(0,0,0,0.08),0 4px 16px rgba(0,0,0,0.06);}
+@keyframes v4sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.v4-skel{background:linear-gradient(90deg,#e2e8f0 25%,#f1f5f9 50%,#e2e8f0 75%);background-size:200% 100%;animation:v4sk 1.4s ease infinite;border-radius:8px;}
+.v4-skel-card{height:110px;border-radius:14px;}
+.v4-skel-row{height:38px;margin-bottom:6px;border-radius:8px;}
+@keyframes v4spin{to{transform:rotate(360deg)}}
+.v4-loading{display:flex;align-items:center;justify-content:center;padding:80px;color:var(--v4-text2);gap:10px;font-size:14px;}
+.v4-spin{width:20px;height:20px;border:3px solid var(--v4-border);border-top-color:var(--v4-accent);border-radius:50%;animation:v4spin 0.7s linear infinite;}
+.v4tab-btn{padding:9px 18px;border-radius:9px;font-size:13px;font-weight:600;border:1.5px solid var(--v4-border);background:#fff;color:var(--v4-text2);cursor:pointer;transition:all 0.15s;font-family:'Noto Sans KR',sans-serif;}
+.v4tab-btn:hover{border-color:var(--v4-accent);color:var(--v4-accent);}
+.v4tab-btn.v4active{border-color:var(--v4-accent);color:#fff;background:var(--v4-accent);box-shadow:0 2px 8px rgba(59,130,246,0.3);}
+.v4-kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:24px;}
+.v4-kpi-card{background:var(--v4-card);border:1px solid var(--v4-border);border-radius:16px;padding:20px 22px;box-shadow:var(--v4-shadow);display:flex;flex-direction:column;gap:0;position:relative;overflow:hidden;transition:transform 0.15s,box-shadow 0.15s;}
+.v4-kpi-card:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,0.12);}
+.v4-kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;}
+.v4-kpi-card.kpi-blue::before{background:var(--v4-accent);}
+.v4-kpi-card.kpi-green::before{background:var(--v4-green);}
+.v4-kpi-card.kpi-red::before{background:var(--v4-red);}
+.v4-kpi-card.kpi-orange::before{background:var(--v4-orange);}
+.v4-kpi-card.kpi-purple::before{background:var(--v4-purple);}
+.v4-kpi-icon{font-size:28px;margin-bottom:10px;line-height:1;}
+.v4-kpi-label{font-size:11px;font-weight:700;color:var(--v4-text2);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;}
+.v4-kpi-value{font-size:26px;font-weight:900;color:var(--v4-text);font-family:'JetBrains Mono',monospace;line-height:1;}
+.v4-kpi-value.danger{color:var(--v4-red)!important;}
+.v4-kpi-sub{font-size:11px;color:var(--v4-text3);margin-top:4px;}
+.kpi-blue .v4-kpi-value{color:var(--v4-accent);}
+.kpi-green .v4-kpi-value{color:var(--v4-green);}
+.kpi-orange .v4-kpi-value{color:var(--v4-orange);}
+.kpi-purple .v4-kpi-value{color:var(--v4-purple);}
+.v4-stitle{font-size:14px;font-weight:700;margin:24px 0 14px;display:flex;align-items:center;gap:8px;color:var(--v4-text);}
+.v4-stitle::after{content:'';flex:1;height:1px;background:var(--v4-border);}
+.v4-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;}
+.v4-search{padding:8px 12px;border:1.5px solid var(--v4-border);border-radius:10px;font-size:13px;font-family:'Noto Sans KR',sans-serif;outline:none;min-width:200px;transition:border-color 0.15s;background:#fff;}
+.v4-search:focus{border-color:var(--v4-accent);}
+.v4-btn{padding:8px 14px;border-radius:10px;font-size:13px;font-weight:600;border:1.5px solid var(--v4-border);background:#fff;color:var(--v4-text2);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.15s;white-space:nowrap;}
+.v4-btn:hover{border-color:var(--v4-accent);color:var(--v4-accent);}
+.v4-btn.active{background:var(--v4-accent);border-color:var(--v4-accent);color:#fff;}
+.v4-btn-danger{border-color:var(--v4-red)!important;color:var(--v4-red)!important;}
+.v4-btn-danger:hover{background:var(--v4-red)!important;color:#fff!important;}
+.v4-adv-panel{background:var(--v4-card);border:1px solid var(--v4-border);border-radius:14px;padding:18px 20px;margin-bottom:14px;box-shadow:var(--v4-shadow);display:none;}
+.v4-adv-panel.open{display:block;}
+.v4-adv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:14px;}
+.v4-adv-group label{font-size:11px;font-weight:700;color:var(--v4-text2);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.4px;}
+.v4-adv-group select{width:100%;padding:7px 10px;border:1.5px solid var(--v4-border);border-radius:8px;font-size:13px;font-family:'Noto Sans KR',sans-serif;background:#fff;outline:none;cursor:pointer;}
+.v4-adv-group select:focus{border-color:var(--v4-accent);}
+.v4-adv-actions{display:flex;gap:8px;justify-content:flex-end;}
+.v4-col-panel{background:var(--v4-card);border:1px solid var(--v4-border);border-radius:14px;padding:18px 20px;margin-bottom:14px;box-shadow:var(--v4-shadow);display:none;}
+.v4-col-panel.open{display:block;}
+.v4-col-checks{display:flex;flex-wrap:wrap;gap:10px;}
+.v4-col-check{display:flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px solid var(--v4-border);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--v4-text2);background:#fff;transition:all 0.15s;user-select:none;}
+.v4-col-check.on{background:var(--v4-accent);border-color:var(--v4-accent);color:#fff;}
+.v4-cat-section{background:var(--v4-card);border:1px solid var(--v4-border);border-radius:16px;overflow:hidden;box-shadow:var(--v4-shadow);margin-bottom:20px;}
+.v4-cat-table{width:100%;border-collapse:collapse;}
+.v4-cat-table th{background:#f8fafc;font-size:11px;font-weight:700;color:var(--v4-text2);text-transform:uppercase;letter-spacing:0.5px;padding:10px 14px;border-bottom:1px solid var(--v4-border);text-align:left;}
+.v4-cat-table td{padding:10px 14px;font-size:13px;border-bottom:1px solid #f1f5f9;color:var(--v4-text);}
+.v4-cat-table tr:last-child td{border-bottom:none;}
+.v4-cat-table tr:hover td{background:#f8fafc;}
+.v4-bar-wrap{display:flex;align-items:center;gap:8px;min-width:120px;}
+.v4-bar-bg{flex:1;height:8px;background:#f1f5f9;border-radius:4px;overflow:hidden;}
+.v4-bar-fill{height:100%;border-radius:4px;transition:width 0.4s ease;}
+.v4-bar-val{font-size:12px;font-weight:700;min-width:38px;text-align:right;font-family:'JetBrains Mono',monospace;}
+.v4-risk-hi .v4-bar-fill{background:var(--v4-red);}
+.v4-risk-hi .v4-bar-val{color:var(--v4-red);}
+.v4-risk-md .v4-bar-fill{background:var(--v4-orange);}
+.v4-risk-md .v4-bar-val{color:var(--v4-orange);}
+.v4-risk-lo .v4-bar-fill{background:var(--v4-green);}
+.v4-risk-lo .v4-bar-val{color:var(--v4-green);}
+.v4-risk-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;}
+.v4-risk-badge.hi{background:#fee2e2;color:var(--v4-red);}
+.v4-risk-badge.md{background:#ffedd5;color:var(--v4-orange);}
+.v4-risk-badge.lo{background:#dcfce7;color:var(--v4-green);}
+.v4-raw-section{background:var(--v4-card);border:1px solid var(--v4-border);border-radius:16px;overflow:hidden;box-shadow:var(--v4-shadow);}
+.v4-raw-table{width:100%;border-collapse:collapse;font-size:13px;}
+.v4-raw-table th{background:#f8fafc;font-size:11px;font-weight:700;color:var(--v4-text2);text-transform:uppercase;letter-spacing:0.5px;padding:10px 12px;border-bottom:1px solid var(--v4-border);text-align:left;cursor:pointer;user-select:none;white-space:nowrap;}
+.v4-raw-table th:hover{background:#f1f5f9;}
+.sort-th.sort-asc::after{content:' ↑';color:var(--v4-accent);}
+.sort-th.sort-desc::after{content:' ↓';color:var(--v4-accent);}
+.sort-th:not(.sort-asc):not(.sort-desc)::after{content:' ↕';opacity:0.3;}
+.v4-raw-table td{padding:9px 12px;border-bottom:1px solid #f1f5f9;color:var(--v4-text);}
+.v4-raw-table tr:last-child td{border-bottom:none;}
+.v4-raw-table tr:hover td{background:#f8fafc;}
+.v4-pagination{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-top:1px solid var(--v4-border);flex-wrap:wrap;gap:8px;}
+.v4-page-info{font-size:13px;color:var(--v4-text2);}
+.v4-page-btns{display:flex;gap:4px;}
+.v4-page-btn{width:32px;height:32px;border-radius:8px;border:1.5px solid var(--v4-border);background:#fff;color:var(--v4-text2);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
+.v4-page-btn:hover{border-color:var(--v4-accent);color:var(--v4-accent);}
+.v4-page-btn.current{background:var(--v4-accent);border-color:var(--v4-accent);color:#fff;}
+.v4-page-btn:disabled{opacity:0.4;cursor:not-allowed;}
+.v4-danger-row td{background:#fff5f5!important;}
+</style>
 
 <script>
 // ===================================================
-// TAB 3: 재도장 로직 (철의 비중 7.85 보존 + 기능 추가)
+// 공통 유틸
 // ===================================================
-const T3 = { IRON: 7.85, inputRows: [{},{},{}], monthStdCost: {}, sessions: [], saved: [], _editSessionId: null };
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'tab4' && !window._dbInited) { window._dbInited = true; initDashboard4(); }
+  if (id === 'tab3' && !window._t3Inited) { window._t3Inited = true; initTab3(); }
+  if (id === 'tab5' && !window._t5Inited) { window._t5Inited = true; initTab5(); }
+}
+function showFade(el) {
+  el.style.display = 'block';
+  el.classList.remove('fade-in'); void el.offsetWidth; el.classList.add('fade-in');
+}
+function setupDrop(zoneId, inputId, onFile) {
+  const zone = document.getElementById(zoneId);
+  const inp  = document.getElementById(inputId);
+  if (!zone) return;
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop',      e => { e.preventDefault(); zone.classList.remove('dragover'); const f = e.dataTransfer.files[0]; if(f) onFile(f); });
+  inp.addEventListener('change',     e => { const f = e.target.files[0]; if(f) onFile(f); });
+}
 
-async function sb3(path, opt={}) {
-    const res = await fetch(SB3 + '/rest/v1/' + path, {
-        headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json', 'Prefer': opt.prefer || 'return=representation' },
-        method: opt.method || 'GET', body: opt.body ? JSON.stringify(opt.body) : undefined
+// ===================================================
+// TAB 2: 리퍼 실적
+// ===================================================
+const T2_KEY     = 't2_records_v2';
+const T2_MON_KEY = 't2_monthly_v1'; // localStorage 백업용 키 (읽기 전용 마이그레이션)
+let pkgData = null, discData = null, calcResult = [];
+let t2Year = new Date().getFullYear();
+let t2SelMonth = null;
+let _t2MonCache = null; // Supabase에서 불러온 월별 데이터 캐시
+
+// ── Supabase API (SB3 재활용) ──
+async function t2SbFetch(path, opt) {
+  opt = opt || {};
+  const res = await fetch(SB3 + '/rest/v1/' + path, {
+    headers: {
+      'apikey': KEY3,
+      'Authorization': 'Bearer ' + KEY3,
+      'Content-Type': 'application/json',
+      'Prefer': opt.prefer || 'return=representation'
+    },
+    method: opt.method || 'GET',
+    body: opt.body ? JSON.stringify(opt.body) : undefined
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const txt = await res.text();
+  return txt ? JSON.parse(txt) : null;
+}
+
+// ── 월별 데이터 Supabase에서 로드 ──
+async function t2MonLoadSB() {
+  try {
+    const rows = await t2SbFetch('refurb_monthly?select=*');
+    const obj = {};
+    (rows || []).forEach(function(r) {
+      obj[r.month_key] = { pkg: r.pkg || 0, qty: r.qty || 0, amount: r.amount || 0 };
     });
-    return res.json();
+    _t2MonCache = obj;
+    return obj;
+  } catch(e) {
+    console.warn('t2 Supabase 로드 실패, localStorage 사용:', e);
+    try { return JSON.parse(localStorage.getItem(T2_MON_KEY) || '{}'); } catch(e2) { return {}; }
+  }
 }
 
+// ── 월별 데이터 Supabase에 저장 (upsert) ──
+async function t2MonSaveSB(monthKey, pkg, qty, amount) {
+  try {
+    // upsert: month_key가 있으면 UPDATE, 없으면 INSERT
+    await t2SbFetch('refurb_monthly?month_key=eq.' + encodeURIComponent(monthKey), {
+      method: 'DELETE', prefer: ''
+    });
+    await t2SbFetch('refurb_monthly', {
+      method: 'POST',
+      body: { month_key: monthKey, pkg: pkg, qty: qty, amount: amount }
+    });
+    // 캐시 갱신
+    if (!_t2MonCache) _t2MonCache = {};
+    _t2MonCache[monthKey] = { pkg: pkg, qty: qty, amount: amount };
+    // localStorage에도 백업
+    try { localStorage.setItem(T2_MON_KEY, JSON.stringify(_t2MonCache)); } catch(e) {}
+  } catch(e) {
+    console.error('t2 저장 오류:', e);
+    // localStorage 폴백
+    try {
+      var obj = JSON.parse(localStorage.getItem(T2_MON_KEY) || '{}');
+      obj[monthKey] = { pkg: pkg, qty: qty, amount: amount };
+      localStorage.setItem(T2_MON_KEY, JSON.stringify(obj));
+      if (!_t2MonCache) _t2MonCache = {};
+      _t2MonCache[monthKey] = { pkg: pkg, qty: qty, amount: amount };
+    } catch(e2) {}
+    throw e;
+  }
+}
+
+function t2ShiftYear(delta) {
+  t2Year += delta;
+  t2SelMonth = null;
+  t2UpdateDashboard();
+}
+
+function t2UpdateDashboard() {
+  var mon = _t2MonCache || {};
+  var yearStr = String(t2Year);
+  document.getElementById('t2AnnualYear').textContent = t2Year;
+  document.getElementById('t2YearLabel').textContent = t2Year;
+  var annualPkg = 0, annualQty = 0, annualAmt = 0;
+  var hasDataMonths = {};
+  for (var key in mon) {
+    if (key.startsWith(yearStr)) {
+      annualPkg += mon[key].pkg || 0;
+      annualQty += mon[key].qty || 0;
+      annualAmt += mon[key].amount || 0;
+      if ((mon[key].pkg || 0) > 0 || (mon[key].qty || 0) > 0 || (mon[key].amount || 0) > 0) {
+        hasDataMonths[key.substring(5, 7)] = true;
+      }
+    }
+  }
+  var apEl = document.getElementById('t2AnnualPkg');
+  if (apEl) apEl.textContent = annualPkg.toLocaleString();
+  document.getElementById('t2AnnualQty').textContent = annualQty.toLocaleString();
+  document.getElementById('t2AnnualAmt').textContent = annualAmt.toLocaleString();
+  var LABELS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  var container = document.getElementById('t2MonthTabs');
+  if (container) {
+    container.innerHTML = LABELS.map(function(label, i) {
+      var mm = String(i + 1).padStart(2, '0');
+      var mkey = yearStr + '-' + mm;
+      var has = hasDataMonths[mm];
+      var active = t2SelMonth === mkey ? 'active' : '';
+      return '<button class="t2-mtab ' + active + '" onclick="t2SelectMonth(\'' + mkey + '\')">' +
+        (has ? '<span class="t2-mtab-dot"></span>' : '') + label + '</button>';
+    }).join('');
+  }
+  var selPkg = 0, selQty = 0, selAmt = 0, selLabel = '';
+  if (t2SelMonth) {
+    var d = mon[t2SelMonth] || { pkg: 0, qty: 0, amount: 0 };
+    selPkg = d.pkg || 0; selQty = d.qty || 0; selAmt = d.amount || 0;
+    var mm2 = parseInt(t2SelMonth.split('-')[1]);
+    selLabel = mm2 + '월';
+  } else {
+    selPkg = annualPkg; selQty = annualQty; selAmt = annualAmt;
+    selLabel = t2Year + '년 전체';
+  }
+  var lbl1 = document.getElementById('t2SelMonthLabel');
+  var lbl2 = document.getElementById('t2SelMonthLabel2');
+  var lbl3 = document.getElementById('t2SelMonthLabel3');
+  if (lbl1) lbl1.textContent = selLabel;
+  if (lbl2) lbl2.textContent = selLabel;
+  if (lbl3) lbl3.textContent = selLabel;
+  var pkgEl = document.getElementById('t2MonthPkg');
+  if (pkgEl) pkgEl.textContent = selPkg.toLocaleString();
+  document.getElementById('t2MonthQty').textContent = selQty.toLocaleString();
+  document.getElementById('t2MonthAmt').textContent = selAmt.toLocaleString();
+  t2RenderInputPanel();
+}
+
+function t2SelectMonth(key) {
+  t2SelMonth = key;
+  t2UpdateDashboard();
+}
+
+function t2RenderInputPanel() {
+  var panel = document.getElementById('t2MonthInputPanel');
+  if (!panel) return;
+  if (!t2SelMonth) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  var mon = _t2MonCache || {};
+  var d = mon[t2SelMonth] || { pkg: 0, qty: 0, amount: 0 };
+  var mm = parseInt(t2SelMonth.split('-')[1]);
+  var yy = t2SelMonth.split('-')[0];
+  document.getElementById('t2PanelTitle').textContent = yy + '년 ' + mm + '월 직접 입력';
+  var pEl = document.getElementById('t2InputPkg');
+  var qEl = document.getElementById('t2InputQty');
+  var aEl = document.getElementById('t2InputAmt');
+  if (pEl) pEl.value = d.pkg || '';
+  if (qEl) qEl.value = d.qty || '';
+  if (aEl) aEl.value = d.amount || '';
+}
+
+function t2SaveMonthly() {
+  if (!t2SelMonth) return;
+  var pkgRaw = (document.getElementById('t2InputPkg').value || '0').replace(/,/g,'');
+  var qtyRaw = (document.getElementById('t2InputQty').value || '0').replace(/,/g,'');
+  var amtRaw = (document.getElementById('t2InputAmt').value || '0').replace(/,/g,'');
+  var pkg = parseInt(pkgRaw) || 0;
+  var qty = parseInt(qtyRaw) || 0;
+  var amount = parseInt(amtRaw) || 0;
+  var btn = document.getElementById('t2SaveMonBtn');
+  if (btn) { btn.textContent = '⏳ 저장 중...'; btn.disabled = true; }
+  t2MonSaveSB(t2SelMonth, pkg, qty, amount).then(function() {
+    t2UpdateDashboard();
+    if (btn) {
+      var orig = '💾 저장하기';
+      btn.textContent = '✅ 저장됨!';
+      btn.style.background = '#22c55e';
+      btn.disabled = false;
+      setTimeout(function() { btn.textContent = orig; btn.style.background = ''; }, 1500);
+    }
+  }).catch(function(e) {
+    if (btn) { btn.textContent = '❌ 저장 실패'; btn.disabled = false; setTimeout(function(){ btn.textContent = '💾 저장하기'; }, 2000); }
+    alert('저장 실패: ' + e.message + '\n(로컬에는 임시 저장됨)');
+    t2UpdateDashboard();
+  });
+}
+
+function readExcelByHeader(data) {
+  var wb = XLSX.read(data, { type: 'array' });
+  var ws = wb.Sheets[wb.SheetNames[0]];
+  var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  if (!rows.length) return [];
+  var hdrIdx = rows[0].filter(String).length >= (rows[1] || []).filter(String).length ? 0 : 1;
+  var headers = rows[hdrIdx].map(String);
+  return rows.slice(hdrIdx + 1).map(function(row) {
+    var obj = {};
+    headers.forEach(function(h, i) { obj[h] = row[i] !== undefined ? row[i] : ''; });
+    return obj;
+  });
+}
+
+function findPrice(row) {
+  if (!discData) return 0;
+  var name = String(row['공정품명'] !== undefined ? row['공정품명'] : '');
+  var spec = String(row['공정품규격'] !== undefined ? row['공정품규격'] : '').replace(/\*5S$/i,'*5단').replace(/\s+5S$/i,' 5단');
+  var brand = name.includes('스피드랙') ? '스피드랙' : (name.includes('H하우스') || name.includes('홈던트하우스')) ? '홈던트하우스' : null;
+  if (!brand) return 0;
+  var cands = discData.filter(function(r) {
+    var pname = String(r['상품명'] !== undefined ? r['상품명'] : '');
+    return brand === '스피드랙' ? pname.includes('스피드랙') : (pname.includes('홈던트하우스') || pname.includes('H하우스'));
+  });
+  for (var ci = 0; ci < cands.length; ci++) {
+    var c = cands[ci];
+    var iname = String(c['품목명'] !== undefined ? c['품목명'] : '').replace(/\*5S$/i,'*5단').replace(/\s+5S$/i,' 5단');
+    if (iname === spec) return Number(String(c['할인가'] !== undefined ? c['할인가'] : '0').replace(/,/g,'')) || 0;
+  }
+  return 0;
+}
+
+function runCalc() {
+  if (!pkgData || !discData) { alert('두 파일을 모두 업로드해주세요!'); return; }
+  var includeZero = document.getElementById('toggleZeroPrice').classList.contains('on');
+  var rows = pkgData.filter(function(r) { return r['공정품명'] && String(r['생산사업장'] !== undefined ? r['생산사업장'] : '') !== 'TOTAL'; });
+  var result = rows.map(function(r) {
+    var qty = parseInt(r['생산수량'] || r['포장수량'] || r['수량'] || r['생산량'] || 0) || 0;
+    var price = findPrice(r);
+    return { _id: Date.now()+Math.random(), 작업일: String(r['작업일'] || ''), 공정품명: String(r['공정품명'] || ''), 공정품규격: String(r['공정품규격'] || ''), _qty: qty, _price: price, _amount: qty*price };
+  });
+  if (!includeZero) result = result.filter(function(r) { return r._price !== 0; });
+  calcResult = result;
+  var totalQty = calcResult.reduce(function(s,r){ return s+r._qty; }, 0);
+  var totalAmt = calcResult.reduce(function(s,r){ return s+r._amount; }, 0);
+  document.getElementById('tableBody2').innerHTML = calcResult.map(function(r,i) {
+    var pCls = r._price === 0 ? 'col-red' : 'col-yellow';
+    return '<tr><td class="td-mono col-gray" style="text-align:center">'+(i+1)+'</td>' +
+      '<td style="font-size:12px;text-align:center">'+(r.작업일||'')+'</td>' +
+      '<td class="td-name">'+(r.공정품명||'')+'</td>' +
+      '<td class="td-mono td-center col-blue">'+(r.공정품규격||'')+'</td>' +
+      '<td class="td-mono td-right col-green">'+r._qty.toLocaleString()+'</td>' +
+      '<td class="td-mono td-right '+pCls+'">'+r._price.toLocaleString()+'</td>' +
+      '<td class="td-mono td-right" style="font-weight:800">'+r._amount.toLocaleString()+'</td></tr>';
+  }).join('');
+  document.getElementById('tableFoot2').innerHTML = '<tr class="tfoot-row">' +
+    '<td colspan="4" style="font-size:12px;color:var(--text2);padding:8px 10px">합계 '+calcResult.length+'건</td>' +
+    '<td class="td-mono td-right col-green">'+totalQty.toLocaleString()+'</td><td></td>' +
+    '<td class="td-mono td-right col-yellow" style="font-weight:800;font-size:15px">'+totalAmt.toLocaleString()+'</td></tr>';
+  var firstDate = (calcResult.find(function(r){ return r.작업일; }) || {}).작업일 || '';
+  document.getElementById('t2TableTitle').textContent = firstDate ? firstDate.substring(0,7).replace('-','년 ')+'월 계산 결과' : '계산 결과';
+  var _s = document.getElementById('t2CalcSummary');
+  if (_s) { _s.style.display=''; document.getElementById('t2SumQty').textContent=totalQty.toLocaleString(); document.getElementById('t2SumAmt').textContent=totalAmt.toLocaleString(); }
+  showFade(document.getElementById('resultsArea2'));
+}
+
+function t2Reset() {
+  calcResult = []; pkgData = null; discData = null;
+  document.getElementById('tableBody2').innerHTML = '';
+  document.getElementById('tableFoot2').innerHTML = '';
+  ['badge2a','badge2b'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
+  ['file2a','file2b'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  var _s2 = document.getElementById('t2CalcSummary');
+  if (_s2) _s2.style.display='none';
+  document.getElementById('resultsArea2').style.display = 'none';
+}
+
+function downloadExcel2() {
+  if (!calcResult.length) return;
+  var rows = calcResult.map(function(r){ return {'작업일':r.작업일,'공정품명':r.공정품명,'공정품규격':r.공정품규격,'생산수량':r._qty,'단가':r._price,'최종금액':r._amount}; });
+  var ws = XLSX.utils.json_to_sheet(rows);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '리퍼계산');
+  XLSX.writeFile(wb, '리퍼금액계산_'+new Date().toISOString().substring(0,10)+'.xlsx');
+}
+
+function t2Init() {
+  t2SelMonth = new Date().toISOString().substring(0,7);
+  // Supabase에서 월별 데이터 로드 후 대시보드 초기화
+  t2MonLoadSB().then(function() {
+    t2UpdateDashboard();
+  }).catch(function() {
+    t2UpdateDashboard();
+  });
+  setupDrop('zone2a', 'file2a', function(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      pkgData = readExcelByHeader(new Uint8Array(e.target.result));
+      document.getElementById('name2a').textContent = file.name;
+      document.getElementById('badge2a').style.display = '';
+    };
+    reader.readAsArrayBuffer(file);
+  });
+  setupDrop('zone2b', 'file2b', function(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      discData = readExcelByHeader(new Uint8Array(e.target.result));
+      document.getElementById('name2b').textContent = file.name;
+      document.getElementById('badge2b').style.display = '';
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+// ===================================================
+// [전체 통합 복구] TAB 3, 4, 5 및 공통 DB 로직
+// ===================================================
+
+const T3 = {
+  stdCost: {}, monthStdCost: {}, inputRows: [], saved: [], sessions: [], IRON: 7.85, _editSessionId: null
+};
+
+// 1. 공통 DB 연결 함수
+async function sb3(path, opt={}) {
+  const res = await fetch(SB3 + '/rest/v1/' + path, {
+    headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json', 'Prefer': opt.prefer || 'return=representation' },
+    method: opt.method || 'GET', body: opt.body ? JSON.stringify(opt.body) : undefined
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const txt = await res.text();
+  return txt ? JSON.parse(txt) : null;
+}
+
+// 2. 재도장 초기화 및 데이터 로드
 async function initTab3() {
-    t3ResetForm();
-    await t3LoadStdCostFromSB();
+  const m = new Date().getMonth() + 1;
+  const selMonth = document.getElementById('t3_sel_month');
+  if (selMonth) selMonth.value = String(m);
+  t3ResetForm();
+  try {
+    await t3LoadStdCostFromSB(); 
     await t3LoadSessions();
-    t3ChangeMonth();
+    t3ChangeMonth(); 
+  } catch(e) { console.error('T3 로드 실패:', e); }
 }
 
-function t3CalcRow(r, scrap) {
-    const m = +document.getElementById('t3_sel_month').value;
-    const stdMap = (T3.monthStdCost[m] && T3.monthStdCost[m].data) || {};
-    const nm = r.name || '';
-    const thick = +r.thickness || (nm === '홈던트기둥' ? 0.8 : (nm.includes('홈던트') ? 1.2 : 0));
-    const width = nm === '홈던트기둥' ? 129 : 64;
-    const size = +r.size || 0;
-    const weight = (thick * width * T3.IRON * size) / 1000000;
-    const sAmt = weight * (scrap || 250);
-    const key = `${nm}_${r.thickness || ''}_${+size}`;
-    const stdData = stdMap[key] || {};
-    const repaint = stdData.repaint || +r.repaint || 0;
-    const std = stdData.std || +r.stdcost || 0;
-    const perPL = std ? (std - repaint - sAmt) : 0;
-    return { weight, sAmt, std, repaint, perPL, totPL: perPL * (+r.qty || 0), width };
+async function t3LoadStdCostFromSB() {
+  try {
+    const rows = await sb3('repaint_stdcost?select=*');
+    T3.monthStdCost = {}; 
+    (rows || []).forEach(r => { T3.monthStdCost[r.month] = { fileName: r.file_name, data: r.data }; });
+    t3UpdateStdSavedList(); // 📋 1, 2, 3월 표준원가 태그 다시 그리기
+  } catch(e) { console.error(e); }
+}
+
+async function t3LoadSessions() {
+  try {
+    const raw = await sb3('repaint_sessions?select=id,month,scrap_price,created_at,repaint_items(id,name,thickness,size,qty,repaint,stdcost)&order=created_at.asc');
+    T3.sessions = raw || [];
+    t3BuildSaved(); t3RenderResults(); t3LoadLog();
+  } catch(e) { console.error(e); }
+}
+
+function t3BuildSaved() {
+  const monthMap = {};
+  (T3.sessions || []).forEach(s => {
+    if (!monthMap[s.month]) monthMap[s.month] = { month: s.month, scrap: s.scrap_price, rowsMap: {} };
+    const m = monthMap[s.month];
+    const items = s.repaint_items || s.items || [];
+    items.forEach(r => {
+      const key = `${r.name}_${r.thickness}_${r.size}`;
+      if (!m.rowsMap[key]) m.rowsMap[key] = { ...r, qty: 0 };
+      m.rowsMap[key].qty += (+r.qty || 0);
+    });
+  });
+  T3.saved = Object.values(monthMap).map(m => ({
+    month: m.month, scrap: m.scrap, rows: Object.values(m.rowsMap)
+  })).sort((a, b) => a.month - b.month);
+}
+
+// 3. 재도장 계산 및 화면 출력 (원본 디자인 복구)
+function t3CalcRow(r, scrap, stdCostMap) {
+  if (!stdCostMap) {
+    const m = +document.getElementById('t3_sel_month')?.value || 1;
+    stdCostMap = (T3.monthStdCost[m] && T3.monthStdCost[m].data) || T3.stdCost || {};
+  }
+  const nm = r.name || '';
+  const thickness = +r.thickness || (nm === '홈던트기둥' ? 0.8 : (nm.includes('홈던트') ? 1.2 : 0));
+  const width = nm === '홈던트기둥' ? 129 : 64;
+  const size = +r.size || 0;
+  const weight = (thickness * width * T3.IRON * size) / 1000000;
+  const sAmt = weight * (scrap || 250);
+  const key = nm + '_' + (r.thickness||'') + '_' + (+r.size);
+  const lookup = stdCostMap[key] || {};
+  const repaint = lookup.repaint || +r.repaint || 0;
+  const std = lookup.std || +r.stdcost || 0;
+  const perPL = std ? (std - repaint - sAmt) : 0;
+  return { weight, sAmt, std, repaint, perPL, totPL: perPL * (+r.qty || 0), width };
 }
 
 function t3RenderInput() {
-    const scrap = +document.getElementById('t3_scrap_price').value || 250;
-    document.getElementById('t3_input_tbody').innerHTML = T3.inputRows.map((r, i) => {
-        const res = t3CalcRow(r, scrap);
-        const ro = (v, f=0) => `<span class="td-mono">${typeof v==='number' ? v.toLocaleString(undefined,{maximumFractionDigits:f}) : (v||'-')}</span>`;
-        return `<tr>
-            <td style="text-align:center;"><button onclick="t3DelRow(${i})" style="color:red; border:none; background:none; cursor:pointer;">✕</button></td>
-            <td class="input-cell"><select onchange="t3CellInput(${i}, 'name', this.value)">
-                <option value="">선택</option><option value="홈던트기둥" ${r.name==='홈던트기둥'?'selected':''}>홈던트기둥</option><option value="홈던트받침" ${r.name==='홈던트받침'?'selected':''}>홈던트받침</option><option value="스피드랙기둥" ${r.name==='스피드랙기둥'?'selected':''}>스피드랙기둥</option><option value="스피드랙받침" ${r.name==='스피드랙받침'?'selected':''}>스피드랙받침</option>
-            </select></td>
-            <td class="input-cell">${t3ThickCell(r, i)}</td>
-            <td class="input-cell"><input type="text" value="${r.size||''}" onblur="t3CellInput(${i}, 'size', this.value)" placeholder="규격"></td>
-            <td class="input-cell"><input type="text" value="${r.qty||''}" onblur="t3CellInput(${i}, 'qty', this.value)" placeholder="수량"></td>
-            <td>7.85</td><td>${res.width}</td><td>${ro(res.weight, 4)}</td><td>${scrap}</td><td>${ro(res.sAmt)}</td>
-            <td class="col-blue">${ro(r.repaint)}</td><td class="col-blue">${ro(r.stdcost)}</td>
-            <td class="${res.perPL>=0?'col-green':'col-red'}">${ro(res.perPL)}</td>
-            <td class="${res.totPL>=0?'col-green':'col-red'}">${ro(res.totPL)}</td>
-        </tr>`;
-    }).join('');
+  const scrap = +document.getElementById('t3_scrap_price')?.value || 250;
+  const tbody = document.getElementById('t3_input_tbody');
+  if (!tbody) return;
+  tbody.innerHTML = T3.inputRows.map((r, i) => {
+    const res = t3CalcRow(r, scrap);
+    const ro = (v, cls) => v ? `<span class="td-mono ${cls||''}" style="font-size:12px">${typeof v==='number'?v.toLocaleString():v}</span>` : `-`;
+    return `<tr>
+      <td style="text-align:center;"><button onclick="t3DelRow(${i})" style="color:red;border:none;background:none;cursor:pointer;">✕</button></td>
+      <td><select onchange="t3CellInput(this)" data-i="${i}" data-f="name">
+        <option value="">선택</option><option value="홈던트기둥" ${r.name==='홈던트기둥'?'selected':''}>홈던트기둥</option><option value="홈던트받침" ${r.name==='홈던트받침'?'selected':''}>홈던트받침</option><option value="스피드랙기둥" ${r.name==='스피드랙기둥'?'selected':''}>스피드랙기둥</option><option value="스피드랙받침" ${r.name==='스피드랙받침'?'selected':''}>스피드랙받침</option>
+      </select></td>
+      <td>${t3ThicknessCell(r, i)}</td>
+      <td><input type="text" value="${r.size||''}" data-i="${i}" data-f="size" onblur="t3CellInput(this)" placeholder="규격" style="width:100%;text-align:right;"></td>
+      <td><input type="text" value="${r.qty||''}" data-i="${i}" data-f="qty" onblur="t3CellInput(this)" placeholder="수량" style="width:100%;text-align:right;"></td>
+      <td style="text-align:center;color:#888;">7.85</td><td style="text-align:center;color:#888;">${res.width||'-'}</td>
+      <td style="text-align:right;">${ro(res.weight ? res.weight.toFixed(4) : null, 'col-gray')}</td><td style="text-align:center;">${scrap}</td>
+      <td style="text-align:right;">${ro(res.sAmt ? Math.round(res.sAmt) : null, 'col-gray')}</td><td style="text-align:right;">${ro(res.std?res.repaint:null, 'col-blue')}</td><td style="text-align:right;">${ro(res.std, 'col-blue')}</td>
+      <td style="text-align:right;background:rgba(154,103,0,0.04);">${ro(res.perPL ? Math.round(res.perPL) : null, (res.perPL>=0?'col-green':'col-red'))}</td>
+      <td style="text-align:right;background:rgba(154,103,0,0.04);">${ro(res.totPL ? Math.round(res.totPL) : null, (res.totPL>=0?'col-green':'col-red'))}</td>
+    </tr>`;
+  }).join('');
 }
 
-function t3ThickCell(r, i) {
-    if (r.name?.includes('홈던트')) return `<span>${r.name==='홈던트기둥'?'0.8':'1.2'}</span>`;
-    return `<select onchange="t3CellInput(${i}, 'thickness', this.value)"><option value="">-</option><option value="1.2" ${r.thickness==='1.2'?'selected':''}>1.2</option><option value="1.4" ${r.thickness==='1.4'?'selected':''}>1.4</option><option value="1.8" ${r.thickness==='1.8'?'selected':''}>1.8</option></select>`;
+function t3ThicknessCell(r, i) {
+  if (r.name?.includes('홈던트')) return `<span>${r.name==='홈던트기둥'?'0.8':'1.2'}</span>`;
+  return `<select data-i="${i}" data-f="thickness" onchange="t3CellInput(this)"><option value="">선택</option><option value="1.2" ${r.thickness==='1.2'?'selected':''}>1.2</option><option value="1.4" ${r.thickness==='1.4'?'selected':''}>1.4</option><option value="1.8" ${r.thickness==='1.8'?'selected':''}>1.8</option></select>`;
 }
 
-function t3CellInput(i, f, v) { 
-    T3.inputRows[i][f] = v; 
-    if(f==='name') T3.inputRows[i].thickness = v==='홈던트기둥'?'0.8':(v.includes('홈던트')?'1.2':'');
-    const r = T3.inputRows[i];
-    if (r.name && r.size) {
-        const stdMap = (T3.monthStdCost[+document.getElementById('t3_sel_month').value]?.data) || {};
-        const key = `${r.name}_${r.thickness||''}_${+r.size}`;
-        if (stdMap[key]) { T3.inputRows[i].stdcost = stdMap[key].std; T3.inputRows[i].repaint = stdMap[key].repaint; }
-    }
-    t3RenderInput(); 
+// 4. 이력 확인, 저장, 삭제 로직
+function t3EditMonth(sid) {
+  const s = T3.sessions.find(x => x.id === sid);
+  if (!s) return;
+  T3._editSessionId = sid;
+  document.getElementById('t3_sel_month').value = s.month;
+  document.getElementById('t3_scrap_price').value = s.scrap_price || 250;
+  T3.inputRows = JSON.parse(JSON.stringify(s.repaint_items || s.items || []));
+  t3RenderInput();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  t3ShowToast(`✏️ 데이터를 불러왔습니다. 수정 후 저장하세요.`);
 }
-function t3AddRow() { T3.inputRows.push({}); t3RenderInput(); }
-function t3DelRow(i) { T3.inputRows.splice(i, 1); t3RenderInput(); }
+
+async function t3DeleteSession(sid) {
+  if (!confirm('정말 삭제하시겠습니까?')) return;
+  try {
+    await sb3('repaint_items?session_id=eq.' + sid, { method: 'DELETE', prefer: '' });
+    await sb3('repaint_sessions?id=eq.' + sid, { method: 'DELETE', prefer: '' });
+    t3ShowToast('🗑️ 삭제되었습니다.'); await t3LoadSessions();
+  } catch(e) { t3ShowToast('❌ 삭제 실패: ' + e.message, 'error'); }
+}
 
 async function t3SaveMonth() {
-    const m = +document.getElementById('t3_sel_month').value;
-    const scrap = +document.getElementById('t3_scrap_price').value;
-    const valid = T3.inputRows.filter(r => r.name && r.size && r.qty);
-    if(!valid.length) return alert('입력된 내용이 없습니다.');
-    try {
-        if(T3._editSessionId) {
-            await sb3(`repaint_sessions?id=eq.${T3._editSessionId}`, { method: 'PATCH', body: { month: m, scrap_price: scrap } });
-            await sb3(`repaint_items?session_id=eq.${T3._editSessionId}`, { method: 'DELETE', prefer: '' });
-            const items = valid.map(r => ({ session_id: T3._editSessionId, name: r.name, thickness: r.thickness, size: +r.size, qty: +r.qty, repaint: +r.repaint||0, stdcost: +r.stdcost||0 }));
-            await sb3('repaint_items', { method: 'POST', body: items });
-        } else {
-            const sess = await sb3('repaint_sessions', { method: 'POST', body: { month: m, scrap_price: scrap } });
-            const items = valid.map(r => ({ session_id: sess[0].id, name: r.name, thickness: r.thickness, size: +r.size, qty: +r.qty, repaint: +r.repaint||0, stdcost: +r.stdcost||0 }));
-            await sb3('repaint_items', { method: 'POST', body: items });
-        }
-        t3ShowToast('✅ 저장 완료'); T3._editSessionId = null; await initTab3();
-    } catch(e) { alert('저장 중 오류 발생'); }
+  const month = +document.getElementById('t3_sel_month').value;
+  const scrap = +document.getElementById('t3_scrap_price').value || 250;
+  const rows = T3.inputRows.filter(r => r.name);
+  if (!rows.length) return t3ShowToast('⚠️ 입력 내용 없음', 'warn');
+  try {
+    if (T3._editSessionId) {
+      await sb3('repaint_sessions?id=eq.' + T3._editSessionId, { method: 'PATCH', body: { month, scrap_price: scrap } });
+      await sb3('repaint_items?session_id=eq.' + T3._editSessionId, { method: 'DELETE', prefer: '' });
+      const items = rows.map(r => ({ session_id: T3._editSessionId, name: r.name, thickness: r.thickness, size: +r.size, qty: +r.qty, repaint: +r.repaint, stdcost: +r.stdcost }));
+      await sb3('repaint_items', { method: 'POST', body: items });
+    } else {
+      const sess = await sb3('repaint_sessions', { method: 'POST', body: { month, scrap_price: scrap } });
+      const items = rows.map(r => ({ session_id: sess[0].id, name: r.name, thickness: r.thickness, size: +r.size, qty: +r.qty, repaint: +r.repaint, stdcost: +r.stdcost }));
+      await sb3('repaint_items', { method: 'POST', body: items });
+    }
+    t3ShowToast('✅ 저장 완료'); T3._editSessionId = null; await t3LoadSessions(); t3ResetForm();
+  } catch(e) { t3ShowToast('❌ 오류: ' + e.message, 'error'); }
 }
 
 function t3RenderResults() {
-    const wrap = document.getElementById('t3_results_wrap');
-    wrap.innerHTML = T3.saved.map(s => {
-        let totalPL = 0;
-        const rows = s.rows.map(r => {
-            const res = t3CalcRow(r, s.scrap); totalPL += res.totPL;
-            return `<tr><td>${r.name}</td><td>${r.size}</td><td>${r.thickness}</td><td>${(+r.qty).toLocaleString()}</td><td>${res.weight.toFixed(4)}</td><td class="${res.totPL>=0?'col-green':'col-red'}">${Math.round(res.totPL).toLocaleString()}원</td></tr>`;
-        }).join('');
-        return `<div class="panel"><b>${s.month}월 누적 실적</b> <span style="float:right; font-weight:bold; color:var(--accent);">총 손익: ${Math.round(totalPL).toLocaleString()}원</span>
-                <div class="table-wrap"><table><thead><tr><th>품명</th><th>규격</th><th>두께</th><th>수량</th><th>무게</th><th>총손익</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  const wrap = document.getElementById('t3_results_wrap'); if (!wrap || !T3.saved.length) return;
+  wrap.innerHTML = T3.saved.map(s => {
+    let mPL = 0;
+    const rowsHtml = s.rows.map(r => {
+      const res = t3CalcRow(r, s.scrap); mPL += res.totPL;
+      return `<tr><td>${r.name}</td><td>${r.size}</td><td>${r.thickness}</td><td>${(+r.qty).toLocaleString()}</td><td>${res.weight.toFixed(4)}</td><td>${Math.round(res.sAmt).toLocaleString()}</td><td>${res.repaint.toLocaleString()}</td><td>${res.std.toLocaleString()}</td><td class="${res.totPL>=0?'col-green':'col-red'}">${Math.round(res.totPL).toLocaleString()}</td></tr>`;
     }).join('');
+    return `<div class="panel" style="margin-bottom:24px;"><b>${s.month}월 합계 실적</b><span style="float:right;" class="${mPL>=0?'col-green':'col-red'}">총 손익: ${Math.round(mPL).toLocaleString()}원</span><div class="table-wrap"><table><thead><tr><th>품명</th><th>규격</th><th>두께</th><th>수량</th><th>무게</th><th>막고철</th><th>재도장비</th><th>표준원가</th><th>총손익</th></tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
+  }).join('');
+  t3RenderStats();
 }
 
-function t3LoadLog() {
-    const el = document.getElementById('t3_log_content');
-    el.innerHTML = T3.sessions.map(s => {
-        const summary = (s.items || []).map(r => `${r.name} ${r.size}(${r.qty})`).join(', ');
-        return `<div style="padding:15px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; background:#fff; margin-bottom:5px; border-radius:10px;">
-            <div><b style="color:var(--accent);">${s.month}월 실적</b> <small style="color:#888;">(${new Date(s.created_at).toLocaleString()})</small><br>
-            <small style="color:#666;">상세: ${summary || '데이터 없음'}</small></div>
-            <div style="display:flex; gap:8px;">
-                <button onclick="t3Edit(${s.id})" style="padding:6px 12px; cursor:pointer; background:#fff; border:1px solid #ddd; border-radius:6px; font-size:12px; font-weight:bold;">수정</button>
-                <button onclick="t3Delete(${s.id})" style="padding:6px 12px; cursor:pointer; background:#fff; border:1px solid #ffcfcf; color:red; border-radius:6px; font-size:12px; font-weight:bold;">삭제</button>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-async function t3Delete(sid) {
-    if(!confirm('정말로 이 실적 기록을 삭제하시겠습니까?')) return;
-    try {
-        await sb3(`repaint_items?session_id=eq.${sid}`, { method: 'DELETE', prefer: '' });
-        await sb3(`repaint_sessions?id=eq.${sid}`, { method: 'DELETE', prefer: '' });
-        t3ShowToast('🗑️ 실적이 삭제되었습니다.'); await initTab3();
-    } catch(e) { alert('삭제 오류'); }
-}
-
-function t3Edit(sid) {
-    const s = T3.sessions.find(x => x.id === sid);
-    T3._editSessionId = sid; T3.inputRows = JSON.parse(JSON.stringify(s.items || []));
-    document.getElementById('t3_sel_month').value = s.month;
-    document.getElementById('t3_scrap_price').value = s.scrap;
-    t3RenderInput(); window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
+// 5. 보조 유틸 및 기타 기능
 function t3ChangeMonth() {
-    const m = +document.getElementById('t3_sel_month').value;
-    document.getElementById('t3_std_status').textContent = T3.monthStdCost[m] ? `✅ ${m}월 표준원가 적용 중` : `⚠️ ${m}월 표준원가 없음`;
-    t3RenderInput();
+  const m = +document.getElementById('t3_sel_month').value;
+  if (T3.monthStdCost[m]) { T3.stdCost = T3.monthStdCost[m].data; document.getElementById('t3_std_status').textContent = `✅ ${m}월 표준원가 적용 중`; }
+  else { T3.stdCost = {}; document.getElementById('t3_std_status').textContent = `⚠ ${m}월 표준원가 없음`; }
+  t3RenderInput();
+}
+function t3CellInput(el) {
+  const i = +el.dataset.i; const f = el.dataset.f; if(T3.inputRows[i]) T3.inputRows[i][f] = el.value;
+  if (f === 'name' && T3.inputRows[i]) T3.inputRows[i].thickness = T3.inputRows[i].name === '홈던트기둥' ? '0.8' : (T3.inputRows[i].name.includes('홈던트') ? '1.2' : '');
+  const r = T3.inputRows[i];
+  if (r && r.name && r.size) {
+    const map = T3.monthStdCost[+document.getElementById('t3_sel_month').value]?.data || {};
+    const key = `${r.name}_${r.thickness||''}_${+r.size}`;
+    if (map[key]) { r.stdcost = map[key].std; r.repaint = map[key].repaint; }
+  }
+  t3RenderInput();
+}
+async function t3LoadLog() {
+  const el = document.getElementById('t3_log_content'); if (!el || !T3.sessions.length) return;
+  el.innerHTML = [...T3.sessions].sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).map(s => {
+    const summary = (s.repaint_items || []).map(r => `${r.name} ${r.size}(${r.qty})`).join(', ');
+    return `<div style="padding:12px; border-bottom:1px solid #eee; background:#fff; margin-bottom:5px; border-radius:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+        <b>${s.month}월 실적</b> <small style="color:#999;">${new Date(s.created_at).toLocaleString()}</small>
+        <div>
+          <button onclick="t3EditMonth(${s.id})" style="padding:3px 8px; cursor:pointer;">확인/수정</button>
+          <button onclick="t3DeleteSession(${s.id})" style="padding:3px 8px; cursor:pointer; color:red;">삭제</button>
+        </div>
+      </div>
+      <div style="font-size:12px; color:#666;">상세: ${summary || '데이터 없음'}</div>
+    </div>`;
+  }).join('');
 }
 
-function t3UpdateStdSavedList() {
-    const el = document.getElementById('t3_std_saved_list');
-    if(el) el.innerHTML = Object.keys(T3.monthStdCost).sort((a,b)=>a-b).map(m => `<span class="tag">📋 ${m}월</span>`).join('');
+function t3ResetForm() { T3.inputRows = [{},{},{}]; T3._editSessionId = null; t3RenderInput(); }
+function t3AddRow() { T3.inputRows.push({}); t3RenderInput(); }
+function t3DelRow(i) { T3.inputRows.splice(i, 1); t3RenderInput(); }
+function t3LogToggle() { const b = document.getElementById('t3_log_body'); if(b) b.style.display = b.style.display==='none'?'block':'none'; }
+function t3RenderStats() { document.getElementById("t3_stats_wrap").style.display = T3.saved.length?"block":"none"; }
+function t3UpdateStdSavedList() { 
+  const el = document.getElementById('t3_std_saved_list');
+  if(el) el.innerHTML = Object.keys(T3.monthStdCost).sort((a,b)=>a-b).map(m => `<span style="background:#f0f6ff; color:#0969da; padding:3px 8px; border-radius:12px; font-size:11px; margin-right:5px; border:1px solid #cce0ff;">📋 ${m}월</span>`).join(''); 
 }
 
-function t3RenderStats() {}
-function t3LogToggle() {}
+// 6. 관리현황 및 인증서 탭 연결 로직 (오전 상태 완벽 복구)
+const CERT_BUCKET = 'certificates';
+const CERT_CAT_OF_IDX = { '1': 'mechanics', '2': 'chemistry', '3': 'certification', '4': 'msds' };
+const CERT_IDX_OF_CAT = { 'mechanics': '1', 'chemistry': '2', 'certification': '3', 'msds': '4' };
 
-// ===================================================
-// TAB 2: 리퍼 실적 로직 (보존)
-// ===================================================
-let t2Year = 2026; let t2SelMonth = null; let _t2MonCache = null;
-async function t2SbFetch(path, opt={}) {
-    const res = await fetch(SB3 + '/rest/v1/' + path, {
-        headers: { 'apikey': KEY3, 'Authorization': 'Bearer ' + KEY3, 'Content-Type': 'application/json', 'Prefer': opt.prefer || 'return=representation' },
-        method: opt.method || 'GET', body: opt.body ? JSON.stringify(opt.body) : undefined
-    });
-    return res.json();
-}
-async function t2MonLoadSB() {
-    try {
-        const rows = await t2SbFetch('refurb_monthly?select=*');
-        const obj = {}; (rows || []).forEach(r => { obj[r.month_key] = r; });
-        _t2MonCache = obj; t2UpdateDashboard();
-    } catch(e) { console.error('T2 로드 실패'); }
-}
-function t2UpdateDashboard() {
-    const yearStr = String(t2Year); document.getElementById('t2AnnualYear').textContent = t2Year; document.getElementById('t2YearLabel').textContent = t2Year;
-    let annualAmt = 0; const container = document.getElementById('t2MonthTabs');
-    if (container) {
-        container.innerHTML = Array.from({length:12}, (_, i) => {
-            const mm = String(i + 1).padStart(2, '0'); const mkey = yearStr + '-' + mm;
-            const d = (_t2MonCache && _t2MonCache[mkey]) || { amount: 0 }; annualAmt += d.amount;
-            return `<button class="t2-mtab ${t2SelMonth === mkey ? 'active' : ''}" onclick="t2SelectMonth('${mkey}')">${i+1}월</button>`;
-        }).join('');
-    }
-    document.getElementById('t2AnnualAmt').textContent = annualAmt.toLocaleString();
-}
-function t2SelectMonth(key) {
-    t2SelMonth = key; document.getElementById('t2MonthInputPanel').style.display = 'block';
-    const d = (_t2MonCache && _t2MonCache[key]) || { pkg: 0, qty: 0, amount: 0 };
-    document.getElementById('t2InputPkg').value = d.pkg; document.getElementById('t2InputQty').value = d.qty; document.getElementById('t2InputAmt').value = d.amount;
-    t2UpdateDashboard();
-}
-async function t2SaveMonthly() {
-    if (!t2SelMonth) return;
-    const body = { month_key: t2SelMonth, pkg: +document.getElementById('t2InputPkg').value, qty: +document.getElementById('t2InputQty').value, amount: +document.getElementById('t2InputAmt').value };
-    await t2SbFetch('refurb_monthly?month_key=eq.' + t2SelMonth, { method: 'DELETE', prefer: '' });
-    await t2SbFetch('refurb_monthly', { method: 'POST', body });
-    t3ShowToast('✅ 리퍼 실적 저장 완료'); await t2MonLoadSB();
-}
-function t2ShiftYear(v) { t2Year += v; t2UpdateDashboard(); }
-
-// ===================================================
-// TAB 4 & 5 연결 브릿지
-// ===================================================
-async function fetchAllRows4(table) {
-    const res = await fetch(`${SB4}/rest/v1/${table}?select=*`, { headers: { 'apikey': KEY4, 'Authorization': `Bearer ${KEY4}` } });
-    return res.json();
-}
-function initDashboard4() {
-    Promise.all([fetchAllRows4('frame_return_items'), fetchAllRows4('rack_return_items')]).then(res => {
-        const all = res[0].concat(res[1]);
-        const tin = all.reduce((s,x) => s+(+x.received_quantity||0), 0);
-        const tdis = all.reduce((s,x) => s+(+x.dispose_quantity||0), 0);
-        document.getElementById('v4-dashboard-root').innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-bottom:20px;">
-            <div class="panel" style="text-align:center;"><b>총 입고</b><br>${tin.toLocaleString()}</div>
-            <div class="panel" style="text-align:center;"><b>총 폐기</b><br>${tdis.toLocaleString()}</div>
-            <div class="panel" style="text-align:center;"><b>폐기율</b><br>${tin?(tdis/tin*100).toFixed(1):0}%</div>
-        </div>`;
-    });
-}
-async function certLoadAll() {
-    const res = await fetch(`${SB5}/rest/v1/cert_folders?select=*,cert_files(*)&order=created_at.asc`, { headers: { 'apikey': KEY5, 'Authorization': `Bearer ${KEY5}` } });
-    const folders = await res.json();
-    ['1','2'].forEach(idx => {
-        const cat = { '1': 'mechanics', '2': 'chemistry' }[idx];
-        const el = document.getElementById('cert-folders-' + idx);
-        if(el) el.innerHTML = folders.filter(f => f.category === cat).map(f => `<div>📁 ${f.name} (${f.cert_files.length})</div>`).join('');
-    });
-}
+function initDashboard4() { loadAll4(); }
 function initTab5() { certLoadAll(); }
-function certToggle(idx) { document.getElementById('cert-body-'+idx).classList.toggle('open'); }
+function certToggleUploadZone(fId) { const b = document.getElementById('cert-folder-body-'+fId); if(b) b.style.display='block'; const z = document.getElementById('cert-upload-zone-'+fId); if(z) z.style.display=z.style.display==='none'?'block':'none'; }
+function certToggleFolder(fId) { const e = document.getElementById('cert-folder-body-'+fId); if(e) e.style.display=e.style.display==='none'?'block':'none'; }
+function loadAll4(){
+  Promise.all([fetchAllRows4('frame_return_items'), fetchAllRows4('rack_return_items')]).then(res => {
+    const all = res[0].concat(res[1]);
+    st4.data['frame']=all; st4.data['rack']=all; st4.data['plywood']=all; st4.data['defect']=all; st4.data['powder']=all;
+    st4._allLoaded=true; updateKPI4(all); applyFilters4(st4.view);
+  });
+}
 
-function t2Init() { t2MonLoadSB(); }
-window.onload = () => { t2Init(); initTab3(); };
-</script>
-</body>
-</html>
+// 7. 시스템 통합 실행
+if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded',initDashboard4); }else{ initDashboard4(); }

@@ -2732,33 +2732,78 @@ function certToggle(id) {
 }
 
 function certAddFolder(type) {
-  alert('폴더 추가 기능은 데이터베이스 연동 후 사용할 수 있습니다. (' + type + ')');
+  // 카테고리별로 들어갈 위치(ID) 지정
+  let containerId = '';
+  if (type === 'mechanics') containerId = 'cert-folders-1';
+  else if (type === 'chemistry') containerId = 'cert-folders-2';
+  else if (type === 'certification') containerId = 'cert-folders-3';
+  else if (type === 'msds') containerId = 'cert-folders-4';
+
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  // 임시 고유 ID 생성 (폴더 구분을 위해)
+  const folderId = 'folder_' + Date.now();
+
+  // 화면에 추가할 폴더 HTML 디자인 (기존 CSS 활용)
+  const folderHTML = `
+    <div class="cert-folder-block fade-in" id="${folderId}">
+      <div class="cert-folder-header">
+        <span style="font-size:16px">📁</span>
+        <input type="text" class="cert-folder-name-input" placeholder="폴더 이름을 입력하세요 (예: 26년 4월 K마크)" />
+        <button class="cert-folder-del-btn" onclick="document.getElementById('${folderId}').remove()">삭제</button>
+      </div>
+      <div class="cert-folder-body">
+        <div class="cert-upload-zone" onclick="this.querySelector('input').click()">
+          <div class="cert-upload-icon">☁️</div>
+          <div class="cert-upload-text">여기를 클릭하거나 파일을 드래그하여 업로드하세요</div>
+          <div class="cert-upload-sub">PDF, 이미지, 엑셀 파일 등</div>
+          <input type="file" onchange="handleCertUpload(this, '${folderId}')" multiple />
+        </div>
+        <div class="cert-file-list" id="file-list-${folderId}">
+          </div>
+      </div>
+    </div>
+  `;
+
+  // 컨테이너 맨 아래에 폴더 추가
+  container.insertAdjacentHTML('beforeend', folderHTML);
 }
-async function loadCertificates() {
-  try {
-    // 1. Supabase에서 데이터 가져오기 (주의: 'cert_files' 부분은 실제 DB 테이블 이름으로 바꿔야 합니다)
-    const certData = await sb3('cert_folders?select=*'); 
+
+// 2. 파일 업로드 시 화면에 리스트 띄워주는 함수 (임시 UI)
+function handleCertUpload(input, folderId) {
+  const files = input.files;
+  if (!files || files.length === 0) return;
+
+  const fileListContainer = document.getElementById('file-list-' + folderId);
+
+  // 선택한 파일들을 하나씩 화면에 리스트로 그려주기
+  Array.from(files).forEach(file => {
+    const ext = file.name.split('.').pop().toLowerCase();
     
-    // DB에 데이터가 없으면 함수 종료
-    if (!certData || certData.length === 0) return;
+    // 확장자에 따라 아이콘 색상 변경
+    let extClass = 'pdf'; // 기본 빨간색
+    if (['jpg', 'jpeg', 'png'].includes(ext)) extClass = 'jpg'; // 초록색
+    else if (['xls', 'xlsx'].includes(ext)) extClass = 'xlsx'; // 진녹색
+    else if (['doc', 'docx'].includes(ext)) extClass = 'docx'; // 파란색
 
-    // 2. 카테고리별로 데이터 나누기
-    const mechanics = certData.filter(c => c.category === 'mechanics');
-    const chemistry = certData.filter(c => c.category === 'chemistry');
-    const certificates = certData.filter(c => c.category === 'certification');
-    const msds = certData.filter(c => c.category === 'msds');
+    const fileHtml = `
+      <div class="cert-file-item fade-in">
+        <div class="cert-file-info">
+          <span class="cert-file-ext ${extClass}">${ext}</span>
+          <span class="cert-file-name">${file.name}</span>
+          <span class="cert-file-size">${(file.size / 1024).toFixed(1)} KB</span>
+        </div>
+        <div class="cert-file-actions">
+          <button class="cert-btn cert-btn-del" onclick="this.closest('.cert-file-item').remove()">삭제</button>
+        </div>
+      </div>
+    `;
+    fileListContainer.insertAdjacentHTML('beforeend', fileHtml);
+  });
 
-    // 3. 화면의 '0건' 숫자를 진짜 갯수로 바꿔주기
-    document.getElementById('cert-count-1').textContent = mechanics.length + '건';
-    document.getElementById('cert-count-2').textContent = chemistry.length + '건';
-    document.getElementById('cert-count-3').textContent = certificates.length + '건';
-    document.getElementById('cert-count-4').textContent = msds.length + '건';
-
-    // (참고: 나중에 여기에 화면에 파일 목록을 그려주는 코드를 추가해야 합니다)
-    
-  } catch (error) {
-    console.error("인증서 로드 실패:", error);
-  }
+  // 같은 파일을 다시 올릴 수 있도록 input 초기화
+  input.value = '';
 }
 </script>
 </body>

@@ -2737,7 +2737,7 @@ function certAddFolder(type) {
 async function loadCertificates() {
   try {
     // 1. Supabase에서 데이터 가져오기 (주의: 'cert_files' 부분은 실제 DB 테이블 이름으로 바꿔야 합니다)
-    const certData = await sb3('cert_files?select=*'); 
+    const certData = await sb3('cert_folders?select=*'); 
     
     // DB에 데이터가 없으면 함수 종료
     if (!certData || certData.length === 0) return;

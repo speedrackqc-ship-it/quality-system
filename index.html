@@ -2731,8 +2731,13 @@ function certToggle(id) {
   if (arrow) arrow.classList.toggle('open');
 }
 
+// 에러 방지용 임시 함수 (DB 연동 전까지 에러 안 나게 해줌)
+window.loadCertificates = async function() {
+  console.log("DB 데이터를 불러오는 함수입니다. (현재는 UI 테스트 중)");
+};
+
+// 1. 폴더 생성 함수 (폴더 열기/닫기 기능 추가)
 function certAddFolder(type) {
-  // 카테고리별로 들어갈 위치(ID) 지정
   let containerId = '';
   if (type === 'mechanics') containerId = 'cert-folders-1';
   else if (type === 'chemistry') containerId = 'cert-folders-2';
@@ -2742,51 +2747,63 @@ function certAddFolder(type) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  // 임시 고유 ID 생성 (폴더 구분을 위해)
   const folderId = 'folder_' + Date.now();
 
-  // 화면에 추가할 폴더 HTML 디자인 (기존 CSS 활용)
+  // 폴더 헤더(제목 부분)를 누르면 열리고 닫히도록 onclick="toggleFolderBody(...)" 추가
   const folderHTML = `
     <div class="cert-folder-block fade-in" id="${folderId}">
-      <div class="cert-folder-header">
+      <div class="cert-folder-header" style="cursor:pointer;" onclick="toggleFolderBody('${folderId}')">
         <span style="font-size:16px">📁</span>
-        <input type="text" class="cert-folder-name-input" placeholder="폴더 이름을 입력하세요 (예: 26년 4월 K마크)" />
-        <button class="cert-folder-del-btn" onclick="document.getElementById('${folderId}').remove()">삭제</button>
+        <input type="text" class="cert-folder-name-input" placeholder="폴더 이름을 입력하세요" onclick="event.stopPropagation()" />
+        <button class="cert-folder-del-btn" onclick="event.stopPropagation(); document.getElementById('${folderId}').remove()">삭제</button>
       </div>
-      <div class="cert-folder-body">
+      
+      <div class="cert-folder-body" id="body-${folderId}">
         <div class="cert-upload-zone" onclick="this.querySelector('input').click()">
           <div class="cert-upload-icon">☁️</div>
           <div class="cert-upload-text">여기를 클릭하거나 파일을 드래그하여 업로드하세요</div>
           <div class="cert-upload-sub">PDF, 이미지, 엑셀 파일 등</div>
           <input type="file" onchange="handleCertUpload(this, '${folderId}')" multiple />
         </div>
-        <div class="cert-file-list" id="file-list-${folderId}">
-          </div>
+        <div class="cert-file-list" id="file-list-${folderId}"></div>
       </div>
     </div>
   `;
 
-  // 컨테이너 맨 아래에 폴더 추가
   container.insertAdjacentHTML('beforeend', folderHTML);
 }
 
-// 2. 파일 업로드 시 화면에 리스트 띄워주는 함수 (임시 UI)
+// 폴더 내용물 열기/닫기 동작 함수
+function toggleFolderBody(folderId) {
+  const body = document.getElementById('body-' + folderId);
+  if (body) {
+    if (body.style.display === 'none') {
+      body.style.display = 'block';
+    } else {
+      body.style.display = 'none';
+    }
+  }
+}
+
+// 2. 파일 업로드 & 미리보기 버튼 추가 함수
 function handleCertUpload(input, folderId) {
   const files = input.files;
   if (!files || files.length === 0) return;
 
   const fileListContainer = document.getElementById('file-list-' + folderId);
 
-  // 선택한 파일들을 하나씩 화면에 리스트로 그려주기
   Array.from(files).forEach(file => {
     const ext = file.name.split('.').pop().toLowerCase();
     
-    // 확장자에 따라 아이콘 색상 변경
-    let extClass = 'pdf'; // 기본 빨간색
-    if (['jpg', 'jpeg', 'png'].includes(ext)) extClass = 'jpg'; // 초록색
-    else if (['xls', 'xlsx'].includes(ext)) extClass = 'xlsx'; // 진녹색
-    else if (['doc', 'docx'].includes(ext)) extClass = 'docx'; // 파란색
+    let extClass = 'pdf';
+    if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) extClass = 'jpg';
+    else if (['xls', 'xlsx'].includes(ext)) extClass = 'xlsx';
+    else if (['doc', 'docx'].includes(ext)) extClass = 'docx';
 
+    // ✨ 핵심: 브라우저 임시 메모리를 이용해 파일을 볼 수 있는 '미리보기 주소(URL)' 생성
+    const fileUrl = URL.createObjectURL(file);
+
+    // 파란색 '미리보기' 버튼 추가 (클릭 시 새 창에서 파일 열림)
     const fileHtml = `
       <div class="cert-file-item fade-in">
         <div class="cert-file-info">
@@ -2795,6 +2812,7 @@ function handleCertUpload(input, folderId) {
           <span class="cert-file-size">${(file.size / 1024).toFixed(1)} KB</span>
         </div>
         <div class="cert-file-actions">
+          <button class="cert-btn cert-btn-view" onclick="window.open('${fileUrl}', '_blank')">미리보기</button>
           <button class="cert-btn cert-btn-del" onclick="this.closest('.cert-file-item').remove()">삭제</button>
         </div>
       </div>
@@ -2802,7 +2820,6 @@ function handleCertUpload(input, folderId) {
     fileListContainer.insertAdjacentHTML('beforeend', fileHtml);
   });
 
-  // 같은 파일을 다시 올릴 수 있도록 input 초기화
   input.value = '';
 }
 </script>

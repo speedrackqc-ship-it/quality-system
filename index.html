@@ -2684,52 +2684,54 @@ function buildViewPane4(view){
   +'</div>';
 }
 
-function initDashboard4(){
-  var container=document.getElementById('v4-dashboard-root');if(!container)return;
-  var kpiCards=[
-    {id:'v4kpi-in',label:'총 입고량',icon:'&#128230;',cls:'kpi-blue',sub:'전체 기간 누계'},
-    {id:'v4kpi-recycle',label:'총 재활용',icon:'&#9851;',cls:'kpi-green',sub:'재활용 처리 수량'},
-    {id:'v4kpi-disposal',label:'총 폐기량',icon:'&#128465;',cls:'kpi-orange',sub:'폐기 처리 수량'},
-    {id:'v4kpi-rate',label:'전체 폐기율',icon:'&#128201;',cls:'kpi-red',sub:'5% 초과 시 위험 표시'},
-    {id:'v4kpi-sessions',label:'총 세션 수',icon:'&#128197;',cls:'kpi-purple',sub:'전체 작업 이력'},
-  ];
-  var kpiHTML=kpiCards.map(function(k){
-    return '<div class="v4-kpi-card '+k.cls+'"><div class="v4-kpi-icon">'+k.icon+'</div>'
-      +'<div class="v4-kpi-label">'+k.label+'</div>'
-      +'<div class="v4-kpi-value" id="'+k.id+'">-</div>'
-      +'<div class="v4-kpi-sub">'+k.sub+'</div></div>';
-  }).join('');
-  var tabBtns=VIEWS4.map(function(v){
-    return '<button id="v4tab-'+v+'" class="v4tab-btn'+(v===st4.view?' v4active':'')+'">'+VIEW_LABELS4[v]+'</button>';
-  }).join('');
-  var panes=VIEWS4.map(buildViewPane4).join('');
-  container.innerHTML='<div class="v4-kpi-grid">'+kpiHTML+'</div>'
-    +'<div class="v4-stitle">&#128193; 데이터 분류</div>'
-    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">'+tabBtns+'</div>'
-    +panes;
-  VIEWS4.forEach(function(v){
-    (function(vv){
-      var tb=document.getElementById('v4tab-'+vv);if(tb)tb.onclick=function(){selectView4(vv);};
-      var ab=document.getElementById('v4-btn-adv-'+vv);if(ab)ab.onclick=function(){toggleAdv4(vv);};
-      var cb=document.getElementById('v4-btn-col-'+vv);if(cb)cb.onclick=function(){toggleColPanel4(vv);};
-      var apb=document.getElementById('v4-btn-apply-'+vv);if(apb)apb.onclick=function(){applyAdv4(vv);};
-      var rsb=document.getElementById('v4-btn-reset-'+vv);if(rsb)rsb.onclick=function(){resetAdv4(vv);};
-      var sr=document.getElementById('v4-search-'+vv);if(sr)sr.oninput=function(){onSearch4(vv,this.value);};
-      (COL_DEFS4[vv]||[]).forEach(function(col){
-        if(col.always)return;
-        var btn=document.getElementById('v4-col-btn-'+vv+'-'+col.k);
-        if(btn)(function(v2,ck){btn.onclick=function(){toggleCol4(v2,ck);};})(vv,col.k);
-      });
-    })(v);
-  });
-  selectView4(st4.view);
-  loadAll4();
-}
+// 기존의 initDashboard4 함수를 이걸로 통째로 교체하세요!
+function initDashboard4() {
+  var container = document.getElementById('v4-dashboard-root');
+  if (!container) return;
 
-if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded',initDashboard4);
-}else{
-  initDashboard4();
+  // 1. 기존의 복잡한 화면 대신, 검은색 코드 창(미리보기)을 만듭니다.
+  container.innerHTML = `
+    <div class="panel" style="margin-bottom:20px;">
+      <div class="panel-title" style="color: #3b82f6; font-size:16px;">🔍 1단계: 탭 4 Supabase 원본 데이터 (Raw Data)</div>
+      <p style="font-size:13px; color:#888; margin-bottom:12px;">아래는 탭 4에서 사용되는 4개의 테이블에서 방금 가져온 가공 전 날것의 데이터입니다.</p>
+      <div id="v4-raw-dump" style="background:#1e293b; color:#a5b4fc; padding:16px; border-radius:8px; overflow:auto; max-height:600px; font-size:12px; font-family: 'JetBrains Mono', monospace;">
+        데이터를 불러오는 중입니다... ⏳
+      </div>
+    </div>
+  `;
+
+  // 상태 표시줄 업데이트 (로딩중)
+  var dot = document.getElementById('dbDot4');
+  var lbl = document.getElementById('dbLabel4');
+  if (dot) dot.style.background = '#f97316';
+  if (lbl) lbl.textContent = '원본 데이터 로딩 중...';
+
+  // 2. Supabase에서 데이터 직접 가져와서 화면에 뿌리기
+  Promise.all([
+    fetchAllRows4('frame_return_sessions', 'id,inspection_date,color,thickness'),
+    fetchAllRows4('rack_return_sessions', 'id,inspection_date'),
+    fetchAllRows4('frame_return_items', '*'),
+    fetchAllRows4('rack_return_items', '*')
+  ]).then(function(results) {
+    // 가져온 데이터를 묶어줍니다.
+    var rawData = {
+      "frame_return_sessions (프레임 작업이력)": results[0],
+      "rack_return_sessions (랙 작업이력)": results[1],
+      "frame_return_items (프레임 상세품목)": results[2],
+      "rack_return_items (랙 상세품목)": results[3]
+    };
+    
+    // 검은색 창 안에 데이터를 텍스트로 변환해서 출력합니다.
+    document.getElementById('v4-raw-dump').textContent = JSON.stringify(rawData, null, 2);
+    
+    // 상태 표시줄 업데이트 (완료)
+    if (dot) dot.style.background = '#22c55e';
+    if (lbl) lbl.textContent = '원본 데이터 로드 완료!';
+  }).catch(function(err) {
+    document.getElementById('v4-raw-dump').textContent = '데이터를 불러오는 중 오류가 발생했습니다:\n' + err.message;
+    if (dot) dot.style.background = '#ef4444';
+    if (lbl) lbl.textContent = '데이터 로드 오류';
+  });
 }
 
 // ===================================================

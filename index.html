@@ -609,6 +609,18 @@ tr:hover td { background: rgba(9,105,218,0.03); }
         <button class="cert-add-folder-btn" onclick="certAddFolder('msds')">＋ 폴더 추가</button>
       </div>
     </div>
+    
+    <!-- 👇 여기부터 빈 공간에 아래 코드를 복사해서 붙여넣으세요! 👇 -->
+    <div class="cert-section" id="cert-sec-5">
+      <div class="cert-section-header" onclick="certToggle('5')">
+        <div class="cert-section-title"><span class="cert-icon">📑</span> 자체 성적서 <span class="cert-count" id="cert-count-5">0건</span></div>
+        <span class="cert-arrow" id="cert-arrow-5">▼</span>
+      </div>
+      <div class="cert-section-body" id="cert-body-5">
+        <div id="cert-folders-5" class="cert-folder-list"></div>
+        <button class="cert-add-folder-btn" onclick="certAddFolder('internal')">＋ 폴더 추가</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2918,8 +2930,13 @@ async function loadCertificates() {
     document.getElementById('cert-folders-2').innerHTML = '';
     document.getElementById('cert-folders-3').innerHTML = '';
     document.getElementById('cert-folders-4').innerHTML = '';
+    
+    // 👇 추가된 부분 1: 5번 폴더 초기화
+    const folder5 = document.getElementById('cert-folders-5');
+    if(folder5) folder5.innerHTML = '';
 
-    const counts = { mechanics: 0, chemistry: 0, certification: 0, msds: 0 };
+    // 👇 수정된 부분 2: 카운트 세는 곳에 internal: 0 추가
+    const counts = { mechanics: 0, chemistry: 0, certification: 0, msds: 0, internal: 0 };
 
     if (folders && !folders.error) {
       folders.forEach(f => {
@@ -2938,12 +2955,15 @@ async function loadCertificates() {
     document.getElementById('cert-count-2').textContent = (counts.chemistry || 0) + '건';
     document.getElementById('cert-count-3').textContent = (counts.certification || 0) + '건';
     document.getElementById('cert-count-4').textContent = (counts.msds || 0) + '건';
+    
+    // 👇 추가된 부분 3: 5번 폴더 건수 화면에 표시
+    const count5 = document.getElementById('cert-count-5');
+    if(count5) count5.textContent = (counts.internal || 0) + '건';
 
   } catch (e) {
     console.error("데이터 로드 오류:", e);
   }
 }
-
 async function certAddFolder(type) {
   const folderName = prompt("새 폴더 이름을 입력하세요:");
   if (!folderName) return;
@@ -2997,7 +3017,9 @@ async function handleCertUpload(input, folderId, category) {
 }
 
 function renderFolderUI(category, folderId, folderName) {
-  const mapping = { mechanics: '1', chemistry: '2', certification: '3', msds: '4' };
+  function renderFolderUI(category, folderId, folderName) {
+  // 끝에 , internal: '5' 를 추가했습니다!
+  const mapping = { mechanics: '1', chemistry: '2', certification: '3', msds: '4', internal: '5' };
   const container = document.getElementById(`cert-folders-${mapping[category]}`);
   if (!container) return;
 

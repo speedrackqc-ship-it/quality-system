@@ -609,16 +609,6 @@ tr:hover td { background: rgba(9,105,218,0.03); }
         <button class="cert-add-folder-btn" onclick="certAddFolder('msds')">＋ 폴더 추가</button>
       </div>
     </div>
-    <div class="cert-section" id="cert-sec-5">
-      <div class="cert-section-header" onclick="certToggle('5')">
-        <div class="cert-section-title"><span class="cert-icon">📑</span> 자체 성적서 <span class="cert-count" id="cert-count-5">0건</span></div>
-        <span class="cert-arrow" id="cert-arrow-5">▼</span>
-      </div>
-      <div class="cert-section-body" id="cert-body-5">
-        <div id="cert-folders-5" class="cert-folder-list"></div>
-        <button class="cert-add-folder-btn" onclick="certAddFolder('internal')">＋ 폴더 추가</button>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -1585,7 +1575,7 @@ function t3SaveMonth() {
       let sessId;
       
       if (editId) {
-        // [수정 모드] 하단 이력에서 특정 날짜를 '수정' 누르고 저장할 때
+        // [수정 모드] 이력에서 특정 날짜를 '수정' 누르고 저장할 때
         await sb3('repaint_sessions?id=eq.' + editId, {
           method: 'PATCH', body: { month: month, scrap_price: scrap }
         });
@@ -1657,7 +1647,7 @@ function t3RenderResults() {
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
         <div>
           <span style="font-size:18px;font-weight:700;color:var(--accent)">${s.month}월 누적 합계</span>
-          <span style="font-size:12px;color:var(--text2);margin-left:8px">상세 조회 및 개별 수정은 하단 이력에서 가능합니다.</span>
+          <span style="font-size:12px;color:var(--text2);margin-left:8px">이력 상세 조회 및 수정은 하단을 참고하세요</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span class="td-mono" style="font-size:13px">
@@ -1696,6 +1686,7 @@ function t3RenderResults() {
   }).join('');
   t3RenderStats();
 }
+
 function t3EditMonth(sessionId) {
   const s = T3.sessions.find(x => x.id === sessionId);
   if (!s) { alert('해당 세션을 찾을 수 없습니다.'); return; }
@@ -2739,41 +2730,43 @@ if(document.readyState==='loading'){
 // 1. 전체 데이터 로드 (조회)
 async function loadCertificates() {
   try {
+    // Supabase에서 폴더와 파일 정보를 병렬로 가져옵니다.
     const [folders, files] = await Promise.all([
-      sb5('cert_folders?select=*&order=created_at.asc'),
-      sb5('cert_files?select=*&order=created_at.asc')
+      sb3('cert_folders?select=*&order=created_at.asc'),
+      sb3('cert_files?select=*&order=created_at.asc')
     ]);
 
+    // 화면 초기화
     document.getElementById('cert-folders-1').innerHTML = '';
     document.getElementById('cert-folders-2').innerHTML = '';
     document.getElementById('cert-folders-3').innerHTML = '';
     document.getElementById('cert-folders-4').innerHTML = '';
-    document.getElementById('cert-folders-5').innerHTML = ''; // 👈 추가됨
 
-    // 💡 internal(자체 성적서) 카운트 0 추가됨
-    const counts = { mechanics: 0, chemistry: 0, certification: 0, msds: 0, internal: 0 }; 
+    const counts = { mechanics: 0, chemistry: 0, certification: 0, msds: 0 };
 
-    if (folders && !folders.error) {
+    // 1) 폴더 렌더링
+    if (folders) {
       folders.forEach(f => {
         if(counts[f.category] !== undefined) counts[f.category]++;
         renderFolderUI(f.category, f.id, f.name);
       });
     }
 
-    if (files && !files.error) {
+    // 2) 파일 렌더링 (각 폴더 내부로 삽입)
+    if (files) {
       files.forEach(file => {
         renderFileUI(file.folder_id, file);
       });
     }
 
+    // 3) 상단 배지 카운트 업데이트
     document.getElementById('cert-count-1').textContent = (counts.mechanics || 0) + '건';
     document.getElementById('cert-count-2').textContent = (counts.chemistry || 0) + '건';
     document.getElementById('cert-count-3').textContent = (counts.certification || 0) + '건';
     document.getElementById('cert-count-4').textContent = (counts.msds || 0) + '건';
-    document.getElementById('cert-count-5').textContent = (counts.internal || 0) + '건'; // 👈 추가됨
 
   } catch (e) {
-    console.error("데이터 로드 오류:", e);
+    console.error("데이터 로드 중 오류:", e);
   }
 }
 
@@ -2835,10 +2828,10 @@ async function handleCertUpload(input, folderId, category) {
 // --- UI 헬퍼 함수 ---
 
 function renderFolderUI(category, folderId, folderName) {
-  
+  const mapping = { mechanics: '1', chemistry: '2', certification: '3', msds: '4' };
   const container = document.getElementById(`cert-folders-${mapping[category]}`);
   if (!container) return;
-const mapping = { mechanics: '1', chemistry: '2', certification: '3', msds: '4', internal: '5' };
+
   const html = `
     <div class="cert-folder-block fade-in" id="folder-${folderId}">
       <div class="cert-folder-header" onclick="toggleFolderBody('${folderId}')" style="cursor:pointer">
@@ -2902,9 +2895,6 @@ async function deleteFolder(id) {
 // ===================================================
 // TAB 5: 공인성적서 시스템 최종 연동 (새 프로젝트 SB5 전용)
 // ===================================================
-// ===================================================
-// TAB 5: 공인성적서 시스템 최종 연동 (자체성적서 포함 완벽본)
-// ===================================================
 
 function certToggle(id) {
   const header = document.querySelector('#cert-sec-' + id + ' .cert-section-header');
@@ -2918,21 +2908,18 @@ function certToggle(id) {
 
 async function loadCertificates() {
   try {
+    // 💡 탭 5 전용 sb5 창고에서 불러옵니다!
     const [folders, files] = await Promise.all([
       sb5('cert_folders?select=*&order=created_at.asc'),
       sb5('cert_files?select=*&order=created_at.asc')
     ]);
 
-    // 5번 구역(자체성적서)까지 화면 싹 비우기
     document.getElementById('cert-folders-1').innerHTML = '';
     document.getElementById('cert-folders-2').innerHTML = '';
     document.getElementById('cert-folders-3').innerHTML = '';
     document.getElementById('cert-folders-4').innerHTML = '';
-    const internalContainer = document.getElementById('cert-folders-5');
-    if (internalContainer) internalContainer.innerHTML = '';
 
-    // internal 카운트 추가!
-    const counts = { mechanics: 0, chemistry: 0, certification: 0, msds: 0, internal: 0 };
+    const counts = { mechanics: 0, chemistry: 0, certification: 0, msds: 0 };
 
     if (folders && !folders.error) {
       folders.forEach(f => {
@@ -2951,10 +2938,6 @@ async function loadCertificates() {
     document.getElementById('cert-count-2').textContent = (counts.chemistry || 0) + '건';
     document.getElementById('cert-count-3').textContent = (counts.certification || 0) + '건';
     document.getElementById('cert-count-4').textContent = (counts.msds || 0) + '건';
-    
-    // 자체 성적서 건수 표기
-    const internalCount = document.getElementById('cert-count-5');
-    if (internalCount) internalCount.textContent = (counts.internal || 0) + '건';
 
   } catch (e) {
     console.error("데이터 로드 오류:", e);
@@ -2982,6 +2965,7 @@ async function handleCertUpload(input, folderId, category) {
 
   for (const file of Array.from(files)) {
     try {
+      // 💡 탭 5 전용 SB5, KEY5 로 업로드!
       const filePath = `${category}/${folderId}/${Date.now()}_${file.name}`;
       const storageUrl = `${SB5}/storage/v1/object/certificates/${filePath}`;
       
@@ -3013,8 +2997,7 @@ async function handleCertUpload(input, folderId, category) {
 }
 
 function renderFolderUI(category, folderId, folderName) {
-  // 💡 핵심 원인: 여기에 internal: '5' 가 있어야 5번 구역에 폴더가 그려집니다!
-  const mapping = { mechanics: '1', chemistry: '2', certification: '3', msds: '4', internal: '5' };
+  const mapping = { mechanics: '1', chemistry: '2', certification: '3', msds: '4' };
   const container = document.getElementById(`cert-folders-${mapping[category]}`);
   if (!container) return;
 
@@ -3075,3 +3058,6 @@ async function deleteFolder(id) {
   await sb5(`cert_folders?id=eq.${id}`, { method: 'DELETE' });
   loadCertificates();
 }
+</script>
+</body>
+</html>

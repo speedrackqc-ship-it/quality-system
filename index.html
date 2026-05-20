@@ -565,7 +565,7 @@ tr:hover td { background: rgba(9,105,218,0.03); }
 <div id="tab5" class="tab-content">
   <div class="main" style="padding:32px 24px; max-width:960px; margin:0 auto;">
     <div style="margin-bottom:28px;">
-      <h2 style="font-size:20px;font-weight:800;color:#222;margin:0 0 6px;">📋 공인성적서 / 인증서 / MSDS</h2>
+      <h2 style="font-size:20px;font-weight:800;color:#222;margin:0 0 6px;">📋 공인성적서 / 인증서 / MSDS / 자체 성적서</h2>
       <p style="font-size:13px;color:#888;margin:0;">항목을 클릭해 펼치고, 폴더를 만들어 파일을 업로드하면 누구나 확인 및 다운로드할 수 있습니다.</p>
     </div>
     <div class="cert-section" id="cert-sec-1">
@@ -598,7 +598,6 @@ tr:hover td { background: rgba(9,105,218,0.03); }
         <button class="cert-add-folder-btn" onclick="certAddFolder('certification')">＋ 폴더 추가</button>
       </div>
     </div>
-
     <div class="cert-section" id="cert-sec-4">
       <div class="cert-section-header" onclick="certToggle('4')">
         <div class="cert-section-title"><span class="cert-icon">⚗️</span> MSDS <span class="cert-count" id="cert-count-4">0건</span></div>
@@ -609,9 +608,19 @@ tr:hover td { background: rgba(9,105,218,0.03); }
         <button class="cert-add-folder-btn" onclick="certAddFolder('msds')">＋ 폴더 추가</button>
       </div>
     </div>
+    <!-- 새로 추가된 자체 성적서 섹션 -->
+    <div class="cert-section" id="cert-sec-5">
+      <div class="cert-section-header" onclick="certToggle('5')">
+        <div class="cert-section-title"><span class="cert-icon">📑</span> 자체 성적서 <span class="cert-count" id="cert-count-5">0건</span></div>
+        <span class="cert-arrow" id="cert-arrow-5">▼</span>
+      </div>
+      <div class="cert-section-body" id="cert-body-5">
+        <div id="cert-folders-5" class="cert-folder-list"></div>
+        <button class="cert-add-folder-btn" onclick="certAddFolder('internal')">＋ 폴더 추가</button>
+      </div>
+    </div>
   </div>
 </div>
-
 <!-- ===== TAB 1: 재고 분석기 ===== -->
 <!-- ===== TAB 2: 리퍼 실적 ===== -->
 <div id="tab2" class="tab-content active">
@@ -2893,8 +2902,7 @@ async function deleteFolder(id) {
   loadCertificates();
 }
 // ===================================================
-// TAB 5: 공인성적서 시스템 최종 연동 (새 프로젝트 SB5 전용)
-// ===================================================
+// ===== TAB 5: 공인성적서 시스템 최종 연동 (새 프로젝트 SB5 전용) =====
 
 function certToggle(id) {
   const header = document.querySelector('#cert-sec-' + id + ' .cert-section-header');
@@ -2908,7 +2916,6 @@ function certToggle(id) {
 
 async function loadCertificates() {
   try {
-    // 💡 탭 5 전용 sb5 창고에서 불러옵니다!
     const [folders, files] = await Promise.all([
       sb5('cert_folders?select=*&order=created_at.asc'),
       sb5('cert_files?select=*&order=created_at.asc')
@@ -2918,8 +2925,10 @@ async function loadCertificates() {
     document.getElementById('cert-folders-2').innerHTML = '';
     document.getElementById('cert-folders-3').innerHTML = '';
     document.getElementById('cert-folders-4').innerHTML = '';
+    const folder5 = document.getElementById('cert-folders-5');
+    if (folder5) folder5.innerHTML = '';
 
-    const counts = { mechanics: 0, chemistry: 0, certification: 0, msds: 0 };
+    const counts = { mechanics: 0, chemistry: 0, certification: 0, msds: 0, internal: 0 };
 
     if (folders && !folders.error) {
       folders.forEach(f => {
@@ -2938,6 +2947,9 @@ async function loadCertificates() {
     document.getElementById('cert-count-2').textContent = (counts.chemistry || 0) + '건';
     document.getElementById('cert-count-3').textContent = (counts.certification || 0) + '건';
     document.getElementById('cert-count-4').textContent = (counts.msds || 0) + '건';
+    
+    const count5 = document.getElementById('cert-count-5');
+    if (count5) count5.textContent = (counts.internal || 0) + '건';
 
   } catch (e) {
     console.error("데이터 로드 오류:", e);
@@ -2965,7 +2977,6 @@ async function handleCertUpload(input, folderId, category) {
 
   for (const file of Array.from(files)) {
     try {
-      // 💡 탭 5 전용 SB5, KEY5 로 업로드!
       const filePath = `${category}/${folderId}/${Date.now()}_${file.name}`;
       const storageUrl = `${SB5}/storage/v1/object/certificates/${filePath}`;
       
@@ -2997,7 +3008,7 @@ async function handleCertUpload(input, folderId, category) {
 }
 
 function renderFolderUI(category, folderId, folderName) {
-  const mapping = { mechanics: '1', chemistry: '2', certification: '3', msds: '4' };
+  const mapping = { mechanics: '1', chemistry: '2', certification: '3', msds: '4', internal: '5' };
   const container = document.getElementById(`cert-folders-${mapping[category]}`);
   if (!container) return;
 

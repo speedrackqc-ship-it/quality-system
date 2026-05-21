@@ -2690,97 +2690,185 @@ function initDashboard4() {
   var container = document.getElementById('v4-dashboard-root');
   if (!container) return;
 
-  // 1. 테이블이 들어갈 빈 껍데기를 만듭니다.
   container.innerHTML = `
     <div class="panel" style="margin-bottom:20px;">
-      <div class="panel-title" style="color: #3b82f6; font-size:16px;">🔍 1.5단계: 탭 4 Supabase 원본 데이터 (테이블 뷰)</div>
-      <p style="font-size:13px; color:#888; margin-bottom:12px;">DB에 있는 4개의 테이블 데이터를 가공 없이 그대로 표 형태로 보여줍니다. 가로로 스크롤하여 모든 항목을 확인하세요.</p>
-      <div id="v4-raw-tables" style="font-size:13px;">
-        <div style="padding:40px; text-align:center; color:#888;">데이터를 불러오는 중입니다... ⏳</div>
+      <div class="panel-title" style="color: #3b82f6; font-size:16px;">📊 2단계: 품목별 분류 데이터 (프레임, 합판, 경중량랙, ACC)</div>
+      <p style="font-size:13px; color:#888; margin-bottom:12px;">작업이력(날짜/색상 등)과 상세품목(수량 등)을 하나로 합친 뒤, 4가지 항목으로 분류하여 보여줍니다.</p>
+      <div id="v4-classified-tables" style="font-size:13px;">
+        <div style="padding:40px; text-align:center; color:#888;">데이터를 분류하고 있습니다... ⏳</div>
       </div>
     </div>
   `;
 
-  // 상태 표시줄 (로딩중)
   var dot = document.getElementById('dbDot4');
   var lbl = document.getElementById('dbLabel4');
   if (dot) dot.style.background = '#f97316';
-  if (lbl) lbl.textContent = '원본 테이블 로딩 중...';
+  if (lbl) lbl.textContent = '분류 데이터 로딩 중...';
 
-  // 2. 4개의 테이블에서 모든 컬럼('*')의 데이터를 가져옵니다.
   Promise.all([
     fetchAllRows4('frame_return_sessions', '*'),
     fetchAllRows4('rack_return_sessions', '*'),
     fetchAllRows4('frame_return_items', '*'),
     fetchAllRows4('rack_return_items', '*')
   ]).then(function(results) {
-    
-    // 가져온 데이터들을 배열로 정리
-    var tablesData = [
-      { title: '📁 1. frame_return_sessions (프레임 작업이력)', data: results[0] },
-      { title: '📁 2. rack_return_sessions (랙 작업이력)', data: results[1] },
-      { title: '📁 3. frame_return_items (프레임 상세품목)', data: results[2] },
-      { title: '📁 4. rack_return_items (랙 상세품목)', data: results[3] }
-    ];
+    var fSessions = results[0];
+    var rSessions = results[1];
+    var fItems = results[2];
+    var rItems = results[3];
 
-    var html = '';
-    
-    // 각 테이블 데이터를 HTML 표(table)로 변환
-    tablesData.forEach(function(tb) {
-      html += '<h3 style="margin-top:24px; margin-bottom:10px; font-size:15px; font-weight:bold; color:var(--text);">' + tb.title + ' <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + tb.data.length + '건)</span></h3>';
+    // 1. 세션(작업이력) 데이터 맵핑 (아이템과 합치기 위해 ID로 연결)
+    var fSessMap = {};
+    fSessions.forEach(function(s) { fSessMap[s.id] = s; });
+    var rSessMap = {};
+    rSessions.forEach(function(s) { rSessMap[s.id] = s; });
+
+    // 2. 4가지 분류를 담을 빈 바구니(배열) 준비
+    var arrFrame = [];
+    var arrPlywood = [];
+    var arrRack = [];
+    var arrACC = [];
+
+    // 3. 프레임 테이블의 아이템들을 분류 (프레임, 합판, ACC)
+    fItems.forEach(function(item) {
+      var sess = fSessMap[item.session_id] || {};
+      var cat = item.category || '';
       
-      if (tb.data.length === 0) {
-        html += '<div style="padding:16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">데이터가 없습니다.</div>';
-        return; 
+      var row = {
+        date: sess.inspection_date || '-',
+        color: sess.color || '-',
+        thickness: sess.thickness || '-',
+        category: cat,
+        size: item.size || '-',
+        received: item.received_quantity || 0,
+        normal: item.normal_quantity || 0, // 정상 수량
+        recycle: item.recycle_quantity || 0,
+        dispose: item.dispose_quantity || 0
+      };
+
+      // 카테고리 이름에 따라 바구니에 담기
+      if (cat.indexOf('합판') !== -1) {
+        arrPlywood.push(row);
+      } else if (cat.toUpperCase().indexOf('ACC') !== -1 || cat.indexOf('부속') !== -1) {
+        arrACC.push(row);
+      } else {
+        arrFrame.push(row);
+      }
+    });
+
+    // 4. 랙 테이블의 아이템들을 분류 (랙, 간혹 합판이 섞여있다면 합판으로)
+    rItems.forEach(function(item) {
+      var sess = rSessMap[item.session_id] || {};
+      var cat = item.category || '';
+      
+      var row = {
+        date: sess.inspection_date || '-',
+        category: cat,
+        product_type: item.product_type || item.item_type || '-',
+        size: item.specifications || item.size || '-',
+        received: item.received_quantity || 0,
+        normal: item.normal_quantity || 0,
+        recycle: item.recycle_quantity || 0,
+        dispose: item.dispose_quantity || 0
+      };
+
+      if (cat.indexOf('합판') !== -1) {
+        row.color = '-'; row.thickness = '-'; 
+        arrPlywood.push(row);
+      } else {
+        arrRack.push(row);
+      }
+    });
+
+    // 5. 표를 그려주는 도우미 함수 (코드를 깔끔하게)
+    function buildTable(title, columns, dataArray) {
+      var html = '<h3 style="margin-top:24px; margin-bottom:10px; font-size:15px; font-weight:bold; color:var(--text);">' + title + ' <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + dataArray.length + '건)</span></h3>';
+      if (dataArray.length === 0) {
+        return html + '<div style="padding:16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">해당하는 데이터가 없습니다.</div>';
       }
       
-      // 데이터에서 컬럼명(Header) 자동 추출
-      var headers = [];
-      tb.data.forEach(function(row) {
-        Object.keys(row).forEach(function(key) {
-          if (headers.indexOf(key) === -1) headers.push(key);
-        });
-      });
-
-      // 표 그리기 시작
       html += '<div class="table-wrap" style="margin-bottom:20px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:350px; overflow:auto;">';
-      html += '<table class="v4-raw-table" style="width:100%; white-space:nowrap; border-collapse:collapse;">';
+      html += '<table class="v4-raw-table" style="width:100%; white-space:nowrap; border-collapse:collapse;"><thead><tr>';
       
-      // 헤더(제목 줄) 만들기
-      html += '<thead><tr>';
-      headers.forEach(function(h) {
-        html += '<th style="background:#f8fafc; position:sticky; top:0; padding:10px 14px; border-bottom:1px solid #e2e8f0; color:#475569; font-weight:700; z-index:2;">' + h + '</th>';
+      columns.forEach(function(col) {
+        html += '<th style="background:#f8fafc; position:sticky; top:0; padding:10px 14px; border-bottom:1px solid #e2e8f0; color:#475569; font-weight:700; z-index:2;">' + col.label + '</th>';
       });
-      html += '</tr></thead>';
+      html += '</tr></thead><tbody>';
       
-      // 데이터(내용 줄) 만들기
-      html += '<tbody>';
-      tb.data.forEach(function(row) {
+      dataArray.forEach(function(row) {
         html += '<tr style="border-bottom:1px solid #f1f5f9;">';
-        headers.forEach(function(h) {
-          var val = (row[h] !== null && row[h] !== undefined) ? row[h] : '';
-          html += '<td style="padding:8px 14px; color:#334155;">' + val + '</td>';
+        columns.forEach(function(col) {
+          var val = row[col.key];
+          var isNum = typeof val === 'number';
+          var align = isNum ? 'right' : 'left'; // 숫자는 오른쪽 정렬
+          var displayVal = isNum ? val.toLocaleString() : val; // 숫자는 콤마(,) 표시
+          html += '<td style="padding:8px 14px; color:#334155; text-align:' + align + ';">' + displayVal + '</td>';
         });
         html += '</tr>';
       });
       html += '</tbody></table></div></div>';
-    });
+      return html;
+    }
 
-    // 완성된 HTML을 화면에 삽입
-    document.getElementById('v4-raw-tables').innerHTML = html;
+    var finalHtml = '';
+
+    // 🟦 1. 프레임 표 그리기
+    finalHtml += buildTable('🟦 1. 프레임 데이터', [
+      {label: '검수일자', key: 'date'},
+      {label: '색상', key: 'color'},
+      {label: '두께', key: 'thickness'},
+      {label: '품명', key: 'category'},
+      {label: '규격', key: 'size'},
+      {label: '입고수량', key: 'received'},
+      {label: '재활용수량', key: 'recycle'},
+      {label: '폐기수량', key: 'dispose'}
+    ], arrFrame);
+
+    // 🟫 2. 합판 표 그리기
+    finalHtml += buildTable('🟫 2. 합판 데이터', [
+      {label: '검수일자', key: 'date'},
+      {label: '품명/두께', key: 'category'},
+      {label: '규격(가로/세로)', key: 'size'},
+      {label: '입고수량', key: 'received'},
+      {label: '정상수량', key: 'normal'},
+      {label: '재활용수량', key: 'recycle'},
+      {label: '폐기수량', key: 'dispose'}
+    ], arrPlywood);
+
+    // 🗄️ 3. 경중량랙 표 그리기
+    finalHtml += buildTable('🗄️ 3. 경중량랙 데이터', [
+      {label: '검수일자', key: 'date'},
+      {label: '구분(경량/중량)', key: 'category'},
+      {label: '제품선택', key: 'product_type'},
+      {label: '규격', key: 'size'},
+      {label: '입고수량', key: 'received'},
+      {label: '재활용수량', key: 'recycle'},
+      {label: '폐기수량', key: 'dispose'}
+    ], arrRack);
+
+    // ⚙️ 4. ACC 표 그리기
+    finalHtml += buildTable('⚙️ 4. ACC 데이터', [
+      {label: '검수일자', key: 'date'},
+      {label: '카테고리', key: 'category'},
+      {label: '색상', key: 'color'},
+      {label: '규격', key: 'size'},
+      {label: '입고수량', key: 'received'},
+      {label: '재활용수량', key: 'recycle'},
+      {label: '폐기수량', key: 'dispose'}
+    ], arrACC);
+
+    document.getElementById('v4-classified-tables').innerHTML = finalHtml;
     
-    // 상태 표시줄 (완료)
     if (dot) dot.style.background = '#22c55e';
-    if (lbl) lbl.textContent = '원본 테이블 로드 완료!';
+    if (lbl) lbl.textContent = '분류 데이터 로드 완료!';
 
   }).catch(function(err) {
-    document.getElementById('v4-raw-tables').innerHTML = '<div style="color:red; padding:20px;">데이터를 불러오는 중 오류가 발생했습니다: ' + err.message + '</div>';
+    document.getElementById('v4-classified-tables').innerHTML = '<div style="color:red; padding:20px;">데이터를 불러오는 중 오류가 발생했습니다: ' + err.message + '</div>';
     if (dot) dot.style.background = '#ef4444';
     if (lbl) lbl.textContent = '데이터 로드 오류';
   });
 }
 
-// 탭 4 진입 시 초기화 실행 (안전 장치)
+// 탭 4 진입 시 초기화 실행
 if(document.readyState === 'loading'){
   document.addEventListener('DOMContentLoaded', initDashboard4);
 } else {

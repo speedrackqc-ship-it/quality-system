@@ -2153,8 +2153,8 @@ function initDashboard4() {
 
   container.innerHTML = `
     <div class="panel" style="margin-bottom:20px;">
-      <div class="panel-title" style="color: #3b82f6; font-size:16px;">📊 2.2단계: 품명에서 브랜드 분리</div>
-      <p style="font-size:13px; color:#888; margin-bottom:12px;">'스피드랙 받침'처럼 입력된 품명에서 앞글자를 떼어내 '제품명'으로 보내고, '품명'은 깔끔하게 정리했습니다.</p>
+      <div class="panel-title" style="color: #3b82f6; font-size:16px;">📊 2.3단계: 프레임 등록 데이터 전체 연동 및 제품명 보정</div>
+      <p style="font-size:13px; color:#888; margin-bottom:12px;">프레임 등록 테이블(frame_return_items)의 모든 데이터를 누락 없이 최신순으로 정렬하여 표시합니다.</p>
       <div id="v4-classified-tables" style="font-size:13px;">
         <div style="padding:40px; text-align:center; color:#888;">데이터를 분류하고 있습니다... ⏳</div>
       </div>
@@ -2190,30 +2190,25 @@ function initDashboard4() {
     fItems.forEach(function(item) {
       var sess = fSessMap[item.session_id] || {};
       var cat = item.category || '';
-      var thickStr = (sess.thickness || '').toString().toUpperCase();
+      var thickStr = (sess.thickness || '').toString().toUpperCase().trim();
       
+      // [보정] 두께 문자열에 공백이나 형식이 달라도 확실하게 찾을 수 있도록 indexOf로 변경
       var brandName = '-';
-      var cleanCat = cat; // 화면에 보여줄 깔끔한 품명 (기둥/받침)
-
-      // [핵심 변경] 품명에 적힌 브랜드 이름을 빼서 제품명으로 옮기고, 품명에서는 지워버립니다.
-      if (cat.indexOf('홈던트') !== -1 || cat.toUpperCase().indexOf('H하우스') !== -1) {
+      if (cat.indexOf('홈던트') !== -1 || cat.toUpperCase().indexOf('H하우스') !== -1 || thickStr.indexOf('V') !== -1) {
         brandName = '홈던트';
-        cleanCat = cat.replace(/홈던트|H하우스/gi, '').trim();
-      } else if (cat.indexOf('스피드랙') !== -1) {
+      } else if (cat.indexOf('스피드랙') !== -1 || thickStr.indexOf('120') !== -1 || thickStr.indexOf('160') !== -1 || thickStr.indexOf('200') !== -1) {
         brandName = '스피드랙';
-        cleanCat = cat.replace(/스피드랙/gi, '').trim();
-      } else {
-        // 혹시나 앞글자가 안 적혀 들어온 예외 데이터가 있다면 두께로 안전하게 보정
-        if (thickStr.indexOf('V') !== -1) brandName = '홈던트';
-        else if (thickStr === '120' || thickStr === '160' || thickStr === '200') brandName = '스피드랙';
       }
+      
+      // 품명에서 브랜드명 제외하고 깔끔하게 만들기
+      var cleanCat = cat.replace(/홈던트|H하우스|스피드랙/gi, '').trim();
       
       var row = {
         date: sess.inspection_date || '-',
         color: sess.color || '-',
         brand: brandName,
         thickness: sess.thickness || '-',
-        category: cleanCat, // 글자가 잘려나간 깔끔한 품명
+        category: cleanCat, 
         size: item.size || '-',
         received: item.received_quantity || 0,
         normal: item.normal_quantity || 0,
@@ -2221,11 +2216,13 @@ function initDashboard4() {
         dispose: item.dispose_quantity || 0
       };
 
+      // 1. 합판과 ACC 분류를 먼저 거릅니다.
       if (cat.indexOf('합판') !== -1) {
         arrPlywood.push(row);
       } else if (cat.toUpperCase().indexOf('ACC') !== -1 || cat.indexOf('부속') !== -1) {
         arrACC.push(row);
-      } else if (cat.indexOf('받침') !== -1 || cat.indexOf('기둥') !== -1) {
+      } else {
+        // [핵심 변경] 단어 제한(기둥/받침)을 없애고, 프레임 등록 데이터 테이블에 있던 항목은 전부 프레임으로 보냅니다!
         arrFrame.push(row);
       }
     });
@@ -2253,6 +2250,7 @@ function initDashboard4() {
       }
     });
 
+    // 프레임 데이터를 검수일자 기준 최신순 정렬
     arrFrame.sort(function(a, b) {
       var dateA = a.date === '-' ? '' : a.date;
       var dateB = b.date === '-' ? '' : b.date;

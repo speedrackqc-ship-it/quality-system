@@ -2731,7 +2731,7 @@ function initDashboard4() {
       
       if (tb.data.length === 0) {
         html += '<div style="padding:16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">데이터가 없습니다.</div>';
-        return; // 데이터가 없으면 표를 그리지 않고 넘어감
+        return; 
       }
       
       // 데이터에서 컬럼명(Header) 자동 추출
@@ -2778,6 +2778,13 @@ function initDashboard4() {
     if (dot) dot.style.background = '#ef4444';
     if (lbl) lbl.textContent = '데이터 로드 오류';
   });
+}
+
+// 탭 4 진입 시 초기화 실행 (안전 장치)
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', initDashboard4);
+} else {
+  initDashboard4();
 }
 
 // ===================================================

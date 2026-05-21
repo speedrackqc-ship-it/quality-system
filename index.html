@@ -2147,19 +2147,54 @@ function fetchAllRows4(table, extraSelect) {
 
 // 기존의 initDashboard4 함수를 이걸로 통째로 교체하세요!
 // 기존의 initDashboard4 함수를 이 코드로 통째로 교체(덮어쓰기) 하세요!
+// 기존의 initDashboard4 함수를 이 코드로 통째로 교체(덮어쓰기) 하세요!
 function initDashboard4() {
   var container = document.getElementById('v4-dashboard-root');
   if (!container) return;
 
+  // 1. 상단에 서브 탭 버튼(프레임 / ACC)이 포함된 기본 틀을 짜줍니다.
   container.innerHTML = `
     <div class="panel" style="margin-bottom:20px;">
-      <div class="panel-title" style="color: #3b82f6; font-size:16px;">📊 [등록-프레임등록-프레임] 데이터 현황 (ACC 전체 항목 확장)</div>
-      <p style="font-size:13px; color:#888; margin-bottom:12px;">프레임은 지정된 양식으로, ACC는 남겨진 데이터 내의 '모든 항목(컬럼)'을 있는 그대로 확장하여 보여줍니다.</p>
-      <div id="v4-classified-tables" style="font-size:13px;">
-        <div style="padding:40px; text-align:center; color:#888;">데이터를 분석하여 표를 생성하고 있습니다... ⏳</div>
+      <div class="panel-title" style="color: #3b82f6; font-size:16px;">📊 [등록-프레임등록-프레임] 실시간 관리현황</div>
+      <p style="font-size:13px; color:#888; margin-bottom:16px;">원하시는 제품 탭을 클릭하면 Supabase에서 동기화된 해당 등록 내역만 전환되어 표시됩니다.</p>
+      
+      <div style="display:flex; gap:8px; margin-bottom:20px; border-bottom:1px solid #e2e8f0; padding-bottom:12px;">
+        <button id="v4-subtab-frame" onclick="v4SwitchSubTab('frame')" 
+          style="padding:8px 18px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; border:none; background:#3b82f6; color:#fff; transition:all 0.15s;">
+          🟦 프레임 등록 내역
+        </button>
+        <button id="v4-subtab-acc" onclick="v4SwitchSubTab('acc')" 
+          style="padding:8px 18px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; border:1px solid #d0d7de; background:#fff; color:#555; transition:all 0.15s;">
+          ⚙️ ACC 등록 내역
+        </button>
       </div>
+
+      <div id="v4-pane-frame-box" style="display:block;"></div>
+      <div id="v4-pane-acc-box" style="display:none;"></div>
     </div>
   `;
+
+  // 서브 탭을 수동으로 전환할 수 있는 전역 함수를 정의합니다. (버튼 클릭 시 작동)
+  window.v4SwitchSubTab = function(subType) {
+    var btnFrame = document.getElementById('v4-subtab-frame');
+    var btnAcc = document.getElementById('v4-subtab-acc');
+    var boxFrame = document.getElementById('v4-pane-frame-box');
+    var boxAcc = document.getElementById('v4-pane-acc-box');
+    
+    if (!btnFrame || !btnAcc || !boxFrame || !boxAcc) return;
+
+    if (subType === 'frame') {
+      // 프레임 활성화 스타일
+      btnFrame.style.background = '#3b82f6'; btnFrame.style.color = '#fff'; btnFrame.style.border = 'none';
+      btnAcc.style.background = '#fff'; btnAcc.style.color = '#555'; btnAcc.style.border = '1px solid #d0d7de';
+      boxFrame.style.display = 'block'; boxAcc.style.display = 'none';
+    } else {
+      // ACC 활성화 스타일
+      btnAcc.style.background = '#10b981'; btnAcc.style.color = '#fff'; btnAcc.style.border = 'none';
+      btnFrame.style.background = '#fff'; btnFrame.style.color = '#555'; btnFrame.style.border = '1px solid #d0d7de';
+      boxFrame.style.display = 'none'; boxAcc.style.display = 'block';
+    }
+  };
 
   var dot = document.getElementById('dbDot4');
   var lbl = document.getElementById('dbLabel4');
@@ -2188,7 +2223,6 @@ function initDashboard4() {
       var cat = item.category || '';
       var thickStr = (sess.thickness || '').toString().toUpperCase().trim();
       
-      // 1. 프레임(기둥/받침)인 경우 - 정해진 규격 양식대로 수집
       if (cat.indexOf('받침') !== -1 || cat.indexOf('기둥') !== -1) {
         var brandName = '-';
         var cleanCat = cat;
@@ -2215,9 +2249,7 @@ function initDashboard4() {
           recycle: item.recycle_quantity || 0,
           dispose: item.dispose_quantity || 0
         });
-      } 
-      // 2. 추려지고 남은 ACC인 경우 - 원본 모든 필드 유지 + 중요 이력 데이터 병합
-      else {
+      } else {
         var fullACCItem = Object.assign({}, item, {
           '검수일자': sess.inspection_date || '-',
           '색상(이력)': sess.color || '-',
@@ -2233,89 +2265,77 @@ function initDashboard4() {
       }
     });
 
-    // 최신 검수일자 순서로 정렬
+    // 최신순 정렬
     arrFrame.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
     arrACC.sort(function(a, b) { return (b['검수일자'] || '').localeCompare(a['검수일자'] || ''); });
 
-    var finalHtml = '';
-
     // ==========================================
-    // 🟦 표 1. 프레임 등록 내역
+    // 🟦 1. 프레임 HTML 데이터 생성 및 주입
     // ==========================================
-    finalHtml += '<h3 style="margin-top:20px; margin-bottom:10px; font-size:15px; font-weight:bold; color:var(--text);">🟦 프레임 등록 내역 (기둥/받침) <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrFrame.length + '건)</span></h3>';
+    var htmlFrame = '<h3 style="margin-bottom:10px; font-size:15px; font-weight:bold; color:var(--text);">🟦 프레임 등록 내역 (기둥/받침) <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrFrame.length + '건)</span></h3>';
     if (arrFrame.length === 0) {
-      finalHtml += '<div style="padding:24px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888; margin-bottom:20px;">내역이 존재하지 않습니다.</div>';
+      htmlFrame += '<div style="padding:24px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">내역이 존재하지 않습니다.</div>';
     } else {
-      finalHtml += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:350px; overflow:auto;">';
-      finalHtml += '<table class="v4-raw-table" style="width:100%; white-space:nowrap; border-collapse:collapse;"><thead><tr>';
-      
+      htmlFrame += '<div class="table-wrap" style="border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:450px; overflow:auto;">';
+      htmlFrame += '<table class="v4-raw-table" style="width:100%; white-space:nowrap; border-collapse:collapse;"><thead><tr>';
       var fCols = [
         {l:'검수일자', k:'date'}, {l:'색상', k:'color'}, {l:'제품명', k:'brand'}, {l:'두께', k:'thickness'},
         {l:'품명', k:'category'}, {l:'규격', k:'size'}, {l:'입고수량', k:'received'}, {l:'재활용수량', k:'recycle'}, {l:'폐기수량', k:'dispose'}
       ];
-      
-      fCols.forEach(function(col) { 
-        finalHtml += '<th style="background:#f8fafc; position:sticky; top:0; padding:10px 14px; border-bottom:1px solid #e2e8f0; color:#475569; font-weight:700; z-index:2;">' + col.l + '</th>'; 
-      });
-      finalHtml += '</tr></thead><tbody>';
-      
+      fCols.forEach(function(col) { htmlFrame += '<th style="background:#f8fafc; position:sticky; top:0; padding:10px 14px; border-bottom:1px solid #e2e8f0; color:#475569; font-weight:700; z-index:2;">' + col.l + '</th>'; });
+      htmlFrame += '</tr></thead><tbody>';
       arrFrame.forEach(function(row) {
-        finalHtml += '<tr style="border-bottom:1px solid #f1f5f9;">';
+        htmlFrame += '<tr style="border-bottom:1px solid #f1f5f9;">';
         fCols.forEach(function(col) {
           var val = row[col.k];
           var isNum = typeof val === 'number';
-          finalHtml += '<td style="padding:8px 14px; color:#334155; text-align:' + (isNum?'right':'left') + ';">' + (isNum?val.toLocaleString():val) + '</td>';
+          htmlFrame += '<td style="padding:8px 14px; color:#334155; text-align:' + (isNum?'right':'left') + ';">' + (isNum?val.toLocaleString():val) + '</td>';
         });
-        finalHtml += '</tr>';
+        htmlFrame += '</tr>';
       });
-      finalHtml += '</tbody></table></div></div>';
+      htmlFrame += '</tbody></table></div></div>';
     }
+    document.getElementById('v4-pane-frame-box').innerHTML = htmlFrame;
 
     // ==========================================
-    // ⚙️ 표 2. ACC 등록 내역 (모든 컬럼 동적 추출형)
+    // ⚙️ 2. ACC HTML 데이터 생성 및 주입
     // ==========================================
-    finalHtml += '<h3 style="margin-top:28px; margin-bottom:10px; font-size:15px; font-weight:bold; color:var(--text);">⚙️ ACC 등록 내역 (남겨진 데이터 원본 항목 전체) <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrACC.length + '건)</span></h3>';
-    
+    var htmlACC = '<h3 style="margin-bottom:10px; font-size:15px; font-weight:bold; color:var(--text);">⚙️ ACC 등록 내역 (남겨진 데이터 원본 항목 전체) <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrACC.length + '건)</span></h3>';
     if (arrACC.length === 0) {
-      finalHtml += '<div style="padding:24px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888; margin-bottom:20px;">ACC 내역이 존재하지 않습니다.</div>';
+      htmlACC += '<div style="padding:24px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">ACC 내역이 존재하지 않습니다.</div>';
     } else {
       var accHeaders = ['검수일자', '색상(이력)', '두께(이력)'];
       arrACC.forEach(function(row) {
         Object.keys(row).forEach(function(key) {
-          if (accHeaders.indexOf(key) === -1) {
-            accHeaders.push(key); 
-          }
+          if (accHeaders.indexOf(key) === -1) { accHeaders.push(key); }
         });
       });
 
-      finalHtml += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:450px; overflow:auto;">';
-      finalHtml += '<table class="v4-raw-table" style="width:100%; white-space:nowrap; border-collapse:collapse;"><thead><tr>';
-      
+      htmlACC += '<div class="table-wrap" style="border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:450px; overflow:auto;">';
+      htmlACC += '<table class="v4-raw-table" style="width:100%; white-space:nowrap; border-collapse:collapse;"><thead><tr>';
       accHeaders.forEach(function(h) {
-        finalHtml += '<th style="background:#f8fafc; position:sticky; top:0; padding:10px 14px; border-bottom:1px solid #e2e8f0; color:#0f766e; font-weight:700; z-index:2;">' + h + '</th>';
+        htmlACC += '<th style="background:#f8fafc; position:sticky; top:0; padding:10px 14px; border-bottom:1px solid #e2e8f0; color:#0f766e; font-weight:700; z-index:2;">' + h + '</th>';
       });
-      finalHtml += '</tr></thead><tbody>';
-      
+      htmlACC += '</tr></thead><tbody>';
       arrACC.forEach(function(row) {
-        finalHtml += '<tr style="border-bottom:1px solid #f1f5f9;">';
+        htmlACC += '<tr style="border-bottom:1px solid #f1f5f9;">';
         accHeaders.forEach(function(h) {
           var val = (row[h] !== null && row[h] !== undefined) ? row[h] : '-';
           var isNum = typeof val === 'number';
-          finalHtml += '<td style="padding:8px 14px; color:#334155; text-align:' + (isNum?'right':'left') + ';">' + (isNum?val.toLocaleString():val) + '</td>';
+          htmlACC += '<td style="padding:8px 14px; color:#334155; text-align:' + (isNum?'right':'left') + ';">' + (isNum?val.toLocaleString():val) + '</td>';
         });
-        finalHtml += '</tr>';
+        htmlACC += '</tr>';
       });
-      finalHtml += '</tbody></table></div></div>';
+      htmlACC += '</tbody></table></div></div>';
     }
-
-    document.getElementById('v4-classified-tables').innerHTML = finalHtml;
+    document.getElementById('v4-pane-acc-box').innerHTML = htmlACC;
     
     if (dot) dot.style.background = '#22c55e';
     if (lbl) lbl.textContent = '데이터 처리 완료';
 
   }).catch(function(err) {
     console.error(err);
-    document.getElementById('v4-classified-tables').innerHTML = '<div style="color:red; padding:20px;">데이터 처리 중 오류 발생: ' + err.message + '</div>';
+    document.getElementById('v4-pane-frame-box').innerHTML = '<div style="color:red; padding:20px;">데이터 처리 중 오류 발생: ' + err.message + '</div>';
     if (dot) dot.style.background = '#ef4444';
     if (lbl) lbl.textContent = '오류 발생';
   });

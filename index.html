@@ -2147,12 +2147,10 @@ function fetchAllRows4(table, extraSelect) {
 
 // 기존의 initDashboard4 함수를 이걸로 통째로 교체하세요!
 // 기존의 initDashboard4 함수를 이 코드로 통째로 교체(덮어쓰기) 하세요!
-// 기존의 initDashboard4 함수를 이 코드로 통째로 교체(덮어쓰기) 하세요!
 function initDashboard4() {
   var container = document.getElementById('v4-dashboard-root');
   if (!container) return;
 
-  // 1. 상단에 서브 탭 버튼(프레임 / ACC)이 포함된 기본 틀을 짜줍니다.
   container.innerHTML = `
     <div class="panel" style="margin-bottom:20px;">
       <div class="panel-title" style="color: #3b82f6; font-size:16px;">📊 [등록-프레임등록-프레임] 실시간 관리현황</div>
@@ -2174,7 +2172,6 @@ function initDashboard4() {
     </div>
   `;
 
-  // 서브 탭을 수동으로 전환할 수 있는 전역 함수를 정의합니다. (버튼 클릭 시 작동)
   window.v4SwitchSubTab = function(subType) {
     var btnFrame = document.getElementById('v4-subtab-frame');
     var btnAcc = document.getElementById('v4-subtab-acc');
@@ -2184,12 +2181,10 @@ function initDashboard4() {
     if (!btnFrame || !btnAcc || !boxFrame || !boxAcc) return;
 
     if (subType === 'frame') {
-      // 프레임 활성화 스타일
       btnFrame.style.background = '#3b82f6'; btnFrame.style.color = '#fff'; btnFrame.style.border = 'none';
       btnAcc.style.background = '#fff'; btnAcc.style.color = '#555'; btnAcc.style.border = '1px solid #d0d7de';
       boxFrame.style.display = 'block'; boxAcc.style.display = 'none';
     } else {
-      // ACC 활성화 스타일
       btnAcc.style.background = '#10b981'; btnAcc.style.color = '#fff'; btnAcc.style.border = 'none';
       btnFrame.style.background = '#fff'; btnFrame.style.color = '#555'; btnFrame.style.border = '1px solid #d0d7de';
       boxFrame.style.display = 'none'; boxAcc.style.display = 'block';
@@ -2216,6 +2211,9 @@ function initDashboard4() {
     var arrFrame = []; 
     var arrACC = [];   
 
+    // 중량 수량 합산을 위한 해시 맵 객체 생성
+    var frameGroupMap = {};
+
     fItems.forEach(function(item) {
       if (!item) return;
       
@@ -2238,6 +2236,11 @@ function initDashboard4() {
           else if (thickStr === '120' || thickStr === '160' || thickStr === '200') brandName = '스피드랙';
         }
 
+        var rQty = item.received_quantity || 0;
+        var cQty = item.recycle_quantity || 0;
+        var dQty = item.dispose_quantity || 0;
+
+        // 1) 상세 내역용 데이터 저장
         arrFrame.push({
           date: sess.inspection_date || '-',
           color: sess.color || '-',
@@ -2245,10 +2248,29 @@ function initDashboard4() {
           thickness: sess.thickness || '-',
           category: cleanCat || cat,
           size: item.size || '-',
-          received: item.received_quantity || 0,
-          recycle: item.recycle_quantity || 0,
-          dispose: item.dispose_quantity || 0
+          received: rQty,
+          recycle: cQty,
+          dispose: dQty
         });
+
+        // 2) 중복 합산용 키 생성 (기준: 제품명 + 품명 + 두께 + 규격)
+        var groupKey = brandName + '|' + cleanCat + '|' + (sess.thickness || '-') + '|' + (item.size || '-');
+        if (!frameGroupMap[groupKey]) {
+          frameGroupMap[groupKey] = {
+            brand: brandName,
+            category: cleanCat,
+            thickness: sess.thickness || '-',
+            size: item.size || '-',
+            received: 0,
+            recycle: 0,
+            dispose: 0
+          };
+        }
+        // 동일 품목 발견 시 수량 누적 합산
+        frameGroupMap[groupKey].received += rQty;
+        frameGroupMap[groupKey].recycle += cQty;
+        frameGroupMap[groupKey].dispose += dQty;
+
       } else {
         var fullACCItem = Object.assign({}, item, {
           '검수일자': sess.inspection_date || '-',
@@ -2265,18 +2287,26 @@ function initDashboard4() {
       }
     });
 
-    // 최신순 정렬
+    // 상세 내역은 날짜 기준 최신순 정렬
     arrFrame.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
     arrACC.sort(function(a, b) { return (b['검수일자'] || '').localeCompare(a['검수일자'] || ''); });
 
+    // 맵 객체를 배열로 변환 후 정렬 (기준: 제품명 오름차순, 품명 오름차순, 두께, 규격 순)
+    var arrFrameGrouped = Object.values(frameGroupMap).sort(function(a, b) {
+      if (a.brand !== b.brand) return b.brand.localeCompare(a.brand); // 스피드랙 우선 배치
+      if (a.category !== b.category) return a.category.localeCompare(b.category);
+      if (a.thickness !== b.thickness) return String(a.thickness).localeCompare(String(b.thickness));
+      return String(a.size).localeCompare(String(b.size));
+    });
+
     // ==========================================
-    // 🟦 1. 프레임 HTML 데이터 생성 및 주입
+    // 🟦 1. 프레임 HTML 데이터 생성 및 주입 (합산 표 추가)
     // ==========================================
-    var htmlFrame = '<h3 style="margin-bottom:10px; font-size:15px; font-weight:bold; color:var(--text);">🟦 프레임 등록 내역 (기둥/받침) <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrFrame.length + '건)</span></h3>';
+    var htmlFrame = '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">🟦 1-1. 프레임 일자별 상세 내역 <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrFrame.length + '건)</span></h3>';
     if (arrFrame.length === 0) {
-      htmlFrame += '<div style="padding:24px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">내역이 존재하지 않습니다.</div>';
+      htmlFrame += '<div style="padding:24px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888; margin-bottom:20px;">내역이 존재하지 않습니다.</div>';
     } else {
-      htmlFrame += '<div class="table-wrap" style="border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:450px; overflow:auto;">';
+      htmlFrame += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:300px; overflow:auto;">';
       htmlFrame += '<table class="v4-raw-table" style="width:100%; white-space:nowrap; border-collapse:collapse;"><thead><tr>';
       var fCols = [
         {l:'검수일자', k:'date'}, {l:'색상', k:'color'}, {l:'제품명', k:'brand'}, {l:'두께', k:'thickness'},
@@ -2295,12 +2325,43 @@ function initDashboard4() {
       });
       htmlFrame += '</tbody></table></div></div>';
     }
+
+    // ⭐ [핵심 추가] 중복 데이터가 조건별로 합산된 별도 집계 요약 표 마크업 생성
+    htmlFrame += '<h3 style="margin-top:32px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📊 1-2. 프레임 품목별 누적 합계 현황 (중복 수량 합산) <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrFrameGrouped.length + '개 품목)</span></h3>';
+    htmlFrame += '<div class="table-wrap" style="border:1px solid #e2e8f0; border-radius:8px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);"><div class="table-scroll" style="max-height:450px; overflow:auto;">';
+    htmlFrame += '<table class="v4-raw-table" style="width:100%; white-space:nowrap; border-collapse:collapse;"><thead><tr>';
+    var groupCols = [
+      {l:'제품명(브랜드)', k:'brand'}, {l:'품명', k:'category'}, {l:'두께', k:'thickness'}, {l:'규격', k:'size'},
+      {l:'누적 입고수량', k:'received'}, {l:'누적 재활용수량', k:'recycle'}, {l:'누적 폐기수량', k:'dispose'}
+    ];
+    groupCols.forEach(function(col) {
+      var thColor = col.k === 'brand' ? '#0969da' : '#475569';
+      finalHtml += '<th style="background:#f4f7fa; position:sticky; top:0; padding:12px 14px; border-bottom:2px solid #d0d7de; color:'+ thColor +'; font-weight:800; z-index:2;">' + col.l + '</th>';
+    });
+    htmlFrame += finalHtml; 
+    finalHtml = ''; // 초기화
+    
+    htmlFrame += '</tr></thead><tbody>';
+    arrFrameGrouped.forEach(function(row) {
+      var brandColor = row.brand === '스피드랙' ? '#0969da' : '#6e40c9';
+      htmlFrame += '<tr style="border-bottom:1px solid #e2e8f0; background:#fff;">';
+      htmlFrame += '<td style="padding:10px 14px; color:'+ brandColor +'; font-weight:700;">' + row.brand + '</td>';
+      htmlFrame += '<td style="padding:10px 14px; color:#24292f; font-weight:600;">' + row.category + '</td>';
+      htmlFrame += '<td style="padding:10px 14px; color:#57606a;" class="td-mono">' + row.thickness + '</td>';
+      htmlFrame += '<td style="padding:10px 14px; color:#0969da; font-weight:600;" class="td-mono">' + row.size + '</td>';
+      htmlFrame += '<td style="padding:10px 14px; text-align:right; font-weight:700; color:#1a7f37;" class="td-mono">' + row.received.toLocaleString() + '</td>';
+      htmlFrame += '<td style="padding:10px 14px; text-align:right; font-weight:700; color:#9a6700;" class="td-mono">' + row.recycle.toLocaleString() + '</td>';
+      htmlFrame += '<td style="padding:10px 14px; text-align:right; font-weight:700; color:#cf222e;" class="td-mono">' + row.dispose.toLocaleString() + '</td>';
+      htmlFrame += '</tr>';
+    });
+    htmlFrame += '</tbody></table></div></div>';
+    
     document.getElementById('v4-pane-frame-box').innerHTML = htmlFrame;
 
     // ==========================================
     // ⚙️ 2. ACC HTML 데이터 생성 및 주입
     // ==========================================
-    var htmlACC = '<h3 style="margin-bottom:10px; font-size:15px; font-weight:bold; color:var(--text);">⚙️ ACC 등록 내역 (남겨진 데이터 원본 항목 전체) <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrACC.length + '건)</span></h3>';
+    var htmlACC = '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">⚙️ ACC 등록 내역 (남겨진 데이터 원본 항목 전체) <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrACC.length + '건)</span></h3>';
     if (arrACC.length === 0) {
       htmlACC += '<div style="padding:24px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">ACC 내역이 존재하지 않습니다.</div>';
     } else {

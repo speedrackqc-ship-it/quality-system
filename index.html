@@ -2685,50 +2685,96 @@ function buildViewPane4(view){
 }
 
 // 기존의 initDashboard4 함수를 이걸로 통째로 교체하세요!
+// 기존의 initDashboard4 함수를 이걸로 통째로 교체하세요!
 function initDashboard4() {
   var container = document.getElementById('v4-dashboard-root');
   if (!container) return;
 
-  // 1. 기존의 복잡한 화면 대신, 검은색 코드 창(미리보기)을 만듭니다.
+  // 1. 테이블이 들어갈 빈 껍데기를 만듭니다.
   container.innerHTML = `
     <div class="panel" style="margin-bottom:20px;">
-      <div class="panel-title" style="color: #3b82f6; font-size:16px;">🔍 1단계: 탭 4 Supabase 원본 데이터 (Raw Data)</div>
-      <p style="font-size:13px; color:#888; margin-bottom:12px;">아래는 탭 4에서 사용되는 4개의 테이블에서 방금 가져온 가공 전 날것의 데이터입니다.</p>
-      <div id="v4-raw-dump" style="background:#1e293b; color:#a5b4fc; padding:16px; border-radius:8px; overflow:auto; max-height:600px; font-size:12px; font-family: 'JetBrains Mono', monospace;">
-        데이터를 불러오는 중입니다... ⏳
+      <div class="panel-title" style="color: #3b82f6; font-size:16px;">🔍 1.5단계: 탭 4 Supabase 원본 데이터 (테이블 뷰)</div>
+      <p style="font-size:13px; color:#888; margin-bottom:12px;">DB에 있는 4개의 테이블 데이터를 가공 없이 그대로 표 형태로 보여줍니다. 가로로 스크롤하여 모든 항목을 확인하세요.</p>
+      <div id="v4-raw-tables" style="font-size:13px;">
+        <div style="padding:40px; text-align:center; color:#888;">데이터를 불러오는 중입니다... ⏳</div>
       </div>
     </div>
   `;
 
-  // 상태 표시줄 업데이트 (로딩중)
+  // 상태 표시줄 (로딩중)
   var dot = document.getElementById('dbDot4');
   var lbl = document.getElementById('dbLabel4');
   if (dot) dot.style.background = '#f97316';
-  if (lbl) lbl.textContent = '원본 데이터 로딩 중...';
+  if (lbl) lbl.textContent = '원본 테이블 로딩 중...';
 
-  // 2. Supabase에서 데이터 직접 가져와서 화면에 뿌리기
+  // 2. 4개의 테이블에서 모든 컬럼('*')의 데이터를 가져옵니다.
   Promise.all([
-    fetchAllRows4('frame_return_sessions', 'id,inspection_date,color,thickness'),
-    fetchAllRows4('rack_return_sessions', 'id,inspection_date'),
+    fetchAllRows4('frame_return_sessions', '*'),
+    fetchAllRows4('rack_return_sessions', '*'),
     fetchAllRows4('frame_return_items', '*'),
     fetchAllRows4('rack_return_items', '*')
   ]).then(function(results) {
-    // 가져온 데이터를 묶어줍니다.
-    var rawData = {
-      "frame_return_sessions (프레임 작업이력)": results[0],
-      "rack_return_sessions (랙 작업이력)": results[1],
-      "frame_return_items (프레임 상세품목)": results[2],
-      "rack_return_items (랙 상세품목)": results[3]
-    };
     
-    // 검은색 창 안에 데이터를 텍스트로 변환해서 출력합니다.
-    document.getElementById('v4-raw-dump').textContent = JSON.stringify(rawData, null, 2);
+    // 가져온 데이터들을 배열로 정리
+    var tablesData = [
+      { title: '📁 1. frame_return_sessions (프레임 작업이력)', data: results[0] },
+      { title: '📁 2. rack_return_sessions (랙 작업이력)', data: results[1] },
+      { title: '📁 3. frame_return_items (프레임 상세품목)', data: results[2] },
+      { title: '📁 4. rack_return_items (랙 상세품목)', data: results[3] }
+    ];
+
+    var html = '';
     
-    // 상태 표시줄 업데이트 (완료)
+    // 각 테이블 데이터를 HTML 표(table)로 변환
+    tablesData.forEach(function(tb) {
+      html += '<h3 style="margin-top:24px; margin-bottom:10px; font-size:15px; font-weight:bold; color:var(--text);">' + tb.title + ' <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + tb.data.length + '건)</span></h3>';
+      
+      if (tb.data.length === 0) {
+        html += '<div style="padding:16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">데이터가 없습니다.</div>';
+        return; // 데이터가 없으면 표를 그리지 않고 넘어감
+      }
+      
+      // 데이터에서 컬럼명(Header) 자동 추출
+      var headers = [];
+      tb.data.forEach(function(row) {
+        Object.keys(row).forEach(function(key) {
+          if (headers.indexOf(key) === -1) headers.push(key);
+        });
+      });
+
+      // 표 그리기 시작
+      html += '<div class="table-wrap" style="margin-bottom:20px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:350px; overflow:auto;">';
+      html += '<table class="v4-raw-table" style="width:100%; white-space:nowrap; border-collapse:collapse;">';
+      
+      // 헤더(제목 줄) 만들기
+      html += '<thead><tr>';
+      headers.forEach(function(h) {
+        html += '<th style="background:#f8fafc; position:sticky; top:0; padding:10px 14px; border-bottom:1px solid #e2e8f0; color:#475569; font-weight:700; z-index:2;">' + h + '</th>';
+      });
+      html += '</tr></thead>';
+      
+      // 데이터(내용 줄) 만들기
+      html += '<tbody>';
+      tb.data.forEach(function(row) {
+        html += '<tr style="border-bottom:1px solid #f1f5f9;">';
+        headers.forEach(function(h) {
+          var val = (row[h] !== null && row[h] !== undefined) ? row[h] : '';
+          html += '<td style="padding:8px 14px; color:#334155;">' + val + '</td>';
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table></div></div>';
+    });
+
+    // 완성된 HTML을 화면에 삽입
+    document.getElementById('v4-raw-tables').innerHTML = html;
+    
+    // 상태 표시줄 (완료)
     if (dot) dot.style.background = '#22c55e';
-    if (lbl) lbl.textContent = '원본 데이터 로드 완료!';
+    if (lbl) lbl.textContent = '원본 테이블 로드 완료!';
+
   }).catch(function(err) {
-    document.getElementById('v4-raw-dump').textContent = '데이터를 불러오는 중 오류가 발생했습니다:\n' + err.message;
+    document.getElementById('v4-raw-tables').innerHTML = '<div style="color:red; padding:20px;">데이터를 불러오는 중 오류가 발생했습니다: ' + err.message + '</div>';
     if (dot) dot.style.background = '#ef4444';
     if (lbl) lbl.textContent = '데이터 로드 오류';
   });

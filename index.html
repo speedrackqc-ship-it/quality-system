@@ -2146,14 +2146,15 @@ function fetchAllRows4(table, extraSelect) {
 }
 
 // 기존의 initDashboard4 함수를 이걸로 통째로 교체하세요!
+// 기존의 initDashboard4 함수를 이걸로 통째로 교체하세요!
 function initDashboard4() {
   var container = document.getElementById('v4-dashboard-root');
   if (!container) return;
 
   container.innerHTML = `
     <div class="panel" style="margin-bottom:20px;">
-      <div class="panel-title" style="color: #3b82f6; font-size:16px;">📊 2.2단계: 프레임 데이터 필터 및 제품명(브랜드) 추가</div>
-      <p style="font-size:13px; color:#888; margin-bottom:12px;">프레임 품목에서 '홈던트'와 '스피드랙'을 자동 구분하여 색상 옆에 제품명으로 표시합니다.</p>
+      <div class="panel-title" style="color: #3b82f6; font-size:16px;">📊 2.2단계: 품명에서 브랜드 분리</div>
+      <p style="font-size:13px; color:#888; margin-bottom:12px;">'스피드랙 받침'처럼 입력된 품명에서 앞글자를 떼어내 '제품명'으로 보내고, '품명'은 깔끔하게 정리했습니다.</p>
       <div id="v4-classified-tables" style="font-size:13px;">
         <div style="padding:40px; text-align:center; color:#888;">데이터를 분류하고 있습니다... ⏳</div>
       </div>
@@ -2189,21 +2190,30 @@ function initDashboard4() {
     fItems.forEach(function(item) {
       var sess = fSessMap[item.session_id] || {};
       var cat = item.category || '';
+      var thickStr = (sess.thickness || '').toString().toUpperCase();
       
-      // [핵심 추가] 품명에서 '홈던트' 또는 '스피드랙' 단어를 찾아 브랜드(제품명)를 추출합니다.
       var brandName = '-';
+      var cleanCat = cat; // 화면에 보여줄 깔끔한 품명 (기둥/받침)
+
+      // [핵심 변경] 품명에 적힌 브랜드 이름을 빼서 제품명으로 옮기고, 품명에서는 지워버립니다.
       if (cat.indexOf('홈던트') !== -1 || cat.toUpperCase().indexOf('H하우스') !== -1) {
         brandName = '홈던트';
+        cleanCat = cat.replace(/홈던트|H하우스/gi, '').trim();
       } else if (cat.indexOf('스피드랙') !== -1) {
         brandName = '스피드랙';
+        cleanCat = cat.replace(/스피드랙/gi, '').trim();
+      } else {
+        // 혹시나 앞글자가 안 적혀 들어온 예외 데이터가 있다면 두께로 안전하게 보정
+        if (thickStr.indexOf('V') !== -1) brandName = '홈던트';
+        else if (thickStr === '120' || thickStr === '160' || thickStr === '200') brandName = '스피드랙';
       }
       
       var row = {
         date: sess.inspection_date || '-',
         color: sess.color || '-',
-        brand: brandName, // <-- 추출한 제품명을 row에 추가합니다.
+        brand: brandName,
         thickness: sess.thickness || '-',
-        category: cat,
+        category: cleanCat, // 글자가 잘려나간 깔끔한 품명
         size: item.size || '-',
         received: item.received_quantity || 0,
         normal: item.normal_quantity || 0,
@@ -2243,7 +2253,6 @@ function initDashboard4() {
       }
     });
 
-    // 프레임 데이터를 검수일자 기준 최신순 정렬
     arrFrame.sort(function(a, b) {
       var dateA = a.date === '-' ? '' : a.date;
       var dateB = b.date === '-' ? '' : b.date;
@@ -2271,8 +2280,7 @@ function initDashboard4() {
           var isNum = typeof val === 'number';
           var align = isNum ? 'right' : 'left';
           var displayVal = isNum ? val.toLocaleString() : val;
-          // 제품명 열(brand)일 경우 좀 더 진하게 표시
-          if (col.key === 'brand' && val !== '-') displayVal = '<strong>' + displayVal + '</strong>';
+          if (col.key === 'brand' && val !== '-') displayVal = '<strong style="color:var(--accent);">' + displayVal + '</strong>';
           
           html += '<td style="padding:8px 14px; color:#334155; text-align:' + align + ';">' + displayVal + '</td>';
         });
@@ -2284,11 +2292,10 @@ function initDashboard4() {
 
     var finalHtml = '';
 
-    // [핵심 추가] 프레임 데이터 컬럼 정의 부분에 '제품명'을 색상 바로 옆에 끼워 넣었습니다.
     finalHtml += buildTable('🟦 1. 프레임 데이터 (기둥/받침)', [
       {label: '검수일자', key: 'date'},
       {label: '색상', key: 'color'},
-      {label: '제품명', key: 'brand'}, // <-- 추가된 제품명 컬럼
+      {label: '제품명', key: 'brand'},
       {label: '두께', key: 'thickness'},
       {label: '품명', key: 'category'},
       {label: '규격', key: 'size'},

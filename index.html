@@ -2178,8 +2178,8 @@ function initDashboard4() {
       if (s && s.id) fSessMap[s.id] = s; 
     });
 
-    var arrFrame = []; // 기둥/받침 데이터
-    var arrACC = [];   // 추려지고 남은 ACC 데이터
+    var arrFrame = []; 
+    var arrACC = [];   
 
     fItems.forEach(function(item) {
       if (!item) return;
@@ -2216,7 +2216,7 @@ function initDashboard4() {
           dispose: item.dispose_quantity || 0
         });
       } 
-      // 2. 추려지고 남은 ACC인 경우 - 모든 원본 항목 유지 + 중요 이력 데이터 병합
+      // 2. 추려지고 남은 ACC인 경우 - 원본 모든 필드 유지 + 중요 이력 데이터 병합
       else {
         var fullACCItem = Object.assign({}, item, {
           '검수일자': sess.inspection_date || '-',
@@ -2224,7 +2224,6 @@ function initDashboard4() {
           '두께(이력)': sess.thickness || '-'
         });
         
-        // 관리용 ID나 날짜 중복 항목 등은 깔끔하게 제외
         delete fullACCItem.id;
         delete fullACCItem.session_id;
         delete fullACCItem.created_at;
@@ -2280,7 +2279,6 @@ function initDashboard4() {
     if (arrACC.length === 0) {
       finalHtml += '<div style="padding:24px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888; margin-bottom:20px;">ACC 내역이 존재하지 않습니다.</div>';
     } else {
-      // 데이터들에 들어있는 원본 항목 필드를 동적으로 추출하여 헤더 정의
       var accHeaders = ['검수일자', '색상(이력)', '두께(이력)'];
       arrACC.forEach(function(row) {
         Object.keys(row).forEach(function(key) {

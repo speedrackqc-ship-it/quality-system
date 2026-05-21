@@ -2147,16 +2147,17 @@ function fetchAllRows4(table, extraSelect) {
 
 // 기존의 initDashboard4 함수를 이걸로 통째로 교체하세요!
 // 기존의 initDashboard4 함수를 이 코드로 통째로 교체(덮어쓰기) 하세요!
+// 기존의 initDashboard4 함수를 이 코드로 통째로 교체(덮어쓰기) 하세요!
 function initDashboard4() {
   var container = document.getElementById('v4-dashboard-root');
   if (!container) return;
 
   container.innerHTML = `
     <div class="panel" style="margin-bottom:20px;">
-      <div class="panel-title" style="color: #3b82f6; font-size:16px;">📊 [등록-프레임등록-프레임] 실시간 입력 데이터 현황</div>
-      <p style="font-size:13px; color:#888; margin-bottom:12px;">Lovable 프레임 입력 화면을 통해 Supabase에 적재된 데이터만 필터링 없이 모두 가져옵니다.</p>
+      <div class="panel-title" style="color: #3b82f6; font-size:16px;">📊 [등록-프레임등록-프레임] 받침/기둥 데이터 현황</div>
+      <p style="font-size:13px; color:#888; margin-bottom:12px;">입력된 데이터 중 품명에 '받침' 또는 '기둥'이 포함된 프레임 핵심 내역만 추려냈습니다.</p>
       <div id="v4-classified-tables" style="font-size:13px;">
-        <div style="padding:40px; text-align:center; color:#888;">Supabase에서 프레임 데이터를 동기화 중입니다... ⏳</div>
+        <div style="padding:40px; text-align:center; color:#888;">프레임 데이터를 필터링하고 있습니다... ⏳</div>
       </div>
     </div>
   `;
@@ -2164,17 +2165,16 @@ function initDashboard4() {
   var dot = document.getElementById('dbDot4');
   var lbl = document.getElementById('dbLabel4');
   if (dot) dot.style.background = '#f97316';
-  if (lbl) lbl.textContent = '프레임 데이터 동기화 중...';
+  if (lbl) lbl.textContent = '프레임 데이터 필터링 중...';
 
-  // 세션 정보와 프레임 아이템 정보를 정밀하게 fetch 합니다.
   Promise.all([
     fetchAllRows4('frame_return_sessions', '*'),
     fetchAllRows4('frame_return_items', '*')
   ]).then(function(results) {
     var fSessions = results[0] || [];
-    var fItems = results[1] || []; // Lovable [등록-프레임등록-프레임] 입력 데이터 타겟
+    var fItems = results[1] || []; 
 
-    // 1. 세션(부모 테이블) ID 매핑 생성 (날짜, 색상, 두께 연동용)
+    // 1. 세션 ID 매핑 생성
     var fSessMap = {};
     fSessions.forEach(function(s) { 
       if (s && s.id) fSessMap[s.id] = s; 
@@ -2182,7 +2182,7 @@ function initDashboard4() {
 
     var arrFrame = [];
 
-    // 2. frame_return_items 에 적재된 데이터를 단 한 건도 빠짐없이 파싱합니다.
+    // 2. 데이터 추출 및 '받침/기둥' 필터링
     fItems.forEach(function(item) {
       if (!item) return;
       
@@ -2190,48 +2190,51 @@ function initDashboard4() {
       var cat = item.category || '';
       var thickStr = (sess.thickness || '').toString().toUpperCase().trim();
       
-      // 앞글자 브랜드 분리 처리 로직
-      var brandName = '-';
-      var cleanCat = cat;
+      // [핵심 조건] 품명에 '받침' 또는 '기둥'이 포함된 경우에만 통과시킵니다.
+      if (cat.indexOf('받침') !== -1 || cat.indexOf('기둥') !== -1) {
+        
+        // 앞글자 브랜드 분리 처리
+        var brandName = '-';
+        var cleanCat = cat;
 
-      if (cat.indexOf('홈던트') !== -1 || cat.toUpperCase().indexOf('H하우스') !== -1) {
-        brandName = '홈던트';
-        cleanCat = cat.replace(/홈던트|H하우스/gi, '').trim();
-      } else if (cat.indexOf('스피드랙') !== -1) {
-        brandName = '스피드랙';
-        cleanCat = cat.replace(/스피드랙/gi, '').trim();
-      } else {
-        // 품명에 텍스트가 없을 경우 마스터 테이블의 두께 스펙을 기준으로 크로스체크 보정
-        if (thickStr.indexOf('V') !== -1) brandName = '홈던트';
-        else if (thickStr === '120' || thickStr === '160' || thickStr === '200') brandName = '스피드랙';
+        if (cat.indexOf('홈던트') !== -1 || cat.toUpperCase().indexOf('H하우스') !== -1) {
+          brandName = '홈던트';
+          cleanCat = cat.replace(/홈던트|H하우스/gi, '').trim();
+        } else if (cat.indexOf('스피드랙') !== -1) {
+          brandName = '스피드랙';
+          cleanCat = cat.replace(/스피드랙/gi, '').trim();
+        } else {
+          // 품명에 텍스트가 없을 경우 두께 스펙으로 브랜드 보정
+          if (thickStr.indexOf('V') !== -1) brandName = '홈던트';
+          else if (thickStr === '120' || thickStr === '160' || thickStr === '200') brandName = '스피드랙';
+        }
+
+        arrFrame.push({
+          date: sess.inspection_date || '-',
+          color: sess.color || '-',
+          brand: brandName,
+          thickness: sess.thickness || '-',
+          category: cleanCat || cat, // 브랜드명이 빠진 '받침' 또는 '기둥'만 남음
+          size: item.size || '-',
+          received: item.received_quantity || 0,
+          recycle: item.recycle_quantity || 0,
+          dispose: item.dispose_quantity || 0
+        });
       }
-
-      // 다른 화면 데이터와 섞이지 않도록 순수 프레임 아이템 로우 객체 생성
-      arrFrame.push({
-        date: sess.inspection_date || '-',
-        color: sess.color || '-',
-        brand: brandName,
-        thickness: sess.thickness || '-',
-        category: cleanCat || cat, // 앞글자가 정상적으로 잘렸다면 깔끔한 품명 표기
-        size: item.size || '-',
-        received: item.received_quantity || 0,
-        recycle: item.recycle_quantity || 0,
-        dispose: item.dispose_quantity || 0
-      });
     });
 
-    // 3. 사용자가 최신 입력 내역을 상단에서 바로 볼 수 있도록 검수일자(date) 기준 내림차순 정렬
+    // 3. 검수일자(date) 기준 최신순 정렬
     arrFrame.sort(function(a, b) {
       var dateA = a.date === '-' ? '' : a.date;
       var dateB = b.date === '-' ? '' : b.date;
       return dateB.localeCompare(dateA); 
     });
 
-    // 4. 단일 프레임 전용 데이터 그리드 마크업 생성
-    var html = '<h3 style="margin-bottom:10px; font-size:15px; font-weight:bold; color:var(--text);">🟦 프레임 실시간 등록 내역 <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrFrame.length + '건)</span></h3>';
+    // 4. 테이블 마크업 생성
+    var html = '<h3 style="margin-bottom:10px; font-size:15px; font-weight:bold; color:var(--text);"></div>🟦 프레임(받침/기둥) 등록 내역 <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrFrame.length + '건)</span></h3>';
     
     if (arrFrame.length === 0) {
-      html += '<div style="padding:32px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">Supabase에 [등록-프레임등록-프레임] 경로로 저장된 데이터가 존재하지 않습니다.</div>';
+      html += '<div style="padding:32px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">[등록-프레임등록-프레임] 데이터 중 품명에 "받침" 또는 "기둥"이 포함된 내역이 없습니다.</div>';
     } else {
       html += '<div class="table-wrap" style="margin-bottom:20px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:500px; overflow:auto;">';
       html += '<table class="v4-raw-table" style="width:100%; white-space:nowrap; border-collapse:collapse;"><thead><tr>';
@@ -2261,7 +2264,6 @@ function initDashboard4() {
           var align = isNum ? 'right' : 'left';
           var displayVal = isNum ? val.toLocaleString() : val;
           
-          // 제품명 하이라이트 스타일 적용
           if (col.key === 'brand' && val !== '-') {
             displayVal = '<strong style="color: #3b82f6;">' + displayVal + '</strong>';
           }
@@ -2276,17 +2278,16 @@ function initDashboard4() {
     document.getElementById('v4-classified-tables').innerHTML = html;
     
     if (dot) dot.style.background = '#22c55e';
-    if (lbl) lbl.textContent = '프레임 데이터 동기화 완료';
+    if (lbl) lbl.textContent = '필터링 완료';
 
   }).catch(function(err) {
     console.error(err);
-    document.getElementById('v4-classified-tables').innerHTML = '<div style="color:red; padding:20px;">Supabase 통신 중 오류가 발생했습니다: ' + err.message + '</div>';
+    document.getElementById('v4-classified-tables').innerHTML = '<div style="color:red; padding:20px;">데이터를 처리하는 중 오류가 발생했습니다: ' + err.message + '</div>';
     if (dot) dot.style.background = '#ef4444';
-    if (lbl) lbl.textContent = '데이터 동기화 실패';
+    if (lbl) lbl.textContent = '오류 발생';
   });
 }
 
-// 초기 로드 보장 실행부
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initDashboard4);
 } else {

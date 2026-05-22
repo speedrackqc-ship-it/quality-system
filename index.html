@@ -2147,7 +2147,6 @@ function fetchAllRows4(table, extraSelect) {
 
 // 기존의 initDashboard4 함수를 이걸로 통째로 교체하세요!
 // 기존의 initDashboard4 함수를 이 코드로 통째로 교체(덮어쓰기) 하세요!
-// 기존의 initDashboard4 함수를 이 코드로 통째로 교체(덮어쓰기) 하세요!
 function initDashboard4() {
   var container = document.getElementById('v4-dashboard-root');
   if (!container) return;
@@ -2196,7 +2195,6 @@ function initDashboard4() {
     
     if (!btnFrame || !btnPlywood || !btnAcc || !btnRack || !boxFrame || !boxPlywood || !boxAcc || !boxRack) return;
 
-    // 스타일 초기화
     var defBg = '#fff', defColor = '#555', defBorder = '1px solid #d0d7de';
     btnFrame.style.background = defBg; btnFrame.style.color = defColor; btnFrame.style.border = defBorder;
     btnPlywood.style.background = defBg; btnPlywood.style.color = defColor; btnPlywood.style.border = defBorder;
@@ -2205,7 +2203,6 @@ function initDashboard4() {
     
     boxFrame.style.display = 'none'; boxPlywood.style.display = 'none'; boxAcc.style.display = 'none'; boxRack.style.display = 'none';
 
-    // 선택 탭 활성화
     if (subType === 'frame') {
       btnFrame.style.background = '#3b82f6'; btnFrame.style.color = '#fff'; btnFrame.style.border = 'none';
       boxFrame.style.display = 'block';
@@ -2242,7 +2239,6 @@ function initDashboard4() {
     var rSessMap = {}; rSessions.forEach(function(s) { if (s && s.id) rSessMap[s.id] = s; });
     var pSessMap = {}; pSessions.forEach(function(s) { if (s && s.id) pSessMap[s.id] = s; });
 
-    // 구조별 토탈 계산기 구조 선언 (Rack 추가)
     var totals = {
       frame: { received: 0, recycle: 0, dispose: 0 },
       plywood: { received: 0, normal: 0, recycle: 0, dispose: 0 },
@@ -2260,68 +2256,61 @@ function initDashboard4() {
     };
 
     var arrPlywood = []; var plyMonthMap = {}; var plyGroupMap = {};
-    var plyThickMap = {
-      '9T': { thickness: '9T', received: 0, normal: 0, recycle: 0, dispose: 0 },
-      '12T': { thickness: '12T', received: 0, normal: 0, recycle: 0, dispose: 0 }
-    };
+    var plyThickMap = { '9T': { received: 0, normal: 0, recycle: 0, dispose: 0 }, '12T': { received: 0, normal: 0, recycle: 0, dispose: 0 } };
 
-    // 🟢 경/중량랙 전용 데이터 구조 선언
     var arrRack = []; var rackMonthMap = {}; var rackGroupMap = {};
 
     function pushToPlywood(dateStr, thick, cat, size, r, n, c, d) {
-      var normThick = '9T';
-      var tStr = String(thick).toUpperCase();
-      if (tStr.indexOf('12') !== -1) normThick = '12T';
-      else if (tStr.indexOf('9') !== -1) normThick = '9T';
-      else normThick = thick || '9T';
-
+      var normThick = '9T'; var tStr = String(thick).toUpperCase();
+      if (tStr.indexOf('12') !== -1) normThick = '12T'; else if (tStr.indexOf('9') !== -1) normThick = '9T'; else normThick = thick || '9T';
       arrPlywood.push({ date: dateStr, thickness: normThick, category: cat, size: size, received: r, normal: n, recycle: c, dispose: d });
       totals.plywood.received += r; totals.plywood.normal += n; totals.plywood.recycle += c; totals.plywood.dispose += d;
-
       if (!plyThickMap[normThick]) plyThickMap[normThick] = { thickness: normThick, received: 0, normal: 0, recycle: 0, dispose: 0 };
       plyThickMap[normThick].received += r; plyThickMap[normThick].normal += n; plyThickMap[normThick].recycle += c; plyThickMap[normThick].dispose += d;
-
       var mKey = dateStr !== '-' ? dateStr.substring(0, 7) : '미지정';
       if (!plyMonthMap[mKey]) plyMonthMap[mKey] = { month: mKey, received: 0, normal: 0, recycle: 0, dispose: 0 };
       plyMonthMap[mKey].received += r; plyMonthMap[mKey].normal += n; plyMonthMap[mKey].recycle += c; plyMonthMap[mKey].dispose += d;
-
       var gKey = normThick + '|' + size;
       if (!plyGroupMap[gKey]) plyGroupMap[gKey] = { thickness: normThick, size: size, received: 0, normal: 0, recycle: 0, dispose: 0 };
       plyGroupMap[gKey].received += r; plyGroupMap[gKey].normal += n; plyGroupMap[gKey].recycle += c; plyGroupMap[gKey].dispose += d;
     }
 
-    function pushToRack(dateStr, cat, size, r, n, c, d) {
-      arrRack.push({ date: dateStr, category: cat, size: size, received: r, normal: n, recycle: c, dispose: d });
+    // 🟢 경중량랙 전용 글자 자르기 헬퍼 함수
+    function pushToRack(dateStr, rawCat, size, r, n, c, d) {
+      // 품명에서 '경량랙', '중량랙' 이라는 앞글자를 분리
+      var rackType = '경량랙'; // 기본값 설정
+      var cleanCat = rawCat;
+
+      if (rawCat.indexOf('중량랙') !== -1) {
+        rackType = '중량랙';
+        cleanCat = rawCat.replace(/중량랙/gi, '').trim();
+      } else if (rawCat.indexOf('경량랙') !== -1) {
+        rackType = '경량랙';
+        cleanCat = rawCat.replace(/경량랙/gi, '').trim();
+      }
+
+      arrRack.push({ date: dateStr, rack_type: rackType, category: cleanCat, size: size, received: r, normal: n, recycle: c, dispose: d });
       totals.rack.received += r; totals.rack.normal += n; totals.rack.recycle += c; totals.rack.dispose += d;
 
       var mKey = dateStr !== '-' ? dateStr.substring(0, 7) : '미지정';
       if (!rackMonthMap[mKey]) rackMonthMap[mKey] = { month: mKey, received: 0, normal: 0, recycle: 0, dispose: 0 };
       rackMonthMap[mKey].received += r; rackMonthMap[mKey].normal += n; rackMonthMap[mKey].recycle += c; rackMonthMap[mKey].dispose += d;
 
-      var gKey = cat + '|' + size;
-      if (!rackGroupMap[gKey]) rackGroupMap[gKey] = { category: cat, size: size, received: 0, normal: 0, recycle: 0, dispose: 0 };
+      // 집계 키에도 분리된 구분명과 품명 적용
+      var gKey = rackType + '|' + cleanCat + '|' + size;
+      if (!rackGroupMap[gKey]) rackGroupMap[gKey] = { rack_type: rackType, category: cleanCat, size: size, received: 0, normal: 0, recycle: 0, dispose: 0 };
       rackGroupMap[gKey].received += r; rackGroupMap[gKey].normal += n; rackGroupMap[gKey].recycle += c; rackGroupMap[gKey].dispose += d;
     }
 
-    // 소스 1 처리 (프레임 세션)
+    // 소스 1 처리 (프레임)
     fItems.forEach(function(item) {
       if (!item) return;
-      var sess = fSessMap[item.session_id] || {};
-      var cat = item.category || '';
-      var thickStr = (sess.thickness || '').toString().toUpperCase().trim();
-      var dateStr = sess.inspection_date || '-';
-      var rQty = item.received_quantity || 0; var nQty = item.normal_quantity || 0;
-      var cQty = item.recycle_quantity || 0; var dQty = item.dispose_quantity || 0;
+      var sess = fSessMap[item.session_id] || {}; var cat = item.category || '';
+      var thickStr = (sess.thickness || '').toString().toUpperCase().trim(); var dateStr = sess.inspection_date || '-';
+      var rQty = item.received_quantity || 0; var nQty = item.normal_quantity || 0; var cQty = item.recycle_quantity || 0; var dQty = item.dispose_quantity || 0;
 
-      if (cat.indexOf('합판') !== -1) {
-        pushToPlywood(dateStr, sess.thickness || '9T', cat, item.size || '-', rQty, nQty, cQty, dQty);
-        return;
-      }
-
-      if (cat.indexOf('중량랙') !== -1 || cat.indexOf('경량랙') !== -1) {
-        pushToRack(dateStr, cat, item.size || '-', rQty, nQty, cQty, dQty);
-        return;
-      }
+      if (cat.indexOf('합판') !== -1) { pushToPlywood(dateStr, sess.thickness || '9T', cat, item.size || '-', rQty, nQty, cQty, dQty); return; }
+      if (cat.indexOf('중량랙') !== -1 || cat.indexOf('경량랙') !== -1) { pushToRack(dateStr, cat, item.size || '-', rQty, nQty, cQty, dQty); return; }
 
       if (cat.indexOf('받침') !== -1 || cat.indexOf('기둥') !== -1) {
         var brandName = '-'; var cleanCat = cat;
@@ -2336,10 +2325,7 @@ function initDashboard4() {
         var mKey = dateStr !== '-' ? dateStr.substring(0, 7) : '미지정';
         if (!frameMonthMap[mKey]) frameMonthMap[mKey] = { month: mKey, received: 0, recycle: 0, dispose: 0 };
         frameMonthMap[mKey].received += rQty; frameMonthMap[mKey].recycle += cQty; frameMonthMap[mKey].dispose += dQty;
-
-        var typeKey = brandName + '|' + normCat;
-        if (frameTypeMap[typeKey]) { frameTypeMap[typeKey].received += rQty; frameTypeMap[typeKey].recycle += cQty; frameTypeMap[typeKey].dispose += dQty; }
-
+        var typeKey = brandName + '|' + normCat; if (frameTypeMap[typeKey]) { frameTypeMap[typeKey].received += rQty; frameTypeMap[typeKey].recycle += cQty; frameTypeMap[typeKey].dispose += dQty; }
         var groupKey = brandName + '|' + cleanCat + '|' + (sess.thickness || '-') + '|' + (item.size || '-');
         if (!frameGroupMap[groupKey]) frameGroupMap[groupKey] = { brand: brandName, category: cleanCat, thickness: sess.thickness || '-', size: item.size || '-', received: 0, recycle: 0, dispose: 0 };
         frameGroupMap[groupKey].received += rQty; frameGroupMap[groupKey].recycle += cQty; frameGroupMap[groupKey].dispose += dQty;
@@ -2347,21 +2333,16 @@ function initDashboard4() {
         var fullACCItem = Object.assign({}, item, { '검수일자': dateStr, '색상(이력)': sess.color || '-', '두께(이력)': sess.thickness || '-' });
         delete fullACCItem.id; delete fullACCItem.session_id; delete fullACCItem.created_at; delete fullACCItem.updated_at;
         arrACC.push(fullACCItem);
-
-        totals.acc.received += (item.received_quantity || 0);
-        totals.acc.recycle += (item.recycle_quantity || 0);
-        totals.acc.dispose += (item.dispose_quantity || 0);
+        totals.acc.received += (item.received_quantity || 0); totals.acc.recycle += (item.recycle_quantity || 0); totals.acc.dispose += (item.dispose_quantity || 0);
       }
     });
 
-    // 소스 2 처리 (경/중량랙 메인 세션 및 아이템)
+    // 소스 2 처리 (경중량랙)
     rItems.forEach(function(item) {
       if (!item) return;
-      var sess = rSessMap[item.session_id] || {};
-      var cat = item.category || item.product_type || '경/중량랙';
+      var sess = rSessMap[item.session_id] || {}; var cat = item.category || item.product_type || '경/중량랙';
       var dateStr = sess.inspection_date || '-';
-      var rQty = item.received_quantity || 0; var nQty = item.normal_quantity || 0;
-      var cQty = item.recycle_quantity || 0; var dQty = item.dispose_quantity || 0;
+      var rQty = item.received_quantity || 0; var nQty = item.normal_quantity || 0; var cQty = item.recycle_quantity || 0; var dQty = item.dispose_quantity || 0;
 
       if (cat.indexOf('합판') !== -1) {
         pushToPlywood(dateStr, item.thickness || sess.thickness || '9T', cat, item.specifications || item.size || '-', rQty, nQty, cQty, dQty);
@@ -2370,18 +2351,15 @@ function initDashboard4() {
       }
     });
 
-    // 소스 3 처리 (합판 전용 독립 데이터)
+    // 소스 3 처리 (합판 전용)
     pItems.forEach(function(item) {
       if (!item) return;
-      var sess = pSessMap[item.session_id] || {};
-      var dateStr = sess.inspection_date || sess.created_at || '-';
+      var sess = pSessMap[item.session_id] || {}; var dateStr = sess.inspection_date || sess.created_at || '-';
       if(dateStr.length > 10) dateStr = dateStr.substring(0,10);
-      var rQty = item.received_quantity || 0; var nQty = item.normal_quantity || 0;
-      var cQty = item.recycle_quantity || 0; var dQty = item.dispose_quantity || 0;
+      var rQty = item.received_quantity || 0; var nQty = item.normal_quantity || 0; var cQty = item.recycle_quantity || 0; var dQty = item.dispose_quantity || 0;
       pushToPlywood(dateStr, item.thickness || sess.thickness || '9T', item.category || '합판', item.size || item.specifications || '-', rQty, nQty, cQty, dQty);
     });
 
-    // 날짜 역순 정렬
     var dateSort = function(a, b) { return (b.date || '').localeCompare(a.date || ''); };
     arrFrame.sort(dateSort); arrPlywood.sort(dateSort); arrRack.sort(dateSort);
     arrACC.sort(function(a, b) { return (b['검수일자'] || '').localeCompare(a['검수일자'] || ''); });
@@ -2392,9 +2370,10 @@ function initDashboard4() {
     
     var arrFrameGrouped = Object.values(frameGroupMap).sort(function(a, b) { return a.brand.localeCompare(b.brand) || a.category.localeCompare(b.category); });
     var arrPlyGrouped = Object.values(plyGroupMap).sort(function(a, b) { return String(b.thickness).localeCompare(String(a.thickness)) || a.size.localeCompare(b.size); });
-    var arrRackGrouped = Object.values(rackGroupMap).sort(function(a, b) { return a.category.localeCompare(b.category) || a.size.localeCompare(b.size); });
+    
+    // 🟢 구분(경량/중량)순으로 합산 표 정렬
+    var arrRackGrouped = Object.values(rackGroupMap).sort(function(a, b) { return b.rack_type.localeCompare(a.rack_type) || a.category.localeCompare(b.category) || a.size.localeCompare(b.size); });
 
-    // 헬퍼: 공용 스코어보드 위젯 생성기
     function buildTotalWidget(title, data, showNormal) {
       var rec = data.received || 0;
       var normRate = rec > 0 ? ((data.normal / rec) * 100).toFixed(1) : '0.0';
@@ -2417,7 +2396,7 @@ function initDashboard4() {
     // ==========================================
     var htmlFrame = buildTotalWidget('프레임 전체', totals.frame, false);
     htmlFrame += '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📈 1-1. 프레임 월별 품질 성능 요약</h3>';
-    htmlFrame += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #d0d7de; border-radius:8px;"><div class="table-scroll"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f6f8fa; padding:12px 14px; text-align:left;">검수월별</th><th style="background:#f6f8fa; padding:12px 14px; text-align:right;">총 입고수량</th><th style="background:#f6f8fa; padding:12px 14px; text-align:right;">총 재활용수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#1a7f37; text-align:right;">재활용률</th><th style="background:#f6f8fa; padding:12px 14px; text-align:right;">총 폐기수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#cf222e; text-align:right;">폐기율</th></tr></thead><tbody>';
+    htmlFrame += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #d0d7de; border-radius:8px;"><div class="table-scroll"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:left;">검수월별</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 입고수량</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 재활용수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#1a7f37; text-align:right;">재활용률</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 폐기수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#cf222e; text-align:right;">폐기율</th></tr></thead><tbody>';
     arrFrameMonthly.forEach(function(mRow){
       var tot = mRow.received || 0;
       htmlFrame += '<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px 14px; color:#0969da; font-weight:700;">'+mRow.month+'</td><td style="text-align:right;">'+tot.toLocaleString()+' 개</td><td style="text-align:right;">'+mRow.recycle.toLocaleString()+' 개</td><td style="text-align:right; color:#1a7f37; font-weight:700;">'+(tot>0?((mRow.recycle/tot)*100).toFixed(1):'0.0')+' %</td><td style="text-align:right;">'+mRow.dispose.toLocaleString()+' 개</td><td style="text-align:right; color:#cf222e; font-weight:700;">'+(tot>0?((mRow.dispose/tot)*100).toFixed(1):'0.0')+' %</td></tr>';
@@ -2449,7 +2428,7 @@ function initDashboard4() {
     if (arrPlyMonthly.length === 0) {
       htmlPlywood += '<div style="padding:40px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">집계할 합판 데이터가 없습니다.</div>';
     } else {
-      htmlPlywood += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #d0d7de; border-radius:8px;"><div class="table-scroll"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f6f8fa; padding:12px 14px; text-align:left;">검수월별</th><th style="background:#f6f8fa; padding:12px 14px; text-align:right;">총 입고수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#2563eb; text-align:right;">정상 수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#2563eb; text-align:right;">정상률</th><th style="background:#f6f8fa; padding:12px 14px; text-align:right;">총 재활용수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#1a7f37; text-align:right;">재활용률</th><th style="background:#f6f8fa; padding:12px 14px; text-align:right;">총 폐기수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#cf222e; text-align:right;">폐기율</th></tr></thead><tbody>';
+      htmlPlywood += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #d0d7de; border-radius:8px;"><div class="table-scroll"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:left;">검수월별</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 입고수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#2563eb; text-align:right;">정상 수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#2563eb; text-align:right;">정상률</th><th style="background:#f6f8fa; padding:12px 14px; text-align:right;">총 재활용수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#1a7f37; text-align:right;">재활용률</th><th style="background:#f6f8fa; padding:12px 14px; text-align:right;">총 폐기수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#cf222e; text-align:right;">폐기율</th></tr></thead><tbody>';
       arrPlyMonthly.forEach(function(mRow) {
         var tot = mRow.received || 0; var nQty = mRow.normal || 0; var cQty = mRow.recycle || 0; var dQty = mRow.dispose || 0;
         htmlPlywood += '<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px 14px; color:#9a6700; font-weight:700;">'+mRow.month+'</td><td style="text-align:right;">'+tot.toLocaleString()+' 개</td><td style="text-align:right; color:#2563eb; font-weight:600;">'+nQty.toLocaleString()+' 개</td><td style="text-align:right; color:#2563eb; font-weight:700;">'+(tot>0?((nQty/tot)*100).toFixed(1):'0.0')+' %</td><td style="text-align:right;">'+cQty.toLocaleString()+' 개</td><td style="text-align:right; color:#1a7f37; font-weight:700;">'+(tot>0?((cQty/tot)*100).toFixed(1):'0.0')+' %</td><td style="text-align:right;">'+dQty.toLocaleString()+' 개</td><td style="text-align:right; color:#cf222e; font-weight:700;">'+(tot>0?((dQty/tot)*100).toFixed(1):'0.0')+' %</td></tr>';
@@ -2503,7 +2482,7 @@ function initDashboard4() {
 
 
     // ==========================================
-    // 🟢 4. [신설] 경/중량랙 탭 렌더링
+    // 🟢 4. [개선 완료] 경/중량랙 탭 렌더링 (구분/품명 분리)
     // ==========================================
     var htmlRack = buildTotalWidget('경/중량랙 전체', totals.rack, true);
     
@@ -2537,10 +2516,11 @@ function initDashboard4() {
       htmlRack += '</tbody></table></div></div>';
     }
 
-    htmlRack += '<h3 style="margin-top:24px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📊 4-2. 경/중량랙 품목 및 규격별 합산 현황</h3>';
+    htmlRack += '<h3 style="margin-top:24px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📊 4-2. 경/중량랙 품목 및 규격별 합산 현황 (중복 수량 합산)</h3>';
     if (arrRackGrouped.length > 0) {
       htmlRack += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:250px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr>' +
-        '<th style="background:#f4f7fa; padding:12px 14px; text-align:left;">품명 분류</th>' +
+        '<th style="background:#f4f7fa; padding:12px 14px; text-align:left;">구분</th>' +
+        '<th style="background:#f4f7fa; padding:12px 14px; text-align:left;">품명</th>' +
         '<th style="background:#f4f7fa; padding:12px 14px; text-align:left;">규격 사양</th>' +
         '<th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 입고수량</th>' +
         '<th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 정상수량</th>' +
@@ -2549,12 +2529,13 @@ function initDashboard4() {
         '</tr></thead><tbody>';
       arrRackGrouped.forEach(function(row) {
         htmlRack += '<tr style="border-bottom:1px solid #e2e8f0;">' +
-          '<td style="font-weight:600; color:#059669;">'+row.category+'</td>' +
-          '<td style="color:#0969da; font-weight:600;">'+row.size+'</td>' +
-          '<td style="text-align:right; font-weight:700;">'+row.received.toLocaleString()+'</td>' +
-          '<td style="text-align:right; color:#2563eb;">'+row.normal.toLocaleString()+'</td>' +
-          '<td style="text-align:right; color:#1a7f37;">'+row.recycle.toLocaleString()+'</td>' +
-          '<td style="text-align:right; color:#cf222e;">'+row.dispose.toLocaleString()+'</td>' +
+          '<td style="font-weight:700; color:#059669;">'+row.rack_type+'</td>' +
+          '<td style="font-weight:600; color:#24292f;">'+row.category+'</td>' +
+          '<td style="color:#0969da; font-weight:600;" class="td-mono">'+row.size+'</td>' +
+          '<td style="text-align:right; font-weight:700;" class="td-mono">'+row.received.toLocaleString()+'</td>' +
+          '<td style="text-align:right; color:#2563eb;" class="td-mono">'+row.normal.toLocaleString()+'</td>' +
+          '<td style="text-align:right; color:#1a7f37;" class="td-mono">'+row.recycle.toLocaleString()+'</td>' +
+          '<td style="text-align:right; color:#cf222e;" class="td-mono">'+row.dispose.toLocaleString()+'</td>' +
           '</tr>';
       });
       htmlRack += '</tbody></table></div></div>';
@@ -2562,16 +2543,15 @@ function initDashboard4() {
 
     htmlRack += '<h3 style="margin-top:20px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">🟢 4-3. 경/중량랙 실시간 등록 상세 내역 <span style="font-size:12px; font-weight:normal; color:#888;">(총 '+arrRack.length+'건)</span></h3>';
     if (arrRack.length > 0) {
-      htmlRack += '<div class="table-wrap" style="border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:250px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f8fafc; padding:10px 14px;">검수일자</th><th style="background:#f8fafc; padding:10px 14px;">품명 분류</th><th style="background:#f8fafc; padding:10px 14px;">규격/사양</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">입고수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">정상수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">재활용수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">폐기수량</th></tr></thead><tbody>';
+      htmlRack += '<div class="table-wrap" style="border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:250px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f8fafc; padding:10px 14px;">검수일자</th><th style="background:#f8fafc; padding:10px 14px;">구분</th><th style="background:#f8fafc; padding:10px 14px;">품명</th><th style="background:#f8fafc; padding:10px 14px;">규격/사양</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">입고수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">정상수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">재활용수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">폐기수량</th></tr></thead><tbody>';
       arrRack.forEach(function(row) {
-        htmlRack += '<tr style="border-bottom:1px solid #f1f5f9;"><td>'+row.date+'</td><td>'+row.category+'</td><td>'+row.size+'</td><td style="text-align:right;">'+row.received.toLocaleString()+'</td><td style="text-align:right;">'+row.normal.toLocaleString()+'</td><td style="text-align:right;">'+row.recycle.toLocaleString()+'</td><td style="text-align:right;">'+row.dispose.toLocaleString()+'</td></tr>';
+        htmlRack += '<tr style="border-bottom:1px solid #f1f5f9;"><td>'+row.date+'</td><td style="font-weight:700; color:#059669;">'+row.rack_type+'</td><td>'+row.category+'</td><td class="td-mono">'+row.size+'</td><td style="text-align:right;" class="td-mono">'+row.received.toLocaleString()+'</td><td style="text-align:right;" class="td-mono">'+row.normal.toLocaleString()+'</td><td style="text-align:right;" class="td-mono">'+row.recycle.toLocaleString()+'</td><td style="text-align:right;" class="td-mono">'+row.dispose.toLocaleString()+'</td></tr>';
       });
+      htmlFrame += '</tbody></table></div></div>';
       htmlRack += '</tbody></table></div></div>';
     }
     document.getElementById('v4-pane-rack-box').innerHTML = htmlRack;
 
-
-    // 동기화 상태 처리 완료
     if (dot) dot.style.background = '#22c55e';
     if (lbl) lbl.textContent = '데이터 처리 완료';
 

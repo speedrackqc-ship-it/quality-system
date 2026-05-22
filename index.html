@@ -2211,14 +2211,11 @@ function initDashboard4() {
   if (dot) dot.style.background = '#f97316';
   if (lbl) lbl.textContent = '모든 데이터 동기화 중...';
 
-  // [교정] 합판 전용 테이블 호출이 누락되었을 가능성에 대비하여, 기존 테이블 분석과 함께 
-  // plywood_ 관련 테이블 호출을 시도하거나 기존 rack_ 및 frame_ 내의 데이터 수집 방식을 더 유연하게 확장합니다.
   Promise.all([
     fetchAllRows4('frame_return_sessions', '*'),
     fetchAllRows4('frame_return_items', '*'),
     fetchAllRows4('rack_return_sessions', '*'),
     fetchAllRows4('rack_return_items', '*'),
-    // 혹시 모를 합판 독자 테이블 전용 호출(에러 방지 처리를 위해 catch 결합)
     fetchAllRows4('plywood_return_sessions', '*').catch(function(){return [];}),
     fetchAllRows4('plywood_return_items', '*').catch(function(){return [];})
   ]).then(function(results) {
@@ -2229,6 +2226,13 @@ function initDashboard4() {
     var fSessMap = {}; fSessions.forEach(function(s) { if (s && s.id) fSessMap[s.id] = s; });
     var rSessMap = {}; rSessions.forEach(function(s) { if (s && s.id) rSessMap[s.id] = s; });
     var pSessMap = {}; pSessions.forEach(function(s) { if (s && s.id) pSessMap[s.id] = s; });
+
+    // 토탈 계산기 구조 선언
+    var totals = {
+      frame: { received: 0, recycle: 0, dispose: 0 },
+      plywood: { received: 0, normal: 0, recycle: 0, dispose: 0 },
+      acc: { received: 0, recycle: 0, dispose: 0, count: 0 }
+    };
 
     var arrFrame = []; var arrACC = [];
     var frameGroupMap = {}; var frameMonthMap = {};
@@ -2241,9 +2245,12 @@ function initDashboard4() {
 
     var arrPlywood = []; var plyMonthMap = {}; var plyGroupMap = {};
 
-    // 헬퍼 함수: 합판 데이터 바구니에 담기
     function pushToPlywood(dateStr, thick, cat, size, r, n, c, d) {
       arrPlywood.push({ date: dateStr, thickness: thick, category: cat, size: size, received: r, normal: n, recycle: c, dispose: d });
+      
+      // 합판 토탈 계산 누적
+      totals.plywood.received += r; totals.plywood.normal += n; totals.plywood.recycle += c; totals.plywood.dispose += d;
+
       var mKey = dateStr !== '-' ? dateStr.substring(0, 7) : '미지정';
       if (!plyMonthMap[mKey]) plyMonthMap[mKey] = { month: mKey, received: 0, recycle: 0, dispose: 0 };
       plyMonthMap[mKey].received += r; plyMonthMap[mKey].recycle += c; plyMonthMap[mKey].dispose += d;
@@ -2253,7 +2260,7 @@ function initDashboard4() {
       plyGroupMap[gKey].received += r; plyGroupMap[gKey].normal += n; plyGroupMap[gKey].recycle += c; plyGroupMap[gKey].dispose += d;
     }
 
-    // 데이터 소스 1: 프레임 테이블 내부 수집
+    // 소스 1 처리
     fItems.forEach(function(item) {
       if (!item) return;
       var sess = fSessMap[item.session_id] || {};
@@ -2276,6 +2283,10 @@ function initDashboard4() {
         var normCat = cleanCat.indexOf('받침') !== -1 ? '받침' : '기둥';
 
         arrFrame.push({ date: dateStr, color: sess.color || '-', brand: brandName, thickness: sess.thickness || '-', category: cleanCat || cat, size: item.size || '-', received: rQty, recycle: cQty, dispose: dQty });
+        
+        // 프레임 토탈 계산 누적
+        totals.frame.received += rQty; totals.frame.recycle += cQty; totals.frame.dispose += dQty;
+
         var mKey = dateStr !== '-' ? dateStr.substring(0, 7) : '미지정';
         if (!frameMonthMap[mKey]) frameMonthMap[mKey] = { month: mKey, received: 0, recycle: 0, dispose: 0 };
         frameMonthMap[mKey].received += rQty; frameMonthMap[mKey].recycle += cQty; frameMonthMap[mKey].dispose += dQty;
@@ -2290,10 +2301,16 @@ function initDashboard4() {
         var fullACCItem = Object.assign({}, item, { '검수일자': dateStr, '색상(이력)': sess.color || '-', '두께(이력)': sess.thickness || '-' });
         delete fullACCItem.id; delete fullACCItem.session_id; delete fullACCItem.created_at; delete fullACCItem.updated_at;
         arrACC.push(fullACCItem);
+
+        // ACC 토탈 수량 누적
+        var accRec = item.received_quantity || 0;
+        totals.acc.received += accRec;
+        totals.acc.recycle += (item.recycle_quantity || 0);
+        totals.acc.dispose += (item.dispose_quantity || 0);
       }
     });
 
-    // 데이터 소스 2: 랙 테이블 내부 수집
+    // 소스 2 처리
     rItems.forEach(function(item) {
       if (!item) return;
       var sess = rSessMap[item.session_id] || {};
@@ -2307,7 +2324,7 @@ function initDashboard4() {
       }
     });
 
-    // 데이터 소스 3: 독자 합판 테이블 내부 수집 (러버블 설계 전용 테이블이 매칭될 경우)
+    // 소스 3 처리
     pItems.forEach(function(item) {
       if (!item) return;
       var sess = pSessMap[item.session_id] || {};
@@ -2315,26 +2332,41 @@ function initDashboard4() {
       if(dateStr.length > 10) dateStr = dateStr.substring(0,10);
       var rQty = item.received_quantity || 0; var nQty = item.normal_quantity || 0;
       var cQty = item.recycle_quantity || 0; var dQty = item.dispose_quantity || 0;
-      
       pushToPlywood(dateStr, item.thickness || sess.thickness || '9T', item.category || '합판', item.size || item.specifications || '-', rQty, nQty, cQty, dQty);
     });
 
-    // 정렬 가공
     var dateSort = function(a, b) { return (b.date || '').localeCompare(a.date || ''); };
     arrFrame.sort(dateSort); arrPlywood.sort(dateSort);
     arrACC.sort(function(a, b) { return (b['검수일자'] || '').localeCompare(a['검수일자'] || ''); });
 
     var arrFrameMonthly = Object.values(frameMonthMap).sort(function(a, b) { return b.month.localeCompare(a.month); });
     var arrPlyMonthly = Object.values(plyMonthMap).sort(function(a, b) { return b.month.localeCompare(a.month); });
-
     var arrFrameGrouped = Object.values(frameGroupMap).sort(function(a, b) { return a.brand.localeCompare(b.brand) || a.category.localeCompare(b.category); });
     var arrPlyGrouped = Object.values(plyGroupMap).sort(function(a, b) { return String(b.thickness).localeCompare(String(a.thickness)) || a.size.localeCompare(b.size); });
 
+    // 헬퍼: 토탈 위젯 바 생성 함수
+    function buildTotalWidget(title, data, isPlywood) {
+      var rec = data.received || 0;
+      var recRate = rec > 0 ? ((data.recycle / rec) * 100).toFixed(1) : '0.0';
+      var disRate = rec > 0 ? ((data.dispose / rec) * 100).toFixed(1) : '0.0';
+      
+      var html = '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:12px; margin-bottom:20px; background:#f8fafc; padding:16px; border:1px solid #e2e8f0; border-radius:10px;">';
+      html += '<div><div style="font-size:11px; color:#64748b; font-weight:700;">📊 '+title+' 총 누적입고</div><div style="font-size:18px; font-weight:800; color:#1e293b; margin-top:2px;">'+rec.toLocaleString()+' <span style="font-size:12px; font-weight:normal;">개</span></div></div>';
+      if(isPlywood) {
+        html += '<div><div style="font-size:11px; color:#64748b; font-weight:700;">✅ 총 정상수량</div><div style="font-size:18px; font-weight:800; color:#24292f; margin-top:2px;">'+(data.normal || 0).toLocaleString()+' <span style="font-size:12px; font-weight:normal;">개</span></div></div>';
+      }
+      html += '<div><div style="font-size:11px; color:#1a7f37; font-weight:700;">♻️ 총 재활용수량</div><div style="font-size:18px; font-weight:800; color:#1a7f37; margin-top:2px;">'+data.recycle.toLocaleString()+' <span style="font-size:12px; font-weight:normal;">개 ('+recRate+'%)</span></div></div>';
+      html += '<div><div style="font-size:11px; color:#cf222e; font-weight:700;">🗑️ 총 폐기수량</div><div style="font-size:18px; font-weight:800; color:#cf222e; margin-top:2px;">'+data.dispose.toLocaleString()+' <span style="font-size:12px; font-weight:normal;">개 ('+disRate+'%)</span></div></div>';
+      html += '</div>';
+      return html;
+    }
+
     // ==========================================
-    // 🟦 1. 프레임 HTML 출력
+    // 🟦 1. 프레임 렌더링 (토탈 위젯 추가)
     // ==========================================
-    var htmlFrame = '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📈 1-1. 프레임 월별 품질 성능 요약</h3>';
-    htmlFrame += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #d0d7de; border-radius:8px;"><div class="table-scroll"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f6f8fa; padding:12px 14px; text-align:left;">검수월별</th><th style="background:#f6f8fa; padding:12px 14px; text-align:right;">총 입고수량</th><th style="background:#f6f8fa; padding:12px 14px; text-align:right;">총 재활용수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#1a7f37; text-align:right;">재활용률</th><th style="background:#f6f8fa; padding:12px 14px; text-align:right;">총 폐기수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#cf222e; text-align:right;">폐기율</th></tr></thead><tbody>';
+    var htmlFrame = buildTotalWidget('프레임 전체', totals.frame, false);
+    htmlFrame += '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📈 1-1. 프레임 월별 품질 성능 요약</h3>';
+    htmlFrame += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #d0d7de; border-radius:8px;"><div class="table-scroll"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:left;">검수월별</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 입고수량</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 재활용수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#1a7f37; text-align:right;">재활용률</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 폐기수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#cf222e; text-align:right;">폐기율</th></tr></thead><tbody>';
     arrFrameMonthly.forEach(function(mRow){
       var tot = mRow.received || 0;
       htmlFrame += '<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px 14px; color:#0969da; font-weight:700;">'+mRow.month+'</td><td style="text-align:right;">'+tot.toLocaleString()+' 개</td><td style="text-align:right;">'+mRow.recycle.toLocaleString()+' 개</td><td style="text-align:right; color:#1a7f37; font-weight:700;">'+(tot>0?((mRow.recycle/tot)*100).toFixed(1):'0.0')+' %</td><td style="text-align:right;">'+mRow.dispose.toLocaleString()+' 개</td><td style="text-align:right; color:#cf222e; font-weight:700;">'+(tot>0?((mRow.dispose/tot)*100).toFixed(1):'0.0')+' %</td></tr>';
@@ -2350,14 +2382,14 @@ function initDashboard4() {
     htmlFrame += '</tbody></table></div></div>';
 
     htmlFrame += '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📊 1-3. 프레임 품목별 규격 합산 현황</h3>';
-    htmlFrame += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:250px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f4f7fa; padding:12px 14px;">제품명(브랜드)</th><th style="background:#f4f7fa; padding:12px 14px;">품명</th><th style="background:#f4f7fa; padding:12px 14px;">두께</th><th style="background:#f4f7fa; padding:12px 14px;">규격</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 입고수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 재활용수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 폐기수량</th></tr></thead><tbody>';
+    htmlFrame += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:220px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f4f7fa; padding:12px 14px;">제품명(브랜드)</th><th style="background:#f4f7fa; padding:12px 14px;">품명</th><th style="background:#f4f7fa; padding:12px 14px;">두께</th><th style="background:#f4f7fa; padding:12px 14px;">규격</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 입고수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 재활용수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 폐기수량</th></tr></thead><tbody>';
     arrFrameGrouped.forEach(function(row){
       htmlFrame += '<tr style="border-bottom:1px solid #e2e8f0;"><td>'+row.brand+'</td><td>'+row.category+'</td><td>'+row.thickness+'</td><td style="color:#0969da; font-weight:600;">'+row.size+'</td><td style="text-align:right; font-weight:700;">'+row.received.toLocaleString()+'</td><td style="text-align:right;">'+row.recycle.toLocaleString()+'</td><td style="text-align:right; color:#cf222e;">'+row.dispose.toLocaleString()+'</td></tr>';
     });
     htmlFrame += '</tbody></table></div></div>';
 
     htmlFrame += '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">🟦 1-4. 프레임 일자별 상세 내역 (총 '+arrFrame.length+'건)</h3>';
-    htmlFrame += '<div class="table-wrap" style="border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:250px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f8fafc; padding:10px 14px;">검수일자</th><th style="background:#f8fafc; padding:10px 14px;">색상</th><th style="background:#f8fafc; padding:10px 14px;">제품명</th><th style="background:#f8fafc; padding:10px 14px;">두께</th><th style="background:#f8fafc; padding:10px 14px;">품명</th><th style="background:#f8fafc; padding:10px 14px;">규격</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">입고수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">재활용수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">폐기수량</th></tr></thead><tbody>';
+    htmlFrame += '<div class="table-wrap" style="border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:220px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f8fafc; padding:10px 14px;">검수일자</th><th style="background:#f8fafc; padding:10px 14px;">색상</th><th style="background:#f8fafc; padding:10px 14px;">제품명</th><th style="background:#f8fafc; padding:10px 14px;">두께</th><th style="background:#f8fafc; padding:10px 14px;">품명</th><th style="background:#f8fafc; padding:10px 14px;">규격</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">입고수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">재활용수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">폐기수량</th></tr></thead><tbody>';
     arrFrame.forEach(function(row){
       htmlFrame += '<tr style="border-bottom:1px solid #f1f5f9;"><td>'+row.date+'</td><td>'+row.color+'</td><td>'+row.brand+'</td><td>'+row.thickness+'</td><td>'+row.category+'</td><td>'+row.size+'</td><td style="text-align:right;">'+row.received.toLocaleString()+'</td><td style="text-align:right;">'+row.recycle.toLocaleString()+'</td><td style="text-align:right;">'+row.dispose.toLocaleString()+'</td></tr>';
     });
@@ -2366,34 +2398,35 @@ function initDashboard4() {
 
 
     // ==========================================
-    // 🟫 2. 합판 HTML 렌더링 주입
+    // 🟫 2. 합판 렌더링 (토탈 위젯 추가)
     // ==========================================
-    var htmlPlywood = '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📈 2-1. 합판 월별 품질 성능 요약 (입고량 대비 비율)</h3>';
+    var htmlPlywood = buildTotalWidget('합판 전체', totals.plywood, true);
+    htmlPlywood += '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📈 2-1. 합판 월별 품질 성능 요약</h3>';
     if (arrPlyMonthly.length === 0) {
-      htmlPlywood += '<div style="padding:40px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">집계할 합판 데이터가 없습니다. 실시간 데이터베이스를 다시 동기화 중입니다.</div>';
+      htmlPlywood += '<div style="padding:40px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">집계할 합판 데이터가 없습니다.</div>';
     } else {
       htmlPlywood += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #d0d7de; border-radius:8px;"><div class="table-scroll"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:left;">검수월별</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 입고수량</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 재활용수량</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#1a7f37; text-align:right;">재활용률</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 폐기수량</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#cf222e; text-align:right;">폐기율</th></tr></thead><tbody>';
       arrPlyMonthly.forEach(function(mRow) {
         var tot = mRow.received || 0;
-        htmlPlywood += '<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px 14px; color:#9a6700; font-weight:700;">'+mRow.month+'</td><td style="text-align:right;" class="td-mono">'+tot.toLocaleString()+' 개</td><td style="text-align:right;" class="td-mono">'+mRow.recycle.toLocaleString()+' 개</td><td style="text-align:right; color:#1a7f37; font-weight:700;" class="td-mono">'+(tot>0?((mRow.recycle/tot)*100).toFixed(1):'0.0')+' %</td><td style="text-align:right;" class="td-mono">'+mRow.dispose.toLocaleString()+' 개</td><td style="text-align:right; color:#cf222e; font-weight:700;" class="td-mono">'+(tot>0?((mRow.dispose/tot)*100).toFixed(1):'0.0')+' %</td></tr>';
+        htmlPlywood += '<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px 14px; color:#9a6700; font-weight:700;">'+mRow.month+'</td><td style="text-align:right;">'+tot.toLocaleString()+' 개</td><td style="text-align:right;">'+mRow.recycle.toLocaleString()+' 개</td><td style="text-align:right; color:#1a7f37; font-weight:700;">'+(tot>0?((mRow.recycle/tot)*100).toFixed(1):'0.0')+' %</td><td style="text-align:right;">'+mRow.dispose.toLocaleString()+' 개</td><td style="text-align:right; color:#cf222e; font-weight:700;">'+(tot>0?((mRow.dispose/tot)*100).toFixed(1):'0.0')+' %</td></tr>';
       });
       htmlPlywood += '</tbody></table></div></div>';
     }
 
-    htmlPlywood += '<h3 style="margin-top:24px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📊 2-2. 합판 품목별 규격 합산 현황 (중복 수량 합산)</h3>';
+    htmlPlywood += '<h3 style="margin-top:24px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📊 2-2. 합판 품목별 규격 합산 현황</h3>';
     if (arrPlyGrouped.length > 0) {
-      htmlPlywood += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:280px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f4f7fa; padding:12px 14px; text-align:left;">품명/두께</th><th style="background:#f4f7fa; padding:12px 14px; text-align:left;">규격(가로*세로)</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 입고수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 정상수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 재활용수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 폐기수량</th></tr></thead><tbody>';
+      htmlPlywood += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:220px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f4f7fa; padding:12px 14px; text-align:left;">품명/두께</th><th style="background:#f4f7fa; padding:12px 14px; text-align:left;">규격(가로*세로)</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 입고수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 정상수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 재활용수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 폐기수량</th></tr></thead><tbody>';
       arrPlyGrouped.forEach(function(row) {
-        htmlPlywood += '<tr style="border-bottom:1px solid #e2e8f0;"><td style="font-weight:600; color:#9a6700;">합판 / '+row.thickness+'</td><td style="color:#0969da; font-weight:600;" class="td-mono">'+row.size+'</td><td style="text-align:right; font-weight:700;" class="td-mono">'+row.received.toLocaleString()+'</td><td style="text-align:right; color:#24292f;" class="td-mono">'+row.normal.toLocaleString()+'</td><td style="text-align:right; color:#9a6700;" class="td-mono">'+row.recycle.toLocaleString()+'</td><td style="text-align:right; color:#cf222e;" class="td-mono">'+row.dispose.toLocaleString()+'</td></tr>';
+        htmlPlywood += '<tr style="border-bottom:1px solid #e2e8f0;"><td style="font-weight:600; color:#9a6700;">합판 / '+row.thickness+'</td><td style="color:#0969da; font-weight:600;">'+row.size+'</td><td style="text-align:right; font-weight:700;">'+row.received.toLocaleString()+'</td><td style="text-align:right;">'+row.normal.toLocaleString()+'</td><td style="text-align:right; color:#9a6700;">'+row.recycle.toLocaleString()+'</td><td style="text-align:right; color:#cf222e;">'+row.dispose.toLocaleString()+'</td></tr>';
       });
       htmlPlywood += '</tbody></table></div></div>';
     }
 
     htmlPlywood += '<h3 style="margin-top:20px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">🟫 2-3. 합판 실시간 등록 내역 상세 <span style="font-size:12px; font-weight:normal; color:#888;">(총 '+arrPlywood.length+'건)</span></h3>';
     if (arrPlywood.length > 0) {
-      htmlPlywood += '<div class="table-wrap" style="border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:280px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f8fafc; padding:10px 14px;">검수일자</th><th style="background:#f8fafc; padding:10px 14px;">두께</th><th style="background:#f8fafc; padding:10px 14px;">카테고리명</th><th style="background:#f8fafc; padding:10px 14px;">규격</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">입고수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">정상수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">재활용수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">폐기수량</th></tr></thead><tbody>';
+      htmlPlywood += '<div class="table-wrap" style="border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:220px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f8fafc; padding:10px 14px;">검수일자</th><th style="background:#f8fafc; padding:10px 14px;">두께</th><th style="background:#f8fafc; padding:10px 14px;">카테고리명</th><th style="background:#f8fafc; padding:10px 14px;">규격</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">입고수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">정상수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">재활용수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">폐기수량</th></tr></thead><tbody>';
       arrPlywood.forEach(function(row) {
-        htmlPlywood += '<tr style="border-bottom:1px solid #f1f5f9;"><td>'+row.date+'</td><td class="td-mono">'+row.thickness+'</td><td>'+row.category+'</td><td class="td-mono">'+row.size+'</td><td style="text-align:right;" class="td-mono">'+row.received.toLocaleString()+'</td><td style="text-align:right;" class="td-mono">'+row.normal.toLocaleString()+'</td><td style="text-align:right;" class="td-mono">'+row.recycle.toLocaleString()+'</td><td style="text-align:right;" class="td-mono">'+row.dispose.toLocaleString()+'</td></tr>';
+        htmlPlywood += '<tr style="border-bottom:1px solid #f1f5f9;"><td>'+row.date+'</td><td>'+row.thickness+'</td><td>'+row.category+'</td><td>'+row.size+'</td><td style="text-align:right;">'+row.received.toLocaleString()+'</td><td style="text-align:right;">'+row.normal.toLocaleString()+'</td><td style="text-align:right;">'+row.recycle.toLocaleString()+'</td><td style="text-align:right;">'+row.dispose.toLocaleString()+'</td></tr>';
       });
       htmlPlywood += '</tbody></table></div></div>';
     }
@@ -2401,9 +2434,10 @@ function initDashboard4() {
 
 
     // ==========================================
-    // ⚙️ 3. ACC HTML 생성 (기존 유지)
+    // ⚙️ 3. ACC 렌더링 (토탈 위젯 추가)
     // ==========================================
-    var htmlACC = '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">⚙️ ACC 등록 내역 (남겨진 데이터 원본 항목 전체) <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrACC.length + '건)</span></h3>';
+    var htmlACC = buildTotalWidget('ACC 부속 전체', totals.acc, false);
+    htmlACC += '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">⚙️ ACC 등록 내역 (남겨진 데이터 원본 항목 전체) <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrACC.length + '건)</span></h3>';
     if (arrACC.length === 0) {
       htmlACC += '<div style="padding:24px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">ACC 내역이 존재하지 않습니다.</div>';
     } else {

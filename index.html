@@ -2147,6 +2147,7 @@ function fetchAllRows4(table, extraSelect) {
 
 // 기존의 initDashboard4 함수를 이걸로 통째로 교체하세요!
 // 기존의 initDashboard4 함수를 이 코드로 통째로 교체(덮어쓰기) 하세요!
+// 기존의 initDashboard4 함수를 이 코드로 통째로 교체(덮어쓰기) 하세요!
 function initDashboard4() {
   var container = document.getElementById('v4-dashboard-root');
   if (!container) return;
@@ -2258,7 +2259,9 @@ function initDashboard4() {
     var arrPlywood = []; var plyMonthMap = {}; var plyGroupMap = {};
     var plyThickMap = { '9T': { received: 0, normal: 0, recycle: 0, dispose: 0 }, '12T': { received: 0, normal: 0, recycle: 0, dispose: 0 } };
 
+    // 🟢 경/중량랙 가공 데이터 저장소 및 [구분+품명] 종합 통계용 맵 추가
     var arrRack = []; var rackMonthMap = {}; var rackGroupMap = {};
+    var rackComboMap = {}; 
 
     function pushToPlywood(dateStr, thick, cat, size, r, n, c, d) {
       var normThick = '9T'; var tStr = String(thick).toUpperCase();
@@ -2275,32 +2278,33 @@ function initDashboard4() {
       plyGroupMap[gKey].received += r; plyGroupMap[gKey].normal += n; plyGroupMap[gKey].recycle += c; plyGroupMap[gKey].dispose += d;
     }
 
-    // ⭐ [핵심 전면 수정] 사용자가 실제 Lovable 스크린샷 폼에서 입력한 2개의 변수를 명확하게 타겟팅 분리합니다.
-    function pushToRack(dateStr, rawCategory, rawProductType, size, r, n, c, d) {
-      // 1) 상단 대분류 매칭 (경량랙 / 중량랙)
-      var rackType = '경량랙'; 
-      if (rawCategory.indexOf('중량랙') !== -1 || rawProductType.indexOf('중량랙') !== -1) {
-        rackType = '중량랙';
-      } else if (rawCategory.indexOf('경량랙') !== -1 || rawProductType.indexOf('경량랙') !== -1) {
-        rackType = '경량랙';
-      }
+    function pushToRack(dateStr, rawCat, size, r, n, c, d) {
+      var rackType = '경량랙'; var cleanCat = rawCat;
+      if (rawCat.indexOf('중량랙') !== -1) { rackType = '중량랙'; cleanCat = rawCat.replace(/중량랙/gi, '').trim(); }
+      else if (rawCat.indexOf('경량랙') !== -1) { rackType = '경량랙'; cleanCat = rawCat.replace(/경량랙/gi, '').trim(); }
+      if (cleanCat === '' || cleanCat === 'RACK') cleanCat = '부품';
 
-      // 2) 하단 제품 선택 컴포넌트 매칭 (기둥, 전면빔, 상부받침, 선반받침, 선반 등)
-      var cleanItemName = rawProductType || rawCategory || '미분류 부품';
-      // 믹싱된 텍스트가 DB에 남아있을 경우를 대비한 가공 필터링
-      cleanItemName = cleanItemName.replace(/경량랙|중량랙/gi, '').trim();
-      if (cleanItemName === '' || cleanItemName === 'RACK') cleanItemName = '부품';
-
-      arrRack.push({ date: dateStr, rack_type: rackType, category: cleanItemName, size: size, received: r, normal: n, recycle: c, dispose: d });
+      arrRack.push({ date: dateStr, rack_type: rackType, category: cleanCat, size: size, received: r, normal: n, recycle: c, dispose: d });
       totals.rack.received += r; totals.rack.normal += n; totals.rack.recycle += c; totals.rack.dispose += d;
 
       var mKey = dateStr !== '-' ? dateStr.substring(0, 7) : '미지정';
       if (!rackMonthMap[mKey]) rackMonthMap[mKey] = { month: mKey, received: 0, normal: 0, recycle: 0, dispose: 0 };
       rackMonthMap[mKey].received += r; rackMonthMap[mKey].normal += n; rackMonthMap[mKey].recycle += c; rackMonthMap[mKey].dispose += d;
 
-      var gKey = rackType + '|' + cleanItemName + '|' + size;
-      if (!rackGroupMap[gKey]) rackGroupMap[gKey] = { rack_type: rackType, category: cleanItemName, size: size, received: 0, normal: 0, recycle: 0, dispose: 0 };
+      // 규격별 중복 합산 키
+      var gKey = rackType + '|' + cleanCat + '|' + size;
+      if (!rackGroupMap[gKey]) rackGroupMap[gKey] = { rack_type: rackType, category: cleanCat, size: size, received: 0, normal: 0, recycle: 0, dispose: 0 };
       rackGroupMap[gKey].received += r; rackGroupMap[gKey].normal += n; rackGroupMap[gKey].recycle += c; rackGroupMap[gKey].dispose += d;
+
+      // ✨ [신규 구현] 규격을 제외한 오직 [구분 + 품명] 마스터 조합 키 누적 합산
+      var comboKey = rackType + '|' + cleanCat;
+      if (!rackComboMap[comboKey]) {
+        rackComboMap[comboKey] = { rack_type: rackType, category: cleanCat, received: 0, normal: 0, recycle: 0, dispose: 0 };
+      }
+      rackComboMap[comboKey].received += r;
+      rackComboMap[comboKey].normal += n;
+      rackComboMap[comboKey].recycle += c;
+      rackComboMap[comboKey].dispose += d;
     }
 
     // 소스 1 처리 (프레임)
@@ -2311,7 +2315,7 @@ function initDashboard4() {
       var rQty = item.received_quantity || 0; var nQty = item.normal_quantity || 0; var cQty = item.recycle_quantity || 0; var dQty = item.dispose_quantity || 0;
 
       if (cat.indexOf('합판') !== -1) { pushToPlywood(dateStr, sess.thickness || '9T', cat, item.size || '-', rQty, nQty, cQty, dQty); return; }
-      if (cat.indexOf('중량랙') !== -1 || cat.indexOf('경량랙') !== -1) { pushToRack(dateStr, cat, item.product_type || item.item_type || '', item.size || '-', rQty, nQty, cQty, dQty); return; }
+      if (cat.indexOf('중량랙') !== -1 || cat.indexOf('경량랙') !== -1) { pushToRack(dateStr, cat, item.size || '-', rQty, nQty, cQty, dQty); return; }
 
       if (cat.indexOf('받침') !== -1 || cat.indexOf('기둥') !== -1) {
         var brandName = '-'; var cleanCat = cat;
@@ -2338,12 +2342,12 @@ function initDashboard4() {
       }
     });
 
-    // 소스 2 처리 (랙 등록 내역 정밀 연동)
+    // 소스 2 처리 (경중량랙)
     rItems.forEach(function(item) {
       if (!item) return;
       var sess = rSessMap[item.session_id] || {}; 
       var cat = item.category || '경량랙';
-      var prodType = item.product_type || item.item_type || '기둥'; // 사용자가 하단 그리드에서 클릭해서 채워진 데이터 변수
+      var prodType = item.product_type || item.item_type || '기둥';
       var dateStr = sess.inspection_date || '-';
       var rQty = item.received_quantity || 0; var nQty = item.normal_quantity || 0; var cQty = item.recycle_quantity || 0; var dQty = item.dispose_quantity || 0;
 
@@ -2354,7 +2358,7 @@ function initDashboard4() {
       }
     });
 
-    // 소스 3 처리 (합판 독립)
+    // 소스 3 처리 (합판 전용)
     pItems.forEach(function(item) {
       if (!item) return;
       var sess = pSessMap[item.session_id] || {}; var dateStr = sess.inspection_date || sess.created_at || '-';
@@ -2374,6 +2378,9 @@ function initDashboard4() {
     var arrFrameGrouped = Object.values(frameGroupMap).sort(function(a, b) { return a.brand.localeCompare(b.brand) || a.category.localeCompare(b.category); });
     var arrPlyGrouped = Object.values(plyGroupMap).sort(function(a, b) { return String(b.thickness).localeCompare(String(a.thickness)) || a.size.localeCompare(b.size); });
     var arrRackGrouped = Object.values(rackGroupMap).sort(function(a, b) { return b.rack_type.localeCompare(a.rack_type) || a.category.localeCompare(b.category) || a.size.localeCompare(b.size); });
+    
+    // [구분+품명] 조합 정렬배열 생성
+    var arrRackCombo = Object.values(rackComboMap).sort(function(a, b) { return b.rack_type.localeCompare(a.rack_type) || a.category.localeCompare(b.category); });
 
     function buildTotalWidget(title, data, showNormal) {
       var rec = data.received || 0;
@@ -2397,7 +2404,7 @@ function initDashboard4() {
     // ==========================================
     var htmlFrame = buildTotalWidget('프레임 전체', totals.frame, false);
     htmlFrame += '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📈 1-1. 프레임 월별 품질 성능 요약</h3>';
-    htmlFrame += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #d0d7de; border-radius:8px;"><div class="table-scroll"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:left;">검수월별</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 입고수량</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 재활용수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#1a7f37; text-align:right;">재활용률</th><th style="background:#f6f8fa; padding:12px 14px; text-align:right;">총 폐기수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#cf222e; text-align:right;">폐기율</th></tr></thead><tbody>';
+    htmlFrame += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #d0d7de; border-radius:8px;"><div class="table-scroll"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:left;">검수월별</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 입고수량</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 재활용수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#1a7f37; text-align:right;">재활용률</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 폐기수량</th><th style="background:#f6f8fa; padding:12px 14px; color:#cf222e; text-align:right;">폐기율</th></tr></thead><tbody>';
     arrFrameMonthly.forEach(function(mRow){
       var tot = mRow.received || 0;
       htmlFrame += '<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px 14px; color:#0969da; font-weight:700;">'+mRow.month+'</td><td style="text-align:right;">'+tot.toLocaleString()+' 개</td><td style="text-align:right;">'+mRow.recycle.toLocaleString()+' 개</td><td style="text-align:right; color:#1a7f37; font-weight:700;">'+(tot>0?((mRow.recycle/tot)*100).toFixed(1):'0.0')+' %</td><td style="text-align:right;">'+mRow.dispose.toLocaleString()+' 개</td><td style="text-align:right; color:#cf222e; font-weight:700;">'+(tot>0?((mRow.dispose/tot)*100).toFixed(1):'0.0')+' %</td></tr>';
@@ -2444,6 +2451,15 @@ function initDashboard4() {
       htmlPlywood += '<tr style="border-bottom:1px solid #fed7aa;"><td style="padding:11px 14px; font-weight:800; color:#b45309; background:#fffaf5;">' + tk + ' 제품군</td><td style="text-align:right; font-weight:700;">' + t.toLocaleString() + ' 개</td><td style="text-align:right; color:#2563eb;">' + row.normal.toLocaleString() + ' 개</td><td style="text-align:right; color:#2563eb; font-weight:700;">' + (t > 0 ? ((row.normal / t) * 100).toFixed(1) : '0.0') + ' %</td><td style="text-align:right; color:#1a7f37;">' + row.recycle.toLocaleString() + ' 개</td><td style="text-align:right; color:#1a7f37; font-weight:700;">' + (t > 0 ? ((row.recycle / t) * 100).toFixed(1) : '0.0') + ' %</td><td style="text-align:right; color:#cf222e;">' + row.dispose.toLocaleString() + ' 개</td><td style="text-align:right; color:#cf222e; font-weight:700;">' + (t > 0 ? ((row.dispose / t) * 100).toFixed(1) : '0.0') + ' %</td></tr>';
     });
     htmlPlywood += '</tbody></table></div></div>';
+
+    htmlPlywood += '<h3 style="margin-top:24px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📊 2-3. 합판 품목별 규격 세부 현황</h3>';
+    if (arrPlyGrouped.length > 0) {
+      htmlPlywood += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:220px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f4f7fa; padding:12px 14px; text-align:left;">품명/두께</th><th style="background:#f4f7fa; padding:12px 14px; text-align:left;">규격(가로*세로)</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 입고수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 정상수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 재활용수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 폐기수량</th></tr></thead><tbody>';
+      arrPlyGrouped.forEach(function(row) {
+        htmlPlywood += '<tr style="border-bottom:1px solid #e2e8f0;"><td style="font-weight:600; color:#9a6700;">합판 / '+row.thickness+'</td><td style="color:#0969da; font-weight:600;">'+row.size+'</td><td style="text-align:right; font-weight:700;">'+row.received.toLocaleString()+'</td><td style="text-align:right;">'+row.normal.toLocaleString()+'</td><td style="text-align:right; color:#9a6700;">'+row.recycle.toLocaleString()+'</td><td style="text-align:right; color:#cf222e;">'+row.dispose.toLocaleString()+'</td></tr>';
+      });
+      htmlPlywood += '</tbody></table></div></div>';
+    }
     document.getElementById('v4-pane-plywood-box').innerHTML = htmlPlywood;
 
 
@@ -2474,7 +2490,7 @@ function initDashboard4() {
 
 
     // ==========================================
-    // 🟢 4. 경/중량랙 탭 렌더링 (★컴포넌트 매칭 완성형★)
+    // 🟢 4. 경/중량랙 탭 렌더링 (★[구분+품명] 종합 표 완벽 적용형★)
     // ==========================================
     var htmlRack = buildTotalWidget('경/중량랙 전체', totals.rack, true);
     
@@ -2508,36 +2524,51 @@ function initDashboard4() {
       htmlRack += '</tbody></table></div></div>';
     }
 
-    htmlRack += '<h3 style="margin-top:24px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📊 4-2. 경/중량랙 규격 사양별 종합 합산 현황 (중복 수량 합산)</h3>';
+    // ⭐ [신규 요청 추가]: 4-2. 경/중량랙 품목별 [구분 + 품명] 종합 품질 요약 분석 표
+    htmlRack += '<h3 style="margin-top:28px; margin-bottom:10px; font-size:14px; font-weight:bold; color:#059669;">📊 4-2. 경/중량랙 품목별 품질 총괄 분석 표 (규격 제외 종합)</h3>';
+    htmlRack += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #059669; border-radius:8px; box-shadow: 0 2px 6px rgba(0,0,0,0.02);"><div class="table-scroll"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr style="background:#f0fdf4;">' +
+      '<th style="padding:12px 14px; text-align:left; border-bottom:2px solid #059669; color:#15803d;">구분 (카테고리)</th>' +
+      '<th style="padding:12px 14px; text-align:left; border-bottom:2px solid #059669; color:#15803d;">품명 (제품선택)</th>' +
+      '<th style="padding:12px 14px; text-align:right; border-bottom:2px solid #059669;">누적 입고총량</th>' +
+      '<th style="padding:12px 14px; color:#2563eb; text-align:right; border-bottom:2px solid #059669;">정상 수량</th>' +
+      '<th style="padding:12px 14px; color:#2563eb; text-align:right; border-bottom:2px solid #059669;">종합 정상률</th>' +
+      '<th style="padding:12px 14px; color:#1a7f37; text-align:right; border-bottom:2px solid #059669;">재활용 수량</th>' +
+      '<th style="padding:12px 14px; color:#1a7f37; text-align:right; border-bottom:2px solid #059669;">종합 재활용률</th>' +
+      '<th style="padding:12px 14px; color:#cf222e; text-align:right; border-bottom:2px solid #059669;">폐기 수량</th>' +
+      '<th style="padding:12px 14px; color:#cf222e; text-align:right; border-bottom:2px solid #059669;">종합 폐기율</th>' +
+      '</tr></thead><tbody>';
+    arrRackCombo.forEach(function(cRow) {
+      var t = cRow.received || 0;
+      htmlRack += '<tr style="border-bottom:1px solid #bbf7d0; background:#fff;">' +
+        '<td style="padding:11px 14px; font-weight:800; color:#115e59;">' + cRow.rack_type + '</td>' +
+        '<td style="padding:11px 14px; font-weight:700; color:#24292f;">' + cRow.category + '</td>' +
+        '<td style="text-align:right; font-weight:700;" class="td-mono">' + t.toLocaleString() + ' 개</td>' +
+        '<td style="text-align:right; color:#2563eb;" class="td-mono">' + cRow.normal.toLocaleString() + ' 개</td>' +
+        '<td style="text-align:right; color:#2563eb; font-weight:700; background:rgba(37,99,235,0.01);" class="td-mono">' + (t > 0 ? ((cRow.normal / t) * 100).toFixed(1) : '0.0') + ' %</td>' +
+        '<td style="text-align:right; color:#1a7f37;" class="td-mono">' + cRow.recycle.toLocaleString() + ' 개</td>' +
+        '<td style="text-align:right; color:#1a7f37; font-weight:700; background:rgba(26,127,55,0.01);" class="td-mono">' + (t > 0 ? ((cRow.recycle / t) * 100).toFixed(1) : '0.0') + ' %</td>' +
+        '<td style="text-align:right; color:#cf222e;" class="td-mono">' + cRow.dispose.toLocaleString() + ' 개</td>' +
+        '<td style="text-align:right; color:#cf222e; font-weight:700; background:rgba(207,34,46,0.01);" class="td-mono">' + (t > 0 ? ((cRow.dispose / t) * 100).toFixed(1) : '0.0') + ' %</td>' +
+        '</tr>';
+    });
+    htmlRack += '</tbody></table></div></div>';
+
+    // 4-3. 세부 규격별 합산 현황
+    htmlRack += '<h3 style="margin-top:24px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📊 4-3. 경/중량랙 세부 규격 사양별 합산 현황</h3>';
     if (arrRackGrouped.length > 0) {
-      htmlRack += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:250px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr>' +
-        '<th style="background:#f4f7fa; padding:12px 14px; text-align:left;">구분(카테고리)</th>' +
-        '<th style="background:#f4f7fa; padding:12px 14px; text-align:left;">품명(제품선택)</th>' +
-        '<th style="background:#f4f7fa; padding:12px 14px; text-align:left;">규격 사양</th>' +
-        '<th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 입고수량</th>' +
-        '<th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 정상수량</th>' +
-        '<th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 재활용수량</th>' +
-        '<th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 폐기수량</th>' +
-        '</tr></thead><tbody>';
+      htmlRack += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:220px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f4f7fa; padding:12px 14px; text-align:left;">구분</th><th style="background:#f4f7fa; padding:12px 14px; text-align:left;">품명</th><th style="background:#f4f7fa; padding:12px 14px; text-align:left;">규격 사양</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 입고수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 정상수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 재활용수량</th><th style="background:#f4f7fa; padding:12px 14px; text-align:right;">누적 폐기수량</th></tr></thead><tbody>';
       arrRackGrouped.forEach(function(row) {
-        htmlRack += '<tr style="border-bottom:1px solid #e2e8f0;">' +
-          '<td style="font-weight:700; color:#059669;">'+row.rack_type+'</td>' +
-          '<td style="font-weight:600; color:#24292f; background:rgba(5,150,105,0.01);">'+row.category+'</td>' +
-          '<td style="color:#0969da; font-weight:600;" class="td-mono">'+row.size+'</td>' +
-          '<td style="text-align:right; font-weight:700;" class="td-mono">'+row.received.toLocaleString()+'</td>' +
-          '<td style="text-align:right; color:#2563eb;" class="td-mono">'+row.normal.toLocaleString()+'</td>' +
-          '<td style="text-align:right; color:#1a7f37;" class="td-mono">'+row.recycle.toLocaleString()+'</td>' +
-          '<td style="text-align:right; color:#cf222e;" class="td-mono">'+row.dispose.toLocaleString()+'</td>' +
-          '</tr>';
+        htmlRack += '<tr style="border-bottom:1px solid #e2e8f0;"><td style="font-weight:700; color:#059669;">'+row.rack_type+'</td><td style="font-weight:600; color:#24292f;">'+row.category+'</td><td style="color:#0969da; font-weight:600;" class="td-mono">'+row.size+'</td><td style="text-align:right; font-weight:700;" class="td-mono">'+row.received.toLocaleString()+'</td><td style="text-align:right;" class="td-mono">'+row.normal.toLocaleString()+'</td><td style="text-align:right; color:#1a7f37;" class="td-mono">'+row.recycle.toLocaleString()+'</td><td style="text-align:right; color:#cf222e;" class="td-mono">'+row.dispose.toLocaleString()+'</td></tr>';
       });
       htmlRack += '</tbody></table></div></div>';
     }
 
-    htmlRack += '<h3 style="margin-top:20px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">🟢 4-3. 경/중량랙 실시간 등록 상세 내역 <span style="font-size:12px; font-weight:normal; color:#888;">(총 '+arrRack.length+'건)</span></h3>';
+    // 4-4. 상세 내역
+    htmlRack += '<h3 style="margin-top:20px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">🟢 4-4. 경/중량랙 실시간 등록 상세 내역 <span style="font-size:12px; font-weight:normal; color:#888;">(총 '+arrRack.length+'건)</span></h3>';
     if (arrRack.length > 0) {
-      htmlRack += '<div class="table-wrap" style="border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:250px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f8fafc; padding:10px 14px;">검수일자</th><th style="background:#f8fafc; padding:10px 14px;">구분</th><th style="background:#f8fafc; padding:10px 14px;">품명</th><th style="background:#f8fafc; padding:10px 14px;">규격/사양</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">입고수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">정상수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">재활용수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">폐기수량</th></tr></thead><tbody>';
+      htmlRack += '<div class="table-wrap" style="border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:220px; overflow:auto;"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f8fafc; padding:10px 14px;">검수일자</th><th style="background:#f8fafc; padding:10px 14px;">구분</th><th style="background:#f8fafc; padding:10px 14px;">품명</th><th style="background:#f8fafc; padding:10px 14px;">규격/사양</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">입고수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">정상수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">재활용수량</th><th style="background:#f8fafc; padding:10px 14px; text-align:right;">폐기수량</th></tr></thead><tbody>';
       arrRack.forEach(function(row) {
-        htmlRack += '<tr style="border-bottom:1px solid #f1f5f9;"><td>'+row.date+'</td><td style="font-weight:700; color:#059669;">'+row.rack_type+'</td><td style="font-weight:600;">'+row.category+'</td><td class="td-mono">'+row.size+'</td><td style="text-align:right;" class="td-mono">'+row.received.toLocaleString()+'</td><td style="text-align:right;" class="td-mono">'+row.normal.toLocaleString()+'</td><td style="text-align:right;" class="td-mono">'+row.recycle.toLocaleString()+'</td><td style="text-align:right;" class="td-mono">'+row.dispose.toLocaleString()+'</td></tr>';
+        htmlRack += '<tr style="border-bottom:1px solid #f1f5f9;"><td>'+row.date+'</td><td style="font-weight:700; color:#059669;">'+row.rack_type+'</td><td>'+row.category+'</td><td class="td-mono">'+row.size+'</td><td style="text-align:right;" class="td-mono">'+row.received.toLocaleString()+'</td><td style="text-align:right;" class="td-mono">'+row.normal.toLocaleString()+'</td><td style="text-align:right;" class="td-mono">'+row.recycle.toLocaleString()+'</td><td style="text-align:right;" class="td-mono">'+row.dispose.toLocaleString()+'</td></tr>';
       });
       htmlRack += '</tbody></table></div></div>';
     }

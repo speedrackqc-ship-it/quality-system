@@ -2227,7 +2227,6 @@ function initDashboard4() {
     var rSessMap = {}; rSessions.forEach(function(s) { if (s && s.id) rSessMap[s.id] = s; });
     var pSessMap = {}; pSessions.forEach(function(s) { if (s && s.id) pSessMap[s.id] = s; });
 
-    // 토탈 계산기 구조 선언
     var totals = {
       frame: { received: 0, recycle: 0, dispose: 0 },
       plywood: { received: 0, normal: 0, recycle: 0, dispose: 0 },
@@ -2248,19 +2247,18 @@ function initDashboard4() {
     function pushToPlywood(dateStr, thick, cat, size, r, n, c, d) {
       arrPlywood.push({ date: dateStr, thickness: thick, category: cat, size: size, received: r, normal: n, recycle: c, dispose: d });
       
-      // 합판 토탈 계산 누적
       totals.plywood.received += r; totals.plywood.normal += n; totals.plywood.recycle += c; totals.plywood.dispose += d;
 
       var mKey = dateStr !== '-' ? dateStr.substring(0, 7) : '미지정';
-      if (!plyMonthMap[mKey]) plyMonthMap[mKey] = { month: mKey, received: 0, recycle: 0, dispose: 0 };
-      plyMonthMap[mKey].received += r; plyMonthMap[mKey].recycle += c; plyMonthMap[mKey].dispose += d;
+      // 월별 합산 데이터 구조에 normal(정상수량) 속성 추가 연동
+      if (!plyMonthMap[mKey]) plyMonthMap[mKey] = { month: mKey, received: 0, normal: 0, recycle: 0, dispose: 0 };
+      plyMonthMap[mKey].received += r; plyMonthMap[mKey].normal += n; plyMonthMap[mKey].recycle += c; plyMonthMap[mKey].dispose += d;
 
       var gKey = thick + '|' + size;
       if (!plyGroupMap[gKey]) plyGroupMap[gKey] = { thickness: thick, size: size, received: 0, normal: 0, recycle: 0, dispose: 0 };
       plyGroupMap[gKey].received += r; plyGroupMap[gKey].normal += n; plyGroupMap[gKey].recycle += c; plyGroupMap[gKey].dispose += d;
     }
 
-    // 소스 1 처리
     fItems.forEach(function(item) {
       if (!item) return;
       var sess = fSessMap[item.session_id] || {};
@@ -2284,7 +2282,6 @@ function initDashboard4() {
 
         arrFrame.push({ date: dateStr, color: sess.color || '-', brand: brandName, thickness: sess.thickness || '-', category: cleanCat || cat, size: item.size || '-', received: rQty, recycle: cQty, dispose: dQty });
         
-        // 프레임 토탈 계산 누적
         totals.frame.received += rQty; totals.frame.recycle += cQty; totals.frame.dispose += dQty;
 
         var mKey = dateStr !== '-' ? dateStr.substring(0, 7) : '미지정';
@@ -2302,7 +2299,6 @@ function initDashboard4() {
         delete fullACCItem.id; delete fullACCItem.session_id; delete fullACCItem.created_at; delete fullACCItem.updated_at;
         arrACC.push(fullACCItem);
 
-        // ACC 토탈 수량 누적
         var accRec = item.received_quantity || 0;
         totals.acc.received += accRec;
         totals.acc.recycle += (item.recycle_quantity || 0);
@@ -2310,7 +2306,6 @@ function initDashboard4() {
       }
     });
 
-    // 소스 2 처리
     rItems.forEach(function(item) {
       if (!item) return;
       var sess = rSessMap[item.session_id] || {};
@@ -2324,7 +2319,6 @@ function initDashboard4() {
       }
     });
 
-    // 소스 3 처리
     pItems.forEach(function(item) {
       if (!item) return;
       var sess = pSessMap[item.session_id] || {};
@@ -2344,7 +2338,6 @@ function initDashboard4() {
     var arrFrameGrouped = Object.values(frameGroupMap).sort(function(a, b) { return a.brand.localeCompare(b.brand) || a.category.localeCompare(b.category); });
     var arrPlyGrouped = Object.values(plyGroupMap).sort(function(a, b) { return String(b.thickness).localeCompare(String(a.thickness)) || a.size.localeCompare(b.size); });
 
-    // 헬퍼: 토탈 위젯 바 생성 함수
     function buildTotalWidget(title, data, isPlywood) {
       var rec = data.received || 0;
       var recRate = rec > 0 ? ((data.recycle / rec) * 100).toFixed(1) : '0.0';
@@ -2353,7 +2346,8 @@ function initDashboard4() {
       var html = '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:12px; margin-bottom:20px; background:#f8fafc; padding:16px; border:1px solid #e2e8f0; border-radius:10px;">';
       html += '<div><div style="font-size:11px; color:#64748b; font-weight:700;">📊 '+title+' 총 누적입고</div><div style="font-size:18px; font-weight:800; color:#1e293b; margin-top:2px;">'+rec.toLocaleString()+' <span style="font-size:12px; font-weight:normal;">개</span></div></div>';
       if(isPlywood) {
-        html += '<div><div style="font-size:11px; color:#64748b; font-weight:700;">✅ 총 정상수량</div><div style="font-size:18px; font-weight:800; color:#24292f; margin-top:2px;">'+(data.normal || 0).toLocaleString()+' <span style="font-size:12px; font-weight:normal;">개</span></div></div>';
+        var normRate = rec > 0 ? ((data.normal / rec) * 100).toFixed(1) : '0.0';
+        html += '<div><div style="font-size:11px; color:#2563eb; font-weight:700;">✅ 총 정상수량</div><div style="font-size:18px; font-weight:800; color:#2563eb; margin-top:2px;">'+(data.normal || 0).toLocaleString()+' <span style="font-size:12px; font-weight:normal;">개 ('+normRate+'%)</span></div></div>';
       }
       html += '<div><div style="font-size:11px; color:#1a7f37; font-weight:700;">♻️ 총 재활용수량</div><div style="font-size:18px; font-weight:800; color:#1a7f37; margin-top:2px;">'+data.recycle.toLocaleString()+' <span style="font-size:12px; font-weight:normal;">개 ('+recRate+'%)</span></div></div>';
       html += '<div><div style="font-size:11px; color:#cf222e; font-weight:700;">🗑️ 총 폐기수량</div><div style="font-size:18px; font-weight:800; color:#cf222e; margin-top:2px;">'+data.dispose.toLocaleString()+' <span style="font-size:12px; font-weight:normal;">개 ('+disRate+'%)</span></div></div>';
@@ -2362,7 +2356,7 @@ function initDashboard4() {
     }
 
     // ==========================================
-    // 🟦 1. 프레임 렌더링 (토탈 위젯 추가)
+    // 🟦 1. 프레임 렌더링
     // ==========================================
     var htmlFrame = buildTotalWidget('프레임 전체', totals.frame, false);
     htmlFrame += '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📈 1-1. 프레임 월별 품질 성능 요약</h3>';
@@ -2398,17 +2392,33 @@ function initDashboard4() {
 
 
     // ==========================================
-    // 🟫 2. 합판 렌더링 (토탈 위젯 추가)
+    // 🟫 2. 합판 렌더링 (월별 표에 정상수량, 정상율 추가 반영)
     // ==========================================
     var htmlPlywood = buildTotalWidget('합판 전체', totals.plywood, true);
     htmlPlywood += '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📈 2-1. 합판 월별 품질 성능 요약</h3>';
     if (arrPlyMonthly.length === 0) {
       htmlPlywood += '<div style="padding:40px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">집계할 합판 데이터가 없습니다.</div>';
     } else {
-      htmlPlywood += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #d0d7de; border-radius:8px;"><div class="table-scroll"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:left;">검수월별</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 입고수량</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 재활용수량</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#1a7f37; text-align:right;">재활용률</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 폐기수량</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#cf222e; text-align:right;">폐기율</th></tr></thead><tbody>';
+      // 표 헤더에 정상수량 및 정상율 컬럼 주입
+      htmlPlywood += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #d0d7de; border-radius:8px;"><div class="table-scroll"><table class="v4-raw-table" style="width:100%; border-collapse:collapse;"><thead><tr><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:left;">검수월별</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 입고수량</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#2563eb; text-align:right;">총 정상수량</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#2563eb; text-align:right;">정상율</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 재활용수량</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#1a7f37; text-align:right;">재활용률</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; text-align:right;">총 폐기수량</th><th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#cf222e; text-align:right;">폐기율</th></tr></thead><tbody>';
       arrPlyMonthly.forEach(function(mRow) {
         var tot = mRow.received || 0;
-        htmlPlywood += '<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px 14px; color:#9a6700; font-weight:700;">'+mRow.month+'</td><td style="text-align:right;">'+tot.toLocaleString()+' 개</td><td style="text-align:right;">'+mRow.recycle.toLocaleString()+' 개</td><td style="text-align:right; color:#1a7f37; font-weight:700;">'+(tot>0?((mRow.recycle/tot)*100).toFixed(1):'0.0')+' %</td><td style="text-align:right;">'+mRow.dispose.toLocaleString()+' 개</td><td style="text-align:right; color:#cf222e; font-weight:700;">'+(tot>0?((mRow.dispose/tot)*100).toFixed(1):'0.0')+' %</td></tr>';
+        var norm = mRow.normal || 0;
+        // 실시간 비율 계산
+        var normRate = tot > 0 ? ((norm / tot) * 100).toFixed(1) : '0.0';
+        var recRate = tot > 0 ? ((mRow.recycle / tot) * 100).toFixed(1) : '0.0';
+        var disRate = tot > 0 ? ((mRow.dispose / tot) * 100).toFixed(1) : '0.0';
+
+        htmlPlywood += '<tr style="border-bottom:1px solid #e2e8f0;">';
+        htmlPlywood += '<td style="padding:10px 14px; color:#9a6700; font-weight:700;">'+mRow.month+'</td>';
+        htmlPlywood += '<td style="text-align:right;">'+tot.toLocaleString()+' 개</td>';
+        htmlPlywood += '<td style="text-align:right; color:#2563eb; font-weight:600;">'+norm.toLocaleString()+' 개</td>';
+        htmlPlywood += '<td style="text-align:right; color:#2563eb; font-weight:700;">'+normRate+' %</td>';
+        htmlPlywood += '<td style="text-align:right;">'+mRow.recycle.toLocaleString()+' 개</td>';
+        htmlPlywood += '<td style="text-align:right; color:#1a7f37; font-weight:700;">'+recRate+' %</td>';
+        htmlPlywood += '<td style="text-align:right;">'+mRow.dispose.toLocaleString()+' 개</td>';
+        htmlPlywood += '<td style="text-align:right; color:#cf222e; font-weight:700;">'+disRate+' %</td>';
+        htmlPlywood += '</tr>';
       });
       htmlPlywood += '</tbody></table></div></div>';
     }
@@ -2434,7 +2444,7 @@ function initDashboard4() {
 
 
     // ==========================================
-    // ⚙️ 3. ACC 렌더링 (토탈 위젯 추가)
+    // ⚙️ 3. ACC 렌더링
     // ==========================================
     var htmlACC = buildTotalWidget('ACC 부속 전체', totals.acc, false);
     htmlACC += '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">⚙️ ACC 등록 내역 (남겨진 데이터 원본 항목 전체) <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrACC.length + '건)</span></h3>';

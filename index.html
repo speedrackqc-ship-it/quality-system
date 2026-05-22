@@ -2211,9 +2211,15 @@ function initDashboard4() {
     var arrFrame = []; 
     var arrACC = [];   
     var frameGroupMap = {};
-    
-    // 월별 집계를 위한 객체 생성
     var frameMonthMap = {};
+    
+    // 4대 핵심 품목별 집계를 위한 맵 객체 초기화 (스피드랙 받침/기둥, 홈던트 받침/기둥)
+    var itemTypeMap = {
+      '스피드랙|받침': { brand: '스피드랙', category: '받침', received: 0, recycle: 0, dispose: 0 },
+      '스피드랙|기둥': { brand: '스피드랙', category: '기둥', received: 0, recycle: 0, dispose: 0 },
+      '홈던트|받침': { brand: '홈던트', category: '받침', received: 0, recycle: 0, dispose: 0 },
+      '홈던트|기둥': { brand: '홈던트', category: '기둥', received: 0, recycle: 0, dispose: 0 }
+    };
 
     fItems.forEach(function(item) {
       if (!item) return;
@@ -2237,27 +2243,22 @@ function initDashboard4() {
           else if (thickStr === '120' || thickStr === '160' || thickStr === '200') brandName = '스피드랙';
         }
 
+        // 품명 글자 표준화 (받침류 -> 받침, 기둥류 -> 기둥)
+        var normCat = cleanCat.indexOf('받침') !== -1 ? '받침' : '기둥';
+
         var rQty = item.received_quantity || 0;
         var cQty = item.recycle_quantity || 0;
         var dQty = item.dispose_quantity || 0;
 
-        // 검수 일자에서 '연도-월' 추출 (예: 2026-05-20 -> 2026-05)
         var dateStr = sess.inspection_date || '-';
         var monthKey = dateStr !== '-' ? dateStr.substring(0, 7) : '미지정';
 
         arrFrame.push({
-          date: dateStr,
-          color: sess.color || '-',
-          brand: brandName,
-          thickness: sess.thickness || '-',
-          category: cleanCat || cat,
-          size: item.size || '-',
-          received: rQty,
-          recycle: cQty,
-          dispose: dQty
+          date: dateStr, color: sess.color || '-', brand: brandName, thickness: sess.thickness || '-',
+          category: cleanCat || cat, size: item.size || '-', received: rQty, recycle: cQty, dispose: dQty
         });
 
-        // 1) 월별 품질 지표 데이터 축적
+        // 1) 월별 데이터 축적
         if (!frameMonthMap[monthKey]) {
           frameMonthMap[monthKey] = { month: monthKey, received: 0, recycle: 0, dispose: 0 };
         }
@@ -2265,7 +2266,15 @@ function initDashboard4() {
         frameMonthMap[monthKey].recycle += cQty;
         frameMonthMap[monthKey].dispose += dQty;
 
-        // 2) 품목별 중복 합산용 데이터 축적
+        // 2) ⭐ [신규 추가] 4대 품목별 집계 마스터 데이터 축적
+        var typeKey = brandName + '|' + normCat;
+        if (itemTypeMap[typeKey]) {
+          itemTypeMap[typeKey].received += rQty;
+          itemTypeMap[typeKey].recycle += cQty;
+          itemTypeMap[typeKey].dispose += dQty;
+        }
+
+        // 3) 규격별 중복 합산 데이터 축적
         var groupKey = brandName + '|' + cleanCat + '|' + (sess.thickness || '-') + '|' + (item.size || '-');
         if (!frameGroupMap[groupKey]) {
           frameGroupMap[groupKey] = {
@@ -2279,14 +2288,9 @@ function initDashboard4() {
 
       } else {
         var fullACCItem = Object.assign({}, item, {
-          '검수일자': sess.inspection_date || '-',
-          '색상(이력)': sess.color || '-',
-          '두께(이력)': sess.thickness || '-'
+          '검수일자': sess.inspection_date || '-', '색상(이력)': sess.color || '-', '두께(이력)': sess.thickness || '-'
         });
-        delete fullACCItem.id;
-        delete fullACCItem.session_id;
-        delete fullACCItem.created_at;
-        delete fullACCItem.updated_at;
+        delete fullACCItem.id; delete fullACCItem.session_id; delete fullACCItem.created_at; delete fullACCItem.updated_at;
         arrACC.push(fullACCItem);
       }
     });
@@ -2294,11 +2298,7 @@ function initDashboard4() {
     arrFrame.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
     arrACC.sort(function(a, b) { return (b['검수일자'] || '').localeCompare(a['검수일자'] || ''); });
 
-    // 월별 요약 테이블 데이터 정렬 (최신 월이 위로)
-    var arrFrameMonthly = Object.values(frameMonthMap).sort(function(a, b) {
-      return b.month.localeCompare(a.month);
-    });
-
+    var arrFrameMonthly = Object.values(frameMonthMap).sort(function(a, b) { return b.month.localeCompare(a.month); });
     var arrFrameGrouped = Object.values(frameGroupMap).sort(function(a, b) {
       if (a.brand !== b.brand) return b.brand.localeCompare(a.brand);
       if (a.category !== b.category) return a.category.localeCompare(b.category);
@@ -2307,45 +2307,71 @@ function initDashboard4() {
     });
 
     // ==========================================
-    // 🟦 1. 프레임 HTML 생성 (월별 성능 요약 추가)
+    // 🟦 1. 프레임 HTML 생성 (월별 및 품목별 요약 결합)
     // ==========================================
     
-    // ⭐ [신규 추가] 1-1. 월별 총 입고 대비 재활용률, 폐기율 테이블
+    // 1-1. 월별 품질 성능 요약
     var htmlFrame = '<h3 style="margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📈 1-1. 프레임 월별 품질 성능 요약 (입고량 대비 비율)</h3>';
     if (arrFrameMonthly.length === 0) {
       htmlFrame += '<div style="padding:24px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888; margin-bottom:20px;">집계할 데이터가 없습니다.</div>';
     } else {
-      htmlFrame += '<div class="table-wrap" style="margin-bottom:28px; border:1px solid #d0d7de; border-radius:8px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);"><div class="table-scroll">';
+      htmlFrame += '<div class="table-wrap" style="margin-bottom:24px; border:1px solid #d0d7de; border-radius:8px;"><div class="table-scroll">';
       htmlFrame += '<table class="v4-raw-table" style="width:100%; white-space:nowrap; border-collapse:collapse;"><thead><tr>';
       htmlFrame += '<th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#24292f; font-weight:800; text-align:left;">검수월별</th>';
-      htmlFrame += '<th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#24292f; font-weight:800; text-align:right;">총 입고수량 (A)</th>';
-      htmlFrame += '<th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#24292f; font-weight:800; text-align:right;">총 재활용수량 (B)</th>';
-      htmlFrame += '<th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#1a7f37; font-weight:800; text-align:right;">재활용률 (B/A)</th>';
-      htmlFrame += '<th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#24292f; font-weight:800; text-align:right;">총 폐기수량 (C)</th>';
-      htmlFrame += '<th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#cf222e; font-weight:800; text-align:right;">폐기율 (C/A)</th>';
+      htmlFrame += '<th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#24292f; font-weight:800; text-align:right;">총 입고수량</th>';
+      htmlFrame += '<th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#24292f; font-weight:800; text-align:right;">총 재활용수량</th>';
+      htmlFrame += '<th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#1a7f37; font-weight:800; text-align:right;">재활용률</th>';
+      htmlFrame += '<th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#24292f; font-weight:800; text-align:right;">총 폐기수량</th>';
+      htmlFrame += '<th style="background:#f6f8fa; padding:12px 14px; border-bottom:2px solid #d0d7de; color:#cf222e; font-weight:800; text-align:right;">폐기율</th>';
       htmlFrame += '</tr></thead><tbody>';
-      
       arrFrameMonthly.forEach(function(mRow) {
         var total = mRow.received || 0;
-        // 0 나누기 방지 예외 처리
         var recRate = total > 0 ? ((mRow.recycle / total) * 100).toFixed(1) : '0.0';
         var disRate = total > 0 ? ((mRow.dispose / total) * 100).toFixed(1) : '0.0';
-
-        htmlFrame += '<tr style="border-bottom:1px solid #e2e8f0; background:#fff; font-size:13px; font-weight:500; height:40px;">';
+        htmlFrame += '<tr style="border-bottom:1px solid #e2e8f0; background:#fff; font-size:13px; height:38px;">';
         htmlFrame += '<td style="padding:10px 14px; color:#0969da; font-weight:700;">' + mRow.month + '</td>';
-        htmlFrame += '<td style="padding:10px 14px; text-align:right; font-weight:600;" class="td-mono">' + total.toLocaleString() + ' 개</td>';
+        htmlFrame += '<td style="padding:10px 14px; text-align:right;" class="td-mono">' + total.toLocaleString() + ' 개</td>';
         htmlFrame += '<td style="padding:10px 14px; text-align:right; color:#57606a;" class="td-mono">' + mRow.recycle.toLocaleString() + ' 개</td>';
-        htmlFrame += '<td style="padding:10px 14px; text-align:right; color:#1a7f37; font-weight:700; background:rgba(26,127,55,0.02);" class="td-mono">' + recRate + ' %</td>';
+        htmlFrame += '<td style="padding:10px 14px; text-align:right; color:#1a7f37; font-weight:700; background:rgba(26,127,55,0.01);" class="td-mono">' + recRate + ' %</td>';
         htmlFrame += '<td style="padding:10px 14px; text-align:right; color:#57606a;" class="td-mono">' + mRow.dispose.toLocaleString() + ' 개</td>';
-        htmlFrame += '<td style="padding:10px 14px; text-align:right; color:#cf222e; font-weight:700; background:rgba(207,34,46,0.02);" class="td-mono">' + disRate + ' %</td>';
+        htmlFrame += '<td style="padding:10px 14px; text-align:right; color:#cf222e; font-weight:700; background:rgba(207,34,46,0.01);" class="td-mono">' + disRate + ' %</td>';
         htmlFrame += '</tr>';
       });
       htmlFrame += '</tbody></table></div></div>';
     }
 
-    // 1-2. 프레임 품목별 누적 합계 현황 (중복 수량 합산)
-    htmlFrame += '<h3 style="margin-top:20px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📊 1-2. 프레임 품목별 누적 합계 현황 (중복 수량 합산) <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrFrameGrouped.length + '개 품목)</span></h3>';
-    htmlFrame += '<div class="table-wrap" style="margin-bottom:28px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:350px; overflow:auto;">';
+    // ⭐ [신규 추가] 1-2. 핵심 품목별(제품명+품명) 재활용률 및 폐기율 종합 표
+    htmlFrame += '<h3 style="margin-top:28px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📊 1-2. 프레임 품목별 품질 성능 요약 (종합 비율)</h3>';
+    htmlFrame += '<div class="table-wrap" style="margin-bottom:28px; border:1px solid #d0d7de; border-radius:8px; box-shadow: 0 2px 6px rgba(0,0,0,0.03);"><div class="table-scroll">';
+    htmlFrame += '<table class="v4-raw-table" style="width:100%; white-space:nowrap; border-collapse:collapse;"><thead><tr>';
+    htmlFrame += '<th style="background:#f4f7fa; padding:12px 14px; border-bottom:2px solid #bbc4ce; color:#24292f; font-weight:800; text-align:left;">제품명 (브랜드)</th>';
+    htmlFrame += '<th style="background:#f4f7fa; padding:12px 14px; border-bottom:2px solid #bbc4ce; color:#24292f; font-weight:800; text-align:left;">품명 분류</th>';
+    htmlFrame += '<th style="background:#f4f7fa; padding:12px 14px; border-bottom:2px solid #bbc4ce; color:#24292f; font-weight:800; text-align:right;">누적 입고총량</th>';
+    htmlFrame += '<th style="background:#f4f7fa; padding:12px 14px; border-bottom:2px solid #bbc4ce; color:#1a7f37; font-weight:800; text-align:right;">누적 재활용률</th>';
+    htmlFrame += '<th style="background:#f4f7fa; padding:12px 14px; border-bottom:2px solid #bbc4ce; color:#cf222e; font-weight:800; text-align:right;">누적 폐기율</th>';
+    htmlFrame += '</tr></thead><tbody>';
+    
+    var orderKeys = ['스피드랙|받침', '스피드랙|기둥', '홈던트|받침', '홈던트|기둥'];
+    orderKeys.forEach(function(key) {
+      var typeRow = itemTypeMap[key];
+      var total = typeRow.received || 0;
+      var recRate = total > 0 ? ((typeRow.recycle / total) * 100).toFixed(1) : '0.0';
+      var disRate = total > 0 ? ((typeRow.dispose / total) * 100).toFixed(1) : '0.0';
+      var bColor = typeRow.brand === '스피드랙' ? '#0969da' : '#6e40c9';
+
+      htmlFrame += '<tr style="border-bottom:1px solid #e2e8f0; background:#fff; font-size:13px; height:40px;">';
+      htmlFrame += '<td style="padding:11px 14px; color:'+ bColor +'; font-weight:700;">' + typeRow.brand + '</td>';
+      htmlFrame += '<td style="padding:11px 14px; color:#24292f; font-weight:600;">' + typeRow.category + '</td>';
+      htmlFrame += '<td style="padding:11px 14px; text-align:right; font-weight:600; color:#57606a;" class="td-mono">' + total.toLocaleString() + ' 개</td>';
+      htmlFrame += '<td style="padding:11px 14px; text-align:right; color:#1a7f37; font-weight:700; background:rgba(26,127,55,0.03);" class="td-mono">' + recRate + ' %</td>';
+      htmlFrame += '<td style="padding:11px 14px; text-align:right; color:#cf222e; font-weight:700; background:rgba(207,34,46,0.03);" class="td-mono">' + disRate + ' %</td>';
+      htmlFrame += '</tr>';
+    });
+    htmlFrame += '</tbody></table></div></div>';
+
+    // 1-3. 프레임 품목별 규격 합산 현황
+    htmlFrame += '<h3 style="margin-top:24px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">📊 1-3. 프레임 품목별 규격 합산 현황 (중복 수량 합산) <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrFrameGrouped.length + '개 품목)</span></h3>';
+    htmlFrame += '<div class="table-wrap" style="margin-bottom:28px; border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:300px; overflow:auto;">';
     htmlFrame += '<table class="v4-raw-table" style="width:100%; white-space:nowrap; border-collapse:collapse;"><thead><tr>';
     var groupCols = [
       {l:'제품명(브랜드)', k:'brand'}, {l:'품명', k:'category'}, {l:'두께', k:'thickness'}, {l:'규격', k:'size'},
@@ -2372,12 +2398,12 @@ function initDashboard4() {
     });
     htmlFrame += '</tbody></table></div></div>';
 
-    // 1-3. 프레임 일자별 상세 내역
-    htmlFrame += '<h3 style="margin-top:20px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">🟦 1-3. 프레임 일자별 상세 내역 <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrFrame.length + '건)</span></h3>';
+    // 1-4. 프레임 일자별 상세 내역
+    htmlFrame += '<h3 style="margin-top:20px; margin-bottom:10px; font-size:14px; font-weight:bold; color:var(--text);">🟦 1-4. 프레임 일자별 상세 내역 <span style="font-size:12px; font-weight:normal; color:#888;">(총 ' + arrFrame.length + '건)</span></h3>';
     if (arrFrame.length === 0) {
       htmlFrame += '<div style="padding:24px; text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#888;">내역이 존재하지 않습니다.</div>';
     } else {
-      htmlFrame += '<div class="table-wrap" style="border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:300px; overflow:auto;">';
+      htmlFrame += '<div class="table-wrap" style="border:1px solid #e2e8f0; border-radius:8px;"><div class="table-scroll" style="max-height:255px; overflow:auto;">';
       htmlFrame += '<table class="v4-raw-table" style="width:100%; white-space:nowrap; border-collapse:collapse;"><thead><tr>';
       var fCols = [
         {l:'검수일자', k:'date'}, {l:'색상', k:'color'}, {l:'제품명', k:'brand'}, {l:'두께', k:'thickness'},
